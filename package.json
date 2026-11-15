@@ -1,0 +1,18 @@
+{
+  "name": "abyssal-garden-rebuild",
+  "private": true,
+  "version": "0.0.0",
+  "description": "A from-scratch rebuild of Noniv's Abyssal Garden, a procedural WebGPU underwater world",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "ref:build": "node tools/reference/build-ref.mjs",
+    "ref:capture": "node tools/reference/run-ref.mjs capture",
+    "ref:verify": "node tools/reference/run-ref.mjs verify",
+    "ref:dump": "node tools/reference/run-ref.mjs dump",
+    "ref:bench": "node tools/reference/run-ref.mjs bench"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.65.1"
+  }
+}
