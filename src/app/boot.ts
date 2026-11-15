@@ -1,37 +1,38 @@
-// Main-thread start-up. At this milestone it proves the scaffold end to end and reports what it found:
-//   - the worker starts from the page's own script and a 16 MB buffer survives a round trip by transfer
-//   - a struct and bind group defined in TypeScript compile, validate and put the right colour on screen
-// The real boot sequence (device, world generation, frame loop) replaces the self-tests from milestone 2 on.
-import { declarations, group } from '../gpu/bindings';
-import { struct } from '../gpu/struct';
-import selfTestSource from '../shaders/selftest.wgsl';
+// Main-thread start-up: device, renderer, frame loop.
+// World generation, the menu, controls and sound are added by later milestones; for now the camera sits at the
+// first viewpoint and the scene pass is empty, so the page shows only what the composite pass makes of nothing.
+import { lookAt } from '../camera/camera';
+import { quality } from '../config/quality';
+import { createGpu, StartupError } from '../gpu/context';
+import { createRenderer } from '../render/renderer';
+import { VIEWPOINTS } from '../world/layout';
 import { checksum, type FromWorker, type ToWorker } from '../world/protocol';
+import { createHarness, type Harness } from './harness';
 
 export interface BootReport {
-  worker: { megabytes: number; roundTripMs: number; detached: boolean; intact: boolean };
-  /** null where WebGPU is not available */
-  gpu: { adapter: string; errors: string[]; pixel: number[]; expected: number[] } | null;
+  adapter: string;
+  size: [width: number, height: number];
+  /** harness builds only: a 16 MB buffer sent to the worker and back by transfer */
+  worker?: { megabytes: number; roundTripMs: number; detached: boolean; intact: boolean };
 }
 
 declare global {
   interface Window {
-    /** A small handle for tests and harnesses; `ready` is set once start-up has finished or failed. */
-    __abyssal?: { ready?: boolean; error?: string; report?: BootReport };
+    /** A handle for tests and harnesses; `ready` is set once start-up has finished or failed. */
+    __abyssal?: { ready?: boolean; error?: string; report?: BootReport; harness?: Harness; frames?: number };
   }
 }
 
-const SelfTest = struct('SelfTest', { shallow: 'vec3f', gain: 'f32', deep: 'vec3f' });
-const SelfTestGroup = group(0, { selfTest: SelfTest });
-const SHALLOW = [0.2, 0.6, 0.8];
-const DEEP = [0.0, 0.2, 0.4];
 const TRANSFER_BYTES = 16 << 20;
+/** Until the generator exists there is no seabed to stand on; the original's is about here under viewpoint 1. */
+const PROVISIONAL_SEABED = -43;
 
 /**
- * Test builds only (`--report`): tells a listener on 127.0.0.1 how start-up is going. Safari cannot be driven
- * without a setting the user has to switch on, so the page reports for itself. Loopback only, and only on request.
+ * Harness builds only: tells a listener on 127.0.0.1 how start-up went. Safari cannot be driven without a
+ * setting the user has to switch on, so the page reports for itself. Loopback only, and only on request.
  */
 function tell(key: string, value: unknown): void {
-  if (!__REPORT__) return;
+  if (!__HARNESS__) return;
   const to = new URLSearchParams(location.search).get('report');
   if (to && /^http:\/\/127\.0\.0\.1:\d+\/$/.test(to)) {
     new Image().src = `${to}?${key}=${encodeURIComponent(JSON.stringify(value))}`;
@@ -72,7 +73,8 @@ function reply<T extends FromWorker['type']>(
   });
 }
 
-async function workerRoundTrip(createWorker: () => Worker): Promise<BootReport['worker']> {
+/** Starts the worker from the page's own script and sends a buffer there and back. */
+async function workerRoundTrip(createWorker: () => Worker): Promise<NonNullable<BootReport['worker']>> {
   const worker = createWorker();
   await reply(worker, 'ready');
   const buffer = new ArrayBuffer(TRANSFER_BYTES);
@@ -90,84 +92,40 @@ async function workerRoundTrip(createWorker: () => Worker): Promise<BootReport['
   return { megabytes: TRANSFER_BYTES >> 20, roundTripMs, detached, intact };
 }
 
-async function gpuSelfTest(canvas: HTMLCanvasElement): Promise<BootReport['gpu']> {
-  const adapter = await navigator.gpu?.requestAdapter({ powerPreference: 'high-performance' });
-  if (!adapter) return null;
-  const device = await adapter.requestDevice();
-  const format = navigator.gpu.getPreferredCanvasFormat();
-  canvas.width = Math.max(2, canvas.clientWidth);
-  canvas.height = Math.max(2, canvas.clientHeight);
-  const context = canvas.getContext('webgpu')!;
-  context.configure({ device, format, alphaMode: 'opaque' });
-
-  const errors: string[] = [];
-  device.pushErrorScope('validation');
-  const module = device.createShaderModule({ code: declarations(SelfTestGroup) + selfTestSource });
-  for (const m of (await module.getCompilationInfo()).messages) {
-    if (m.type === 'error') errors.push(`line ${m.lineNum}: ${m.message}`);
-  }
-  const layout = SelfTestGroup.layout(device);
-  const pipeline = device.createRenderPipeline({
-    layout: device.createPipelineLayout({ bindGroupLayouts: [layout] }),
-    vertex: { module, entryPoint: 'fullscreenVertex' },
-    fragment: { module, entryPoint: 'fragment', targets: [{ format }] },
-  });
-  const data = new Float32Array(SelfTest.size / 4);
-  data.set(SHALLOW, SelfTest.at.shallow);
-  data[SelfTest.at.gain] = 1;
-  data.set(DEEP, SelfTest.at.deep);
-  const buffer = device.createBuffer({ size: SelfTest.size, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-  device.queue.writeBuffer(buffer, 0, data);
-  const bindGroup = SelfTestGroup.bind(device, layout, { selfTest: { buffer } });
-
-  const encoder = device.createCommandEncoder();
-  const view = context.getCurrentTexture().createView();
-  const pass = encoder.beginRenderPass({ colorAttachments: [{ view, loadOp: 'clear', storeOp: 'store' }] });
-  pass.setPipeline(pipeline);
-  pass.setBindGroup(0, bindGroup);
-  pass.draw(3);
-  pass.end();
-  device.queue.submit([encoder.finish()]);
-
-  // read the middle pixel back through a 2D canvas, in the same task as the draw (the frame is gone after it)
-  const probe = document.createElement('canvas');
-  probe.width = canvas.width;
-  probe.height = canvas.height;
-  const probeContext = probe.getContext('2d')!;
-  probeContext.drawImage(canvas, 0, 0);
-  const pixel = Array.from(probeContext.getImageData(canvas.width >> 1, canvas.height >> 1, 1, 1).data.subarray(0, 3));
-
-  const validation = await device.popErrorScope();
-  if (validation) errors.push(validation.message);
-  const info = adapter.info;
-  return {
-    adapter: [info.vendor, info.architecture, info.description].filter(Boolean).join(' '),
-    errors,
-    pixel,
-    expected: SHALLOW.map((s, i) => Math.round(((s + DEEP[i]!) / 2) * 255)),
-  };
-}
-
 export async function bootMain(createWorker: () => Worker): Promise<void> {
   const status = document.getElementById('s')!;
-  const hook: NonNullable<Window['__abyssal']> = (window.__abyssal = {});
+  const hook: NonNullable<Window['__abyssal']> = (window.__abyssal = { frames: 0 });
   try {
-    tell('stage', 'started');
-    const worker = await workerRoundTrip(createWorker);
-    tell('stage', 'worker done');
-    const gpu = await gpuSelfTest(document.getElementById('c') as HTMLCanvasElement);
-    hook.report = { worker, gpu };
-    status.textContent = [
-      `worker: ${worker.megabytes} MB there and back in ${worker.roundTripMs.toFixed(1)} ms` +
-        (worker.detached && worker.intact ? '' : '  (FAILED)'),
-      gpu
-        ? `gpu: ${gpu.adapter || 'adapter'}; middle pixel ${gpu.pixel.join(',')} (expected ${gpu.expected.join(',')})` +
-          (gpu.errors.length ? `\n${gpu.errors.join('\n')}` : '')
-        : 'gpu: WebGPU is not available in this browser',
-    ].join('\n');
+    const gpu = await createGpu(document.getElementById('c') as HTMLCanvasElement);
+    const renderer = await createRenderer(gpu, quality(0));
+    const view = VIEWPOINTS[0] as [number, number, number, number, number, number];
+    lookAt(renderer.camera, view[0], PROVISIONAL_SEABED + view[1], view[2], view[3], view[4], view[5]);
+
+    const info = gpu.adapter.info;
+    hook.report = {
+      adapter: [info.vendor, info.architecture, info.description].filter(Boolean).join(' '),
+      size: [renderer.targets.width, renderer.targets.height],
+    };
+    if (__DEV__ || __HARNESS__) hook.harness = createHarness(renderer);
+    if (__HARNESS__) hook.report.worker = await workerRoundTrip(createWorker);
+
+    let first = 0;
+    const frame = (now: number) => {
+      requestAnimationFrame(frame);
+      first ||= now;
+      renderer.resize();
+      renderer.render((now - first) / 1000);
+      hook.frames = (hook.frames ?? 0) + 1;
+    };
+    requestAnimationFrame(frame);
+    status.textContent = 'Rebuild in progress: the engine core is running, the scene itself comes next.';
   } catch (error) {
     hook.error = error instanceof Error ? (error.stack ?? error.message) : String(error);
-    status.textContent = 'Failed to start: ' + (error instanceof Error ? error.message : String(error));
+    // a StartupError is written for the reader; anything else is unexpected and says so
+    status.textContent =
+      error instanceof StartupError
+        ? error.message
+        : 'Failed to start: ' + (error instanceof Error ? error.message : String(error));
     console.error(error);
   }
   hook.ready = true;

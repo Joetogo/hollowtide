@@ -218,8 +218,16 @@ async function dump(dir) {
       const r = await page.evaluate(([p, t]) => window.__ref.capture(p, t), [p, t]),
         id = `pose${p + 1}_t${t}`;
       frames[id] = { uniforms: r.uniforms, width: r.width, height: r.height };
+      const png = (file, shot) =>
+        writeFileSync(path.join(dir, file), Buffer.from(shot.png.slice(shot.png.indexOf(',') + 1), 'base64'));
+      png(`frame_${id}.png`, r);
       for (const name of ['scene', 'shaftsBlurred', 'bloom0']) await tex(name, 0, `hdr_${id}_${name}.bin`);
       if (!p) await tex('water', 0, `tex_water_t${t}.bin`);
+      // the same frame without light shafts: what the composite pass makes of the scene and its bloom alone
+      // (both passes are masked: the blur divides by the shafts' depth channel, which is zero when they are not drawn)
+      await page.evaluate(() => window.__ref.setMask(['shafts', 'shaftBlur']));
+      png(`frame_${id}_noShafts.png`, await page.evaluate(([p, t]) => window.__ref.capture(p, t), [p, t]));
+      await page.evaluate(() => window.__ref.setMask([]));
     }
     writeJson(path.join(dir, 'index.json'), {
       upstream: upstream.sha,

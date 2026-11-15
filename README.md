@@ -10,8 +10,16 @@ and the milestone list.
 
 ## Status
 
-Done: milestone 0 (reference rig and baseline) and milestone 1 (scaffold). The page currently shows only the
-scaffold's self-tests; the renderer arrives with milestones 2 to 6.
+Done so far:
+
+| Milestone | What exists | How it was checked |
+|---|---|---|
+| 0. Reference rig | The original, driven and measured on this machine | Two separate loads give byte-identical frames and hashes |
+| 1. Scaffold | TypeScript modules, single-file build with its worker, WGSL files, generated uniform layouts, tests, CI | Starts from `file://` in Chrome and Safari; layouts agree with an independent WGSL parser |
+| 2. Engine core | Device, camera, frame uniforms, render targets, bloom and composite passes, capture hooks | Frame uniforms equal the original's bit for bit (18 frames); bloom is bit-identical and the composited frame differs in 0 of 921,600 pixels at all six viewpoints |
+
+The scene pass is still empty, so the page itself shows almost nothing yet. Next is milestone 3 (the one-time
+bakes: rock detail texture, water texture, shadow map), then the scene shaders on the original's dumped data.
 
 ## Working on it
 
@@ -20,8 +28,8 @@ npm install
 npm run dev            # http://127.0.0.1:5173, rebuilds and reloads on save
 npm run check          # typecheck, lint, unit tests
 npm run build          # dist/index.html: one self-contained file, size printed, 130 kB budget enforced
-npm run test:browser   # opens the built file from file:// in Chrome and checks its start-up report
-npm run test:safari    # the same in Safari (which is left open on the test page)
+npm run test:browser   # Chrome: the built files start from file://, and the passes match the original
+npm run test:safari    # Safari: the build starts from file:// (Safari is left open on the test page)
 ```
 
 How it is put together:
@@ -33,6 +41,11 @@ How it is put together:
   WGSL declarations and the typed offsets, so shaders and the code that feeds them cannot drift apart.
 - `src/shaders/*.wgsl` are real files with `#include "…"`; `tools/wgsl.mjs` resolves the includes and minifies
   them for the shipped build.
+- `src/app/harness.ts` holds the hooks the browser tests use (capture a frame, feed in a dumped scene of the
+  original, compare). It is compiled into `dist/index.harness.html` and the dev server only, never into
+  `dist/index.html`.
+
+The browser tests that compare against the original need its fixtures: run `npm run ref:dump` once.
 
 ## The reference rig
 

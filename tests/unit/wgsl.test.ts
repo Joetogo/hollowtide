@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { WgslReflect } from 'wgsl_reflect';
 import { loadWgsl, minifyWgsl } from '../../tools/wgsl.mjs';
-import { declarations, group } from '../../src/gpu/bindings';
-import { struct } from '../../src/gpu/struct';
-import selfTest from '../../src/shaders/selftest.wgsl';
+import { declarations } from '../../src/gpu/bindings';
+import { BlitGroup } from '../../src/render/passes/blit';
+import { postGroup } from '../../src/render/passes/post';
+import blit from '../../src/shaders/blit.wgsl';
+import post from '../../src/shaders/post.wgsl';
 
 describe('minifyWgsl', () => {
   const cases: [string, string][] = [
@@ -38,14 +40,35 @@ describe('loadWgsl', () => {
     );
   });
 
-  it('gives the app a shader that still parses after minifying', () => {
-    const SelfTest = struct('SelfTest', { shallow: 'vec3f', gain: 'f32', deep: 'vec3f' });
-    const header = declarations(group(0, { selfTest: SelfTest }));
-    expect(selfTest).toContain('fn fullscreenVertex');
-    for (const source of [selfTest, minifyWgsl(selfTest)]) {
-      const parsed = new WgslReflect(header + source);
-      expect(parsed.entry.vertex.map((f) => f.name)).toEqual(['fullscreenVertex']);
-      expect(parsed.entry.fragment.map((f) => f.name)).toEqual(['fragment']);
-    }
-  });
+  // every shader the app ships, with the bind groups it is compiled against
+  const shaders: Record<string, { source: string; header: string; vertex: string[]; fragment: string[] }> = {
+    blit: {
+      source: blit,
+      header: declarations(BlitGroup),
+      vertex: ['fullscreenVertex'],
+      fragment: ['mip', 'bloomDownFirst', 'bloomDown', 'bloomUp'],
+    },
+    'post (multisampled depth)': {
+      source: post,
+      header: declarations(postGroup(true)),
+      vertex: ['fullscreenVertex'],
+      fragment: ['composite'],
+    },
+    'post (plain depth)': {
+      source: post,
+      header: declarations(postGroup(false)),
+      vertex: ['fullscreenVertex'],
+      fragment: ['composite'],
+    },
+  };
+  for (const [name, shader] of Object.entries(shaders)) {
+    it(`${name} parses, as written and minified, with the entry points the pipelines ask for`, () => {
+      expect(shader.source).not.toContain('#include');
+      for (const source of [shader.source, minifyWgsl(shader.source)]) {
+        const parsed = new WgslReflect(shader.header + source);
+        expect(parsed.entry.vertex.map((f) => f.name)).toEqual(shader.vertex);
+        expect(parsed.entry.fragment.map((f) => f.name)).toEqual(shader.fragment);
+      }
+    });
+  }
 });

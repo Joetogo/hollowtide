@@ -1,8 +1,8 @@
 // Bundles src/ into one self-contained dist/index.html.
 //   node tools/build.mjs          minified; fails if the file is over the size budget
 //   node tools/build.mjs --dev    unminified, served on http://127.0.0.1:5173 with rebuild and reload on save
-//   node tools/build.mjs --report dist/index.report.html: the same build, but it can send its start-up report to a
-//                                 listener on 127.0.0.1 (for browsers that cannot be automated, see tests/browser)
+//   node tools/build.mjs --harness  dist/index.harness.html: the same minified build plus the hooks that tests
+//                                 use to drive it and compare it with the original (src/app/harness.ts)
 //
 // The page holds a single classic inline script. It boots as the main thread, and the main thread starts the
 // world-generation worker from a Blob of that same script (src/main.ts), so the one file also runs from file://.
@@ -16,7 +16,7 @@ import { wgslPlugin } from './wgsl.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dev = process.argv.includes('--dev');
-const report = process.argv.includes('--report');
+const harness = process.argv.includes('--harness');
 const BUDGET_KB = 130; // the original ships at 97 kB
 const PORT = 5173;
 const NOTICE =
@@ -32,7 +32,7 @@ const options = (prod) => ({
   minify: prod,
   write: false,
   legalComments: 'none',
-  define: { __DEV__: String(!prod), __REPORT__: String(report) },
+  define: { __DEV__: String(!prod), __HARNESS__: String(harness) },
   plugins: [wgslPlugin({ minify: prod })],
   logLevel: 'warning',
 });
@@ -68,12 +68,12 @@ if (!dev) {
   const result = await build(options(true));
   const html = await page(result.outputFiles[0].text, true);
   mkdirSync(path.join(root, 'dist'), { recursive: true });
-  const name = report ? 'dist/index.report.html' : 'dist/index.html';
+  const name = harness ? 'dist/index.harness.html' : 'dist/index.html';
   writeFileSync(path.join(root, name), html);
   const kb = Buffer.byteLength(html) / 1024;
   const gz = gzipSync(Buffer.from(html), { level: 9 }).length / 1024;
   console.log(`${name}: ${kb.toFixed(1)} kB, ${gz.toFixed(1)} kB gzipped (budget ${BUDGET_KB} kB)`);
-  if (kb > BUDGET_KB && !report) {
+  if (kb > BUDGET_KB && !harness) {
     console.error(`over the ${BUDGET_KB} kB budget`);
     process.exitCode = 1;
   }

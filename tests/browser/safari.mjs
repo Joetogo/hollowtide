@@ -1,6 +1,6 @@
 // Safari smoke test, from file://.
 // Safari can only be automated after the user switches on "Allow remote automation", so instead this builds the
-// report variant (tools/build.mjs --report), opens it with `open -a Safari`, and waits for the page to send its
+// harness build (tools/build.mjs --harness), opens it with `open -a Safari`, and waits for the page to send its
 // start-up report to a listener on 127.0.0.1. Safari is left open on the test page.
 import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
@@ -9,7 +9,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-execFileSync(process.execPath, [path.join(root, 'tools/build.mjs'), '--report'], { stdio: 'inherit' });
+execFileSync(process.execPath, [path.join(root, 'tools/build.mjs'), '--harness'], { stdio: 'inherit' });
 
 const result = await new Promise((resolve, reject) => {
   const stages = [];
@@ -29,7 +29,7 @@ const result = await new Promise((resolve, reject) => {
     const launcher = path.join(root, 'dist/safari-launch.html');
     writeFileSync(
       launcher,
-      `<!doctype html><script>location.replace('index.report.html?report=' + encodeURIComponent('${listener}'))</script>`,
+      `<!doctype html><script>location.replace('index.harness.html?report=' + encodeURIComponent('${listener}'))</script>`,
     );
     execFileSync('open', ['-a', 'Safari', pathToFileURL(launcher).href]);
   });
@@ -47,20 +47,12 @@ const check = (ok, what) => {
 console.log(result.userAgent);
 check(!result.error, `starts from file://${result.error ? ': ' + result.error : ''}`);
 if (result.report) {
-  const { worker, gpu } = result.report;
+  const { worker, adapter, size } = result.report;
+  check(!!adapter, `WebGPU device and renderer created (${adapter}, ${size.join('x')})`);
   check(
-    worker.detached && worker.intact,
-    `worker: ${worker.megabytes} MB transferred there and back intact (${worker.roundTripMs.toFixed(1)} ms)`,
+    worker?.detached && worker?.intact,
+    `worker: ${worker?.megabytes} MB transferred there and back intact (${worker?.roundTripMs.toFixed(1)} ms)`,
   );
-  check(gpu !== null, 'WebGPU adapter available');
-  if (gpu) {
-    check(
-      gpu.errors.length === 0,
-      `generated struct and bind group compile and validate${gpu.errors.length ? ': ' + gpu.errors.join('; ') : ''}`,
-    );
-    const off = Math.max(...gpu.pixel.map((v, i) => Math.abs(v - gpu.expected[i])));
-    check(off <= 1, `uniforms reach the shader at the generated offsets: pixel ${gpu.pixel} vs ${gpu.expected}`);
-  }
 }
 console.log('Safari was left open on the test page.');
 process.exitCode = failures.length ? 1 : 0;

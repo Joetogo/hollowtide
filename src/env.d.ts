@@ -7,5 +7,8 @@ declare module '*.wgsl' {
 /** True in the dev server build, false in dist/index.html; dev-only code is dropped from the shipped file. */
 declare const __DEV__: boolean;
 
-/** True only in the `--report` build, which may send its start-up report to a listener on 127.0.0.1. */
-declare const __REPORT__: boolean;
+/**
+ * True only in the `--harness` build (dist/index.harness.html): the shipped code plus the hooks tests use to
+ * drive it and compare it with the original (src/app/harness.ts).
+ */
+declare const __HARNESS__: boolean;
