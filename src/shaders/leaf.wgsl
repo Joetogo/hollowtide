@@ -99,3 +99,68 @@ fn leafVertex(@builtin(vertex_index) index: u32, leaf: LeafInstance) -> LeafVary
   o.color = color; o.look = look; o.seeds = vec2f(s1, s2); o.sparkle = sparkle;
   return o;
 }
+
+@fragment
+fn leafFragment(v: LeafVarying, @builtin(front_facing) front: bool) -> @location(0) vec4f {
+  let dist = length(v.world - frame.camPos);
+  let caustic = causticsMono(v.world, dist);
+  var n = normalize(v.normal); if (!front) { n = -n; }
+  let V = normalize(frame.camPos - v.world); let L = frame.sunDir;
+  let zone = zoneAt(v.world);
+  let grain = textureSample(detailTexture, repeatSampler, vec2f(v.uv.x * .13 + v.seeds.x * 3.7, v.uv.y * .8 + v.seeds.y * 5.3));
+  let around = volume(v.world + vec3f(0., .8, 0.));
+  let sun = sunlight(v.world.y, zone) * shadow1(v.world + L * .3);
+  let ndl = dot(n, L);
+  // base colour: darker along the midrib and towards the root, fine veins up close, mottled by the detail texture
+  var albedo = v.color * (.72 + .28 * smoothRamp(0., .25, abs(v.uv.x))) * mix(.5, 1.12, v.uv.y) * (1. - .45 * smoothRamp(30., 8., dist) * smoothRamp(.6, 1., sin(v.uv.y * 40. - abs(v.uv.x) * 7. + v.seeds.x * 40.))) * (.58 + .42 * smoothRamp(0., .13, abs(v.uv.x))) * (.5 + 1.0 * grain.b) * (.65 + .7 * grain.a);
+  let ndv = clamp01(dot(n, V));
+  // a rainbow sheen that shifts with the viewing angle, on the types that have it
+  let iridescence = .5 + .5 * cos(TAU * (vec3f(0., .33, .67) + ndv * 1.1 + v.seeds.x * .22 + v.uv.y * .5 + .55));
+  albedo = mix(albedo, albedo * .5 + iridescence * vec3f(.15, .13, .30), v.look.z * (1. - ndv) * .8);
+  // light coming through the blade from behind, warmer than the blade itself
+  let through = (max(-ndl, 0.) * .85 + .15) * v.look.y;
+  let throughColor = albedo * mix(vec3f(1.), vec3f(1.5, 1.4, .75), clamp01(v.look.y) * (1. - v.look.z));
+  let occlusion = clamp01((around.r - .5) * 6.) * mix(.4, 1., v.uv.y);
+  let ambientLight = (ambient(v.world, n, around.g, zone) + ambient(v.world, -n, around.g, zone) * v.look.y * .55 * vec3f(1.1, 1.15, .7) + sideGlow(v.world, n, clamp01((around.r - .5) * 4.), zone) * .6) * (.3 + .7 * occlusion);
+  var c = sun * (.06 + caustic * 1.5) * (albedo * max(ndl, 0.) + throughColor * through) + albedo * ambientLight;
+  let H = normalize(V + L);
+  c += sun * (pow(clamp01(dot(n, H)), 40.) * (.45 + iridescence * v.look.z * 2.) + pow(clamp01(dot(n, H)), 9.) * .07) + ambientLight * iridescence * v.look.z * pow(1. - ndv, 3.) * 1.5;
+  c += sun * throughColor * v.look.y * pow(clamp01(dot(-V, L)), 3.) * 1.2; // glow when looking towards the sun through it
+  c += albedo * v.look.w * (.5 + 3. * dot(ambientLight + sun * .3, vec3f(.1, .5, .5)));
+  // sparkle: whole-leaf glints that twinkle slowly
+  let twinkle = pow(.5 + .5 * sin(frame.time * (.5 + v.seeds.y * 1.4) + v.seeds.x * 90.), 5.);
+  let band = smoothRamp(.2, .0, abs(v.uv.y - (.35 + .45 * v.seeds.y))) * (1. - v.uv.x * v.uv.x);
+  let lit = .35 + sun.g * 1.2;
+  c += v.sparkle * v.look.x * (.1 + twinkle) * band * lit * .6;
+  return hdrOutput(applyFog(c, v.world, zone));
+}
+
+// ---- glints: the gold and green specks drifting among the kelp, as additive camera-facing quads
+struct GlintVarying { @builtin(position) clip: vec4f, @location(0) uv: vec2f, @location(1) @interpolate(flat) color: vec3f }
+
+// place: position, height above the plant's root (so it sways with the plant). spark: seed, colour key, size.
+@vertex
+fn glintVertex(@builtin(vertex_index) index: u32, @location(0) place: vec4f, @location(1) spark: vec4f) -> GlintVarying {
+  var o: GlintVarying; let q = vec2f(f32(index & 1u), f32(index >> 1u)) * 2. - 1.; let t = frame.time;
+  var p = place.xyz; let drift = sway(place.xz, place.w, t); p.x += drift.x; p.z += drift.y;
+  p += .1 * vec3f(sin(t * .7 + spark.x * 50.), sin(t * .9 + spark.x * 70.), cos(t * .8 + spark.x * 90.));
+  let d = length(p - frame.camPos);
+  // too far or behind the camera: collapse the quad outside the clip volume
+  if (d > 120. || dot(p - frame.camPos, frame.fwd) < -1.) { o.clip = vec4f(0., 0., 2., 1.); return o; }
+  let twinkle = pow(.5 + .5 * sin(t * (.35 + .9 * sineHash(spark.x)) + spark.x * 100.), 4.);
+  // never smaller than about a pixel on screen; the brightness is scaled down to keep the same total light
+  let size = min(max(spark.z, d * .0026), d * .0045);
+  let world = p + (frame.right * q.x + frame.up * q.y) * size;
+  o.clip = frame.viewProj * vec4f(world, 1.); o.uv = q;
+  let zone = zoneAt(p);
+  let lit = .3 + 1.8 * shadow1(p) * sunlight(p.y, zone).g;
+  let e = spark.z / size;
+  o.color = sparklePalette(spark.y) * (.12 + twinkle * 1.7) * lit * e * e * exp(-EXTINCTION.g * d) * smoothRamp(.4, 1.5, d) * 17.;
+  return o;
+}
+
+@fragment
+fn glintFragment(v: GlintVarying) -> @location(0) vec4f {
+  let r = dot(v.uv, v.uv);
+  return vec4f(min(v.color * exp(-r * 7.) * (1. - smoothRamp(.7, 1., r)), vec3f(10.)), 0.);
+}

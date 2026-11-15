@@ -240,7 +240,11 @@ async function dump(dir) {
       // the same frame without light shafts: what the composite pass makes of the scene and its bloom alone
       // (both passes are masked: the blur divides by the shafts' depth channel, which is zero when they are not drawn)
       await page.evaluate(() => window.__ref.setMask(['shafts', 'shaftBlur']));
-      png(`frame_${id}_noShafts.png`, await page.evaluate(([p, t]) => window.__ref.capture(p, t), [p, t]));
+      // at every capture time, since plants and animals move
+      for (const tt of times) {
+        const shot = await page.evaluate(([p, t]) => window.__ref.capture(p, t), [p, tt]);
+        png(`frame_pose${p + 1}_t${tt}_noShafts.png`, shot);
+      }
       // the same frame with only the opaque world: terrain, rocks, set pieces, sponges, corals, surface, backdrop
       await page.evaluate((m) => window.__ref.setMask(m), OPAQUE_ONLY);
       png(`frame_${id}_opaque.png`, await page.evaluate(([p, t]) => window.__ref.capture(p, t), [p, t]));

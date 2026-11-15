@@ -32,6 +32,36 @@ export const LEAF_INSTANCE_LAYOUT: GPUVertexBufferLayout = {
   ],
 };
 
+/** Fish and mantas: path centre + radius, then four motion values. */
+export const CREATURE_INSTANCE_LAYOUT: GPUVertexBufferLayout = {
+  arrayStride: 32,
+  stepMode: 'instance',
+  attributes: [
+    { shaderLocation: 2, offset: 0, format: 'float32x4' },
+    { shaderLocation: 3, offset: 16, format: 'float32x4' },
+  ],
+};
+/** Bubbles and glints: eight floats, with no mesh in front of them. */
+export const SPRITE_INSTANCE_LAYOUT: GPUVertexBufferLayout = {
+  arrayStride: 32,
+  stepMode: 'instance',
+  attributes: [
+    { shaderLocation: 0, offset: 0, format: 'float32x4' },
+    { shaderLocation: 1, offset: 16, format: 'float32x4' },
+  ],
+};
+export const SNOW_INSTANCE_LAYOUT: GPUVertexBufferLayout = {
+  arrayStride: 16,
+  stepMode: 'instance',
+  attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x4' }],
+};
+
+/** An instance buffer drawn whole. */
+export interface InstanceBuffer {
+  buffer: GPUBuffer;
+  count: number;
+}
+
 /** An instance buffer sorted by culling cell. */
 export interface CellBuffer {
   buffer: GPUBuffer;
@@ -56,6 +86,11 @@ export interface WorldBuffers {
   leavesBig: CellBuffer;
   leavesBigFar: CellBuffer;
   leavesSmall: CellBuffer;
+  fish: InstanceBuffer;
+  mantas: InstanceBuffer;
+  bubbles: InstanceBuffer;
+  glints: InstanceBuffer;
+  snow: InstanceBuffer;
   destroy(): void;
 }
 
@@ -80,6 +115,11 @@ export function uploadWorld(gpu: Gpu, scene: Scene, data: WorldData): WorldBuffe
     buffer: upload(label, set.instances, VERTEX),
     count: set.instances.byteLength / stride,
     cells: set.cells,
+  });
+
+  const instances = (label: string, floats: Float32Array, perInstance: number): InstanceBuffer => ({
+    buffer: upload(label, floats, VERTEX),
+    count: floats.length / perInstance,
   });
 
   const solidCount = data.solids.instances.length / 12;
@@ -113,6 +153,11 @@ export function uploadWorld(gpu: Gpu, scene: Scene, data: WorldData): WorldBuffe
     leavesBig: cellBuffer('leaves', data.leaves.big, LEAF_BYTES),
     leavesBigFar: cellBuffer('far leaves', data.leaves.bigFar, LEAF_BYTES),
     leavesSmall: cellBuffer('small leaves', data.leaves.small, LEAF_BYTES),
+    fish: instances('fish', data.fish, 8),
+    mantas: instances('mantas', data.mantas, 8),
+    bubbles: instances('bubbles', data.bubbles, 8),
+    glints: instances('glints', data.glints, 8),
+    snow: instances('snow', data.snow, 4),
     destroy: () => buffers.forEach((b) => b.destroy()),
   };
 }

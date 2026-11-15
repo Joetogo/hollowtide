@@ -7,10 +7,12 @@ import { postGroup } from '../../src/render/passes/post';
 import { WaterGroup } from '../../src/render/passes/water';
 import { SceneGroup } from '../../src/render/scene';
 import blit from '../../src/shaders/blit.wgsl';
+import creatures from '../../src/shaders/creatures.wgsl';
 import detail from '../../src/shaders/detail.wgsl';
 import leaf from '../../src/shaders/leaf.wgsl';
 import post from '../../src/shaders/post.wgsl';
 import solid from '../../src/shaders/solid.wgsl';
+import sprites from '../../src/shaders/sprites.wgsl';
 import surface from '../../src/shaders/surface.wgsl';
 import water from '../../src/shaders/water.wgsl';
 
@@ -76,7 +78,24 @@ describe('loadWgsl', () => {
       vertex: ['surfaceVertex', 'backdropVertex'],
       fragment: ['surfaceFragment', 'backdropFragment'],
     },
-    leaf: { source: leaf, header: declarations(SceneGroup), vertex: ['leafVertex'], fragment: [] },
+    leaf: {
+      source: leaf,
+      header: declarations(SceneGroup),
+      vertex: ['leafVertex', 'glintVertex'],
+      fragment: ['leafFragment', 'glintFragment'],
+    },
+    creatures: {
+      source: creatures,
+      header: declarations(SceneGroup),
+      vertex: ['fishVertex', 'mantaVertex'],
+      fragment: ['fishFragment', 'mantaFragment'],
+    },
+    sprites: {
+      source: sprites,
+      header: declarations(SceneGroup),
+      vertex: ['bubbleVertex', 'snowVertex'],
+      fragment: ['bubbleFragment', 'snowFragment'],
+    },
   };
   for (const [name, shader] of Object.entries(shaders)) {
     it(`${name} parses, as written and minified, with the entry points the pipelines ask for`, () => {

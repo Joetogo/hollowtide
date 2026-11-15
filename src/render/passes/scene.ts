@@ -1,15 +1,27 @@
-// The scene pass: everything opaque, drawn once into the multisampled HDR target.
-// So far: terrain, rocks, set pieces, sponges, corals, the water surface and the backdrop. Plants, animals and
-// particles join in the next milestone.
+// The scene pass: the whole world, drawn once into the multisampled HDR target. Opaque things first (terrain,
+// rocks, set pieces, sponges, corals, animals, plants, the water surface, the backdrop), then what blends on top
+// (bubbles, glints, drifting particles).
 import type { Quality } from '../../config/quality';
 import { DEPTH, HDR, type Gpu } from '../../gpu/context';
 import { shaderModule } from '../../gpu/shader';
+import creaturesSource from '../../shaders/creatures.wgsl';
+import leafSource from '../../shaders/leaf.wgsl';
 import solidSource from '../../shaders/solid.wgsl';
+import spritesSource from '../../shaders/sprites.wgsl';
 import surfaceSource from '../../shaders/surface.wgsl';
 import { MESH } from '../../world/data';
 import { visibleRuns, type CullView } from '../cull';
 import { SceneGroup, type Scene } from '../scene';
-import { MESH_VERTEX_LAYOUT, SOLID_INSTANCE_LAYOUT, type CellBuffer, type WorldBuffers } from '../world';
+import {
+  CREATURE_INSTANCE_LAYOUT,
+  LEAF_INSTANCE_LAYOUT,
+  MESH_VERTEX_LAYOUT,
+  SNOW_INSTANCE_LAYOUT,
+  SOLID_INSTANCE_LAYOUT,
+  SPRITE_INSTANCE_LAYOUT,
+  type CellBuffer,
+  type WorldBuffers,
+} from '../world';
 
 /** How far each thing is drawn, in metres from the camera to the nearest edge of its cell. */
 const TERRAIN_DISTANCE = 240;
@@ -19,6 +31,32 @@ const LARGE_CHUNK_NEAR = 40; // large chunks switch to their coarser mesh here..
 const LARGE_CHUNK_FAR = 150; // ...and end here
 const PROP_DISTANCE = 110;
 const CORAL_NEAR = 6; // corals switch to their coarser mesh almost at once
+// leaves: 9 rows of vertices up close, 5 mid-range, then every second leaf (made wider) with 3 rows
+const LEAF_NEAR = 24;
+const LEAF_MID = 58;
+const LEAF_FAR = 150;
+const SMALL_LEAF_DISTANCE = 70;
+
+const PREMULTIPLIED: GPUBlendState = {
+  color: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
+  alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
+};
+const ADDITIVE: GPUBlendState = {
+  color: { srcFactor: 'one', dstFactor: 'one' },
+  alpha: { srcFactor: 'one', dstFactor: 'one' },
+};
+
+interface PipelineOptions {
+  buffers?: GPUVertexBufferLayout[];
+  strip?: boolean;
+  cullMode?: GPUCullMode;
+  /** pipeline constants of the vertex stage */
+  vertexConstants?: Record<string, number>;
+  /** pipeline constants of the fragment stage */
+  constants?: Record<string, number>;
+  /** blended on top of the scene: tested against depth but not written to it */
+  blend?: GPUBlendState;
+}
 
 export interface ScenePass {
   /** Draws into a pass the renderer has begun. */
@@ -29,6 +67,9 @@ export async function createScenePass(gpu: Gpu, scene: Scene, quality: Quality):
   const { device } = gpu;
   const solidModule = shaderModule(device, 'solid', [SceneGroup], solidSource);
   const surfaceModule = shaderModule(device, 'surface', [SceneGroup], surfaceSource);
+  const creaturesModule = shaderModule(device, 'creatures', [SceneGroup], creaturesSource);
+  const leafModule = shaderModule(device, 'leaf', [SceneGroup], leafSource);
+  const spritesModule = shaderModule(device, 'sprites', [SceneGroup], spritesSource);
   const shadowConstants = { LOW: quality.level > 1 ? 1 : 0, SHADOW_SIZE: scene.shadowSize };
 
   const pipeline = (
@@ -36,48 +77,79 @@ export async function createScenePass(gpu: Gpu, scene: Scene, quality: Quality):
     module: GPUShaderModule,
     vertex: string,
     fragment: string,
-    options: {
-      buffers?: GPUVertexBufferLayout[];
-      strip?: boolean;
-      cullMode?: GPUCullMode;
-      constants?: Record<string, number>;
-    },
+    options: PipelineOptions,
   ) =>
     device.createRenderPipelineAsync({
       label,
       layout: scene.pipelineLayout,
-      vertex: { module, entryPoint: vertex, buffers: options.buffers ?? [] },
-      fragment: { module, entryPoint: fragment, targets: [{ format: HDR }], constants: options.constants },
+      vertex: { module, entryPoint: vertex, buffers: options.buffers ?? [], constants: options.vertexConstants },
+      fragment: {
+        module,
+        entryPoint: fragment,
+        targets: [{ format: HDR, blend: options.blend }],
+        constants: options.constants,
+      },
       primitive: { topology: options.strip ? 'triangle-strip' : 'triangle-list', cullMode: options.cullMode ?? 'none' },
       // reversed depth: nearer is greater
-      depthStencil: { format: DEPTH, depthWriteEnabled: true, depthCompare: 'greater' },
+      depthStencil: { format: DEPTH, depthWriteEnabled: !options.blend, depthCompare: 'greater' },
       multisample: { count: quality.samples },
     });
   const solidBuffers = [MESH_VERTEX_LAYOUT, SOLID_INSTANCE_LAYOUT];
-  const [terrain, solid, surface, backdrop] = await Promise.all([
-    pipeline('terrain', solidModule, 'solidVertex', 'solidFragment', {
-      buffers: solidBuffers,
-      cullMode: 'back',
-      constants: shadowConstants,
-    }),
-    pipeline('solid', solidModule, 'solidVertex', 'solidFragment', {
-      buffers: solidBuffers,
-      constants: shadowConstants,
-    }),
-    pipeline('surface', surfaceModule, 'surfaceVertex', 'surfaceFragment', { strip: true }),
-    pipeline('backdrop', surfaceModule, 'backdropVertex', 'backdropFragment', { strip: true }),
-  ]);
+  const creatureBuffers = [MESH_VERTEX_LAYOUT, CREATURE_INSTANCE_LAYOUT];
+  const sprite = { buffers: [SPRITE_INSTANCE_LAYOUT], strip: true };
+  const leaf = (label: string, vertexConstants: Record<string, number>) =>
+    pipeline(label, leafModule, 'leafVertex', 'leafFragment', {
+      buffers: [LEAF_INSTANCE_LAYOUT],
+      strip: true,
+      vertexConstants,
+    });
+
+  const [terrain, solid, surface, backdrop, manta, fish, leafNear, leafMid, leafFar, leafSmall, bubbles, glints, snow] =
+    await Promise.all([
+      pipeline('terrain', solidModule, 'solidVertex', 'solidFragment', {
+        buffers: solidBuffers,
+        cullMode: 'back',
+        constants: shadowConstants,
+      }),
+      pipeline('solid', solidModule, 'solidVertex', 'solidFragment', {
+        buffers: solidBuffers,
+        constants: shadowConstants,
+      }),
+      pipeline('surface', surfaceModule, 'surfaceVertex', 'surfaceFragment', { strip: true }),
+      pipeline('backdrop', surfaceModule, 'backdropVertex', 'backdropFragment', { strip: true }),
+      pipeline('manta', creaturesModule, 'mantaVertex', 'mantaFragment', {
+        buffers: creatureBuffers,
+        constants: { SHADOW_SIZE: scene.shadowSize },
+      }),
+      pipeline('fish', creaturesModule, 'fishVertex', 'fishFragment', { buffers: creatureBuffers }),
+      leaf('leaf near', { ROWS: 9 }),
+      leaf('leaf mid', { ROWS: 5 }),
+      leaf('leaf far', { ROWS: 3 }),
+      leaf('leaf small', { ROWS: 3, FAR: SMALL_LEAF_DISTANCE }),
+      pipeline('bubbles', spritesModule, 'bubbleVertex', 'bubbleFragment', { ...sprite, blend: PREMULTIPLIED }),
+      pipeline('glints', leafModule, 'glintVertex', 'glintFragment', { ...sprite, blend: ADDITIVE }),
+      pipeline('snow', spritesModule, 'snowVertex', 'snowFragment', {
+        buffers: [SNOW_INSTANCE_LAYOUT],
+        strip: true,
+        blend: ADDITIVE,
+      }),
+    ]);
 
   return {
     encode(pass, world, view) {
       const runs = view.runs;
-      /** Draws the instances of one cell-sorted list that are in view and within the distance band. */
+      /** Draws the instances of one cell-sorted list of meshes that are in view and within the distance band. */
       const drawCells = (list: CellBuffer, mesh: number, minDistance: number, maxDistance: number) => {
         const range = world.meshes[mesh]!;
         const n = visibleRuns(view, list.cells, 3, minDistance, maxDistance);
         for (let i = 0; i < n; i++) {
           pass.drawIndexed(range.indexCount, runs[i * 2 + 1]!, range.firstIndex, range.firstVertex, runs[i * 2]!);
         }
+      };
+      /** The same for leaves, which have no mesh: two vertices per row. */
+      const drawLeaves = (list: CellBuffer, rows: number, margin: number, minDistance: number, maxDistance: number) => {
+        const n = visibleRuns(view, list.cells, margin, minDistance, maxDistance);
+        for (let i = 0; i < n; i++) pass.draw(rows * 2, runs[i * 2 + 1]!, 0, runs[i * 2]!);
       };
       pass.setBindGroup(0, scene.bindGroup);
 
@@ -117,10 +189,44 @@ export async function createScenePass(gpu: Gpu, scene: Scene, quality: Quality):
         if (coral) drawCells(prop, MESH.coralFar + i - 3, CORAL_NEAR, PROP_DISTANCE);
       }
 
+      // animals: the mesh buffers are still bound
+      const mantaMesh = world.meshes[MESH.manta]!;
+      pass.setPipeline(manta);
+      pass.setVertexBuffer(1, world.mantas.buffer);
+      pass.drawIndexed(mantaMesh.indexCount, world.mantas.count, mantaMesh.firstIndex, mantaMesh.firstVertex, 0);
+      const fishMesh = world.meshes[MESH.fish]!;
+      pass.setPipeline(fish);
+      pass.setVertexBuffer(1, world.fish.buffer);
+      pass.drawIndexed(fishMesh.indexCount, world.fish.count, fishMesh.firstIndex, fishMesh.firstVertex, 0);
+
+      // kelp and plants
+      pass.setPipeline(leafNear);
+      pass.setVertexBuffer(0, world.leavesBig.buffer);
+      drawLeaves(world.leavesBig, 9, 5, 0, LEAF_NEAR);
+      pass.setPipeline(leafMid);
+      drawLeaves(world.leavesBig, 5, 5, LEAF_NEAR, LEAF_MID);
+      pass.setPipeline(leafFar);
+      pass.setVertexBuffer(0, world.leavesBigFar.buffer);
+      drawLeaves(world.leavesBigFar, 3, 5, LEAF_MID, LEAF_FAR);
+      pass.setPipeline(leafSmall);
+      pass.setVertexBuffer(0, world.leavesSmall.buffer);
+      drawLeaves(world.leavesSmall, 3, 1.5, 0, SMALL_LEAF_DISTANCE);
+
       pass.setPipeline(surface);
       pass.draw(4);
       pass.setPipeline(backdrop);
       pass.draw(4);
+
+      // blended, in this order: bubbles over the scene, then the additive glints and particles
+      pass.setPipeline(bubbles);
+      pass.setVertexBuffer(0, world.bubbles.buffer);
+      pass.draw(4, world.bubbles.count);
+      pass.setPipeline(glints);
+      pass.setVertexBuffer(0, world.glints.buffer);
+      pass.draw(4, world.glints.count);
+      pass.setPipeline(snow);
+      pass.setVertexBuffer(0, world.snow.buffer);
+      pass.draw(4, world.snow.count);
     },
   };
 }
