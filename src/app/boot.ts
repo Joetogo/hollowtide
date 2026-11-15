@@ -115,7 +115,15 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       adapter: [info.vendor, info.architecture, info.description].filter(Boolean).join(' '),
       size: [renderer.targets.width, renderer.targets.height],
     };
-    if (__DEV__ || __HARNESS__) hook.harness = createHarness(renderer);
+    if (__DEV__ || __HARNESS__) {
+      hook.harness = createHarness(renderer);
+      // ?world=reference: until the generator exists, the scene can be drawn from a dump of the original's world
+      if (new URLSearchParams(location.search).get('world') === 'reference') {
+        status.textContent = 'Loading the reference world…';
+        const [eye] = await hook.harness.loadReferenceWorld('/fixtures/');
+        lookAt(renderer.camera, eye![0]!, eye![1]!, eye![2]!, eye![3]!, eye![4]!, eye![5]!);
+      }
+    }
     if (__HARNESS__) hook.report.worker = await workerRoundTrip(createWorker);
 
     let first = 0;
@@ -128,7 +136,9 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       hook.frames = (hook.frames ?? 0) + 1;
     };
     requestAnimationFrame(frame);
-    status.textContent = 'Rebuild in progress: the engine core is running, the scene itself comes next.';
+    status.textContent = renderer.world
+      ? 'Rebuild in progress: rock, seabed and set pieces, drawn from a dump of the original world.'
+      : 'Rebuild in progress: the world generator is not built yet, so there is nothing to see here.';
   } catch (error) {
     hook.error = error instanceof Error ? (error.stack ?? error.message) : String(error);
     // a StartupError is written for the reader; anything else is unexpected and says so

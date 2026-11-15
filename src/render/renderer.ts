@@ -4,11 +4,13 @@ import { createCamera, type Camera } from '../camera/camera';
 import type { Quality } from '../config/quality';
 import type { Gpu } from '../gpu/context';
 import type { WorldData } from '../world/data';
+import { createCullView, updateCullView } from './cull';
 import { writeFrame } from './frame';
 import { createBlit } from './passes/blit';
 import { createBloom } from './passes/bloom';
 import { bakeDetail } from './passes/detail';
 import { createPost } from './passes/post';
+import { createScenePass } from './passes/scene';
 import { createShadowBake } from './passes/shadow';
 import { createWater } from './passes/water';
 import { createScene, type Scene } from './scene';
@@ -44,18 +46,21 @@ export interface Renderer {
 export async function createRenderer(gpu: Gpu, quality: Quality): Promise<Renderer> {
   const { device, queue, canvas, context } = gpu;
   const scene = createScene(gpu, quality);
-  const [blit, post, shadow] = await Promise.all([
+  const [blit, post, shadow, sceneDraw] = await Promise.all([
     createBlit(gpu, scene.linearSampler),
     createPost(gpu, scene.frameBuffer, scene.linearSampler, quality.samples),
     createShadowBake(gpu, scene, quality),
+    createScenePass(gpu, scene, quality),
   ]);
   const [water] = await Promise.all([createWater(gpu, blit, scene.water), bakeDetail(gpu, blit, scene.detail)]);
   const bloom = createBloom(blit);
   let scenePass: GPURenderPassDescriptor;
+  const camera = createCamera();
+  const cullView = createCullView(camera);
 
   const renderer: Renderer = {
     gpu,
-    camera: createCamera(),
+    camera,
     scene,
     world: null,
     detail: 1,
@@ -115,7 +120,14 @@ export async function createRenderer(gpu: Gpu, quality: Quality): Promise<Render
       queue.writeBuffer(scene.frameBuffer, 0, scene.frameData);
       const encoder = device.createCommandEncoder();
       water.encode(encoder, time);
-      if (!renderer.holdScene) encoder.beginRenderPass(scenePass).end();
+      if (!renderer.holdScene) {
+        const pass = encoder.beginRenderPass(scenePass);
+        if (renderer.world) {
+          updateCullView(cullView, targets.width, targets.height, renderer.detail);
+          sceneDraw.encode(pass, renderer.world, cullView);
+        }
+        pass.end();
+      }
       bloom.encode(encoder);
       post.encode(encoder, context.getCurrentTexture().createView());
       queue.submit([encoder.finish()]);

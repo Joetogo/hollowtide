@@ -198,6 +198,20 @@ function diffManifests(a, b) {
 }
 
 // ---------------------------------------------------------------- dump
+// everything the rebuild's renderer does not draw until its leaves, animals, particles and shafts exist
+const OPAQUE_ONLY = [
+  'leaf9',
+  'leaf5',
+  'leafSmall',
+  'leafFar',
+  'fish',
+  'manta',
+  'bubbles',
+  'snow',
+  'glints',
+  'shafts',
+  'shaftBlur',
+];
 async function dump(dir) {
   mkdirSync(dir, { recursive: true });
   const s = await open({ page: 'reference.html', ref: 'dump', dumpDir: dir });
@@ -227,6 +241,10 @@ async function dump(dir) {
       // (both passes are masked: the blur divides by the shafts' depth channel, which is zero when they are not drawn)
       await page.evaluate(() => window.__ref.setMask(['shafts', 'shaftBlur']));
       png(`frame_${id}_noShafts.png`, await page.evaluate(([p, t]) => window.__ref.capture(p, t), [p, t]));
+      // the same frame with only the opaque world: terrain, rocks, set pieces, sponges, corals, surface, backdrop
+      await page.evaluate((m) => window.__ref.setMask(m), OPAQUE_ONLY);
+      png(`frame_${id}_opaque.png`, await page.evaluate(([p, t]) => window.__ref.capture(p, t), [p, t]));
+      await tex('scene', 0, `hdr_${id}_opaqueScene.bin`);
       await page.evaluate(() => window.__ref.setMask([]));
     }
     writeJson(path.join(dir, 'index.json'), {

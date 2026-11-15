@@ -38,8 +38,11 @@ export interface Harness {
   compareFrame(pose: number[], time: number, pngUrl: string): Promise<FrameDiff>;
   /** Compares a texture with a raw dump of the original's (call after a frame has been drawn). */
   compareTexture(name: TextureName, dumpUrl: string): Promise<TextureDiff>;
-  /** Builds the world from a dump of the original (index.json and the .bin files under `baseUrl`) and uploads it. */
-  loadReferenceWorld(baseUrl: string): Promise<void>;
+  /**
+   * Builds the world from a dump of the original (index.json and the .bin files under `baseUrl`) and uploads it.
+   * Resolves with its six viewpoints.
+   */
+  loadReferenceWorld(baseUrl: string): Promise<number[][]>;
 }
 
 export type TextureName = 'scene' | 'bloom0' | 'water' | 'detail' | 'shadow';
@@ -231,6 +234,7 @@ export function createHarness(renderer: Renderer): Harness {
         viewpoints: index.meta.poses,
       };
       renderer.setWorld(data);
+      return data.viewpoints;
     },
   };
 }

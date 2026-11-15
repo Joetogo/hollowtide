@@ -7,7 +7,7 @@
 // The page holds a single classic inline script. It boots as the main thread, and the main thread starts the
 // world-generation worker from a Blob of that same script (src/main.ts), so the one file also runs from file://.
 import { build, context, transform } from 'esbuild';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createReadStream, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -19,6 +19,8 @@ const dev = process.argv.includes('--dev');
 const harness = process.argv.includes('--harness');
 const BUDGET_KB = 130; // the original ships at 97 kB
 const PORT = 5173;
+const upstream = JSON.parse(readFileSync(path.join(root, 'tools/reference/upstream.json'), 'utf8'));
+const fixtures = path.join(root, '.cache/reference', upstream.sha.slice(0, 7), 'L0/fixtures');
 const NOTICE =
   '<!-- Abyssal Garden, rebuilt. MIT License. Copyright (c) 2026 Maksymilian Dendura (the original Abyssal Garden, ' +
   'https://github.com/Noniv/abyssal-garden) and (c) 2026 Richman Tan (this rebuild). -->';
@@ -104,6 +106,10 @@ if (!dev) {
         res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store' });
         clients.add(res);
         req.on('close', () => clients.delete(res));
+      } else if (/^\/fixtures\/[\w.-]+$/.test(req.url) && existsSync(path.join(fixtures, req.url.slice(10)))) {
+        // the original's dumped world (npm run ref:dump), for /?world=reference
+        res.writeHead(200, { 'content-type': 'application/octet-stream', 'cache-control': 'no-store' });
+        createReadStream(path.join(fixtures, req.url.slice(10))).pipe(res);
       } else if (req.url === '/' || req.url?.startsWith('/?')) {
         res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
         res.end(html);

@@ -11,6 +11,7 @@ import detail from '../../src/shaders/detail.wgsl';
 import leaf from '../../src/shaders/leaf.wgsl';
 import post from '../../src/shaders/post.wgsl';
 import solid from '../../src/shaders/solid.wgsl';
+import surface from '../../src/shaders/surface.wgsl';
 import water from '../../src/shaders/water.wgsl';
 
 describe('minifyWgsl', () => {
@@ -68,7 +69,13 @@ describe('loadWgsl', () => {
     },
     detail: { source: detail, header: '', vertex: ['fullscreenVertex'], fragment: ['bakeDetail'] },
     water: { source: water, header: declarations(WaterGroup), vertex: ['fullscreenVertex'], fragment: ['drawWater'] },
-    solid: { source: solid, header: declarations(SceneGroup), vertex: ['solidVertex'], fragment: [] },
+    solid: { source: solid, header: declarations(SceneGroup), vertex: ['solidVertex'], fragment: ['solidFragment'] },
+    surface: {
+      source: surface,
+      header: declarations(SceneGroup),
+      vertex: ['surfaceVertex', 'backdropVertex'],
+      fragment: ['surfaceFragment', 'backdropFragment'],
+    },
     leaf: { source: leaf, header: declarations(SceneGroup), vertex: ['leafVertex'], fragment: [] },
   };
   for (const [name, shader] of Object.entries(shaders)) {

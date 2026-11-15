@@ -20,8 +20,12 @@ Done so far:
 
 | 3. Bakes | Rock detail texture, animated water texture, sun shadow map; the world-data contract and its GPU buffers | All three equal the original's value for value (4.2M, 1.0M and 16.8M values), the shadow map baked from the original's dumped world |
 
-The scene pass is still empty, so the page itself shows almost nothing yet. Next is milestone 4: the rock and
-terrain shader, fog, the water surface and the backdrop, drawn from the original's dumped world.
+| 4. Opaque scene | Rock and seabed shader, set pieces, sponges, corals, water surface, backdrop, cell culling and level of detail | Drawing the original's dumped world, all six viewpoints match its frames: at most 2 of 921,600 pixels differ, by 1/255 |
+
+The renderer is being built first, drawing a dump of the original's world; the rebuild's own world generator
+follows in milestones 7 and 8. To see it: `npm run ref:dump` once, then `npm run dev` and open
+`http://127.0.0.1:5173/?world=reference`, or `npm run shots` to save frames to `test-results/shots/`. There are no
+plants, animals or light shafts yet (milestones 5 and 6), and no controls (milestone 9).
 
 ## Working on it
 
