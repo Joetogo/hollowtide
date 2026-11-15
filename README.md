@@ -26,8 +26,11 @@ Done so far:
 
 | 6. Light shafts, detail levels | Volumetric light shafts and their blur; Medium and Low variants; the scripted camera path | Whole frames against the original at High, Medium and Low: six viewpoints at three times each, plus 30 frames along the fly-through at High. At High and Medium at most 11 of 921,600 pixels differ, by 1/255 |
 
-**The renderer is complete**: drawing a dump of the original's world, it reproduces the original's frames. It is
-being built first; the rebuild's own world generator follows in milestones 7 and 8. To see it: `npm run ref:dump`
+| 7. Generator, part 1 | In the worker: speck removal, collision bricks, terrain mesh, ground map, all 26 procedural meshes; on the GPU: the density field | Each output has the same SHA-256 as the original's, at all three detail levels (13 outputs, from 21 million voxels of density to the ship's planks) |
+
+**The renderer is complete**: drawing a dump of the original's world, it reproduces the original's frames. The
+rebuild's own world generator is half done: the terrain and the meshes come out identical to the original's; the
+scattering of plants, rocks and animals (milestone 8) is next, and until then the page still draws the dump. To see it: `npm run ref:dump`
 once, then `npm run dev` and open `http://127.0.0.1:5173/?world=reference` (add `&level=1` or `2` for Medium or
 Low), or `npm run shots` to save frames to `test-results/shots/`. There are no controls yet (milestone 9).
 

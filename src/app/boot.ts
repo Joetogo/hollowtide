@@ -118,7 +118,7 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       size: [renderer.targets.width, renderer.targets.height],
     };
     if (__DEV__ || __HARNESS__) {
-      hook.harness = createHarness(renderer);
+      hook.harness = createHarness(renderer, createWorker);
       // ?world=reference: until the generator exists, the scene can be drawn from a dump of the original's world
       if (new URLSearchParams(location.search).get('world') === 'reference') {
         status.textContent = 'Loading the reference world…';

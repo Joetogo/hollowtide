@@ -66,3 +66,19 @@ export function flyPoint(seconds: number, out: Float64Array): void {
   if (k > LUT_SIZE - 1) k = LUT_SIZE - 1;
   spline(lut[k]! + (lut[k + 1]! - lut[k]!) * (s - k), out);
 }
+
+/**
+ * Points the generator keeps clear of kelp and rocks: the flight sampled every tenth of a second, and a point
+ * 40 m down under each viewpoint. Three numbers per point.
+ */
+export function clearancePoints(viewpoints: readonly (readonly number[])[]): Float64Array {
+  const points: number[] = [];
+  const p = new Float64Array(6);
+  // (the sum of tenths falls just short of 60, so this is 600 points and the last is at 59.9 s)
+  for (let t = 0; t <= FLY_SECONDS; t += 0.1) {
+    flyPoint(t, p);
+    points.push(p[0], p[1], p[2]);
+  }
+  for (const view of viewpoints) points.push(view[0], -40, view[2]);
+  return new Float64Array(points);
+}

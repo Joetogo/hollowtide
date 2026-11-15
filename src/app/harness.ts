@@ -2,10 +2,13 @@
 // file has none of this.
 import { lookAt } from '../camera/camera';
 import { flyPoint } from '../camera/path';
+import type { Level } from '../config/quality';
 import { shaderErrors } from '../gpu/shader';
 import { skippedDraws } from '../render/passes/scene';
 import type { Renderer } from '../render/renderer';
 import type { CellTable, MeshRange, WorldData } from '../world/data';
+import { computeDensity } from '../world/density';
+import type { FromWorker, ToWorker } from '../world/protocol';
 
 export interface FrameDiff {
   pixels: number;
@@ -48,6 +51,11 @@ export interface Harness {
   compareImages(urlA: string, urlB: string, heatmap?: boolean): Promise<FrameDiff>;
   /** Compares a texture with a raw dump of the original's (call after a frame has been drawn). */
   compareTexture(name: TextureName, dumpUrl: string): Promise<TextureDiff>;
+  /**
+   * Runs the rebuild's own world generator and resolves with the SHA-256 of everything it made, under the names
+   * the reference rig gives the same data.
+   */
+  generate(level: Level): Promise<Record<string, Made>>;
   /** SHA-256 of a texture's contents, to tell whether two renders produced the same values. */
   textureHash(name: TextureName | 'shafts' | 'shaftsBlurred'): Promise<string>;
   /**
@@ -55,6 +63,12 @@ export interface Harness {
    * Resolves with its six viewpoints.
    */
   loadReferenceWorld(baseUrl: string): Promise<number[][]>;
+}
+
+/** Something the generator made: how many values, and their SHA-256. */
+export interface Made {
+  length: number;
+  sha256: string;
 }
 
 export type TextureName = 'scene' | 'bloom0' | 'water' | 'detail' | 'shadow';
@@ -123,7 +137,7 @@ async function decodePng(url: string): Promise<Uint8ClampedArray> {
   return copy.getImageData(0, 0, bitmap.width, bitmap.height).data;
 }
 
-export function createHarness(renderer: Renderer): Harness {
+export function createHarness(renderer: Renderer, createWorker: () => Worker): Harness {
   const { device, queue, canvas } = renderer.gpu;
   const errors: string[] = [];
   device.addEventListener('uncapturederror', (event) => errors.push(event.error.message));
@@ -243,6 +257,27 @@ export function createHarness(renderer: Renderer): Harness {
         if (d > diff.max) diff.max = d;
       }
       return diff;
+    },
+
+    async generate(level) {
+      const density = await computeDensity(device);
+      const digest = await crypto.subtle.digest('SHA-256', density);
+      const hex = Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+      const made: Record<string, Made> = { densityRaw: { length: density.length, sha256: hex } };
+      const worker = createWorker();
+      await new Promise<void>((resolve, reject) => {
+        worker.onerror = (event) => reject(new Error(`worker error: ${event.message}`));
+        worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
+          if (data.type === 'ready') {
+            const message: ToWorker = { type: 'generate', density: density.buffer, level, checksums: true };
+            worker.postMessage(message, [density.buffer]);
+          } else if (data.type === 'checksum') made[data.name] = { length: data.length, sha256: data.sha256 };
+          else if (data.type === 'done') resolve();
+          else if (data.type === 'error') reject(new Error(`worker failed in ${data.stage}: ${data.message}`));
+        };
+      });
+      worker.terminate();
+      return made;
     },
 
     async textureHash(name) {
