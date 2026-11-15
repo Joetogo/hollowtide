@@ -1,0 +1,21 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      # typecheck, lint and unit tests; anything that needs a GPU (shader compile, golden images) runs locally
+      - run: npm run check
+      # builds the single file and fails if it is over the size budget
+      - run: npm run build

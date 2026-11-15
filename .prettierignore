@@ -1,0 +1,8 @@
+dist
+.cache
+test-results
+package-lock.json
+*.md
+*.html
+# these mirror upstream's dense style because they run inside its function scope
+tools/reference/capture-*.js

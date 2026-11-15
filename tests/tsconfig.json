@@ -1,0 +1,9 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "types": ["@webgpu/types", "node"],
+    "allowJs": true,
+    "checkJs": false
+  },
+  "include": ["unit", "../src"]
+}

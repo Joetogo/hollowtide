@@ -6,6 +6,15 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
+    "dev": "node tools/build.mjs --dev",
+    "build": "node tools/build.mjs",
+    "typecheck": "tsc -p . && tsc -p tests",
+    "lint": "eslint . && prettier --check .",
+    "format": "prettier --write .",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm run lint && npm run test",
+    "test:browser": "npm run build && node tests/browser/boot.mjs",
+    "test:safari": "node tests/browser/safari.mjs",
     "ref:build": "node tools/reference/build-ref.mjs",
     "ref:capture": "node tools/reference/run-ref.mjs capture",
     "ref:verify": "node tools/reference/run-ref.mjs verify",
@@ -13,6 +22,17 @@
     "ref:bench": "node tools/reference/run-ref.mjs bench"
   },
   "devDependencies": {
-    "playwright-core": "^1.65.1"
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.6.6",
+    "@webgpu/types": "^0.1.74",
+    "esbuild": "^0.28.2",
+    "eslint": "^10.15.0",
+    "globals": "^17.14.0",
+    "playwright-core": "^1.65.1",
+    "prettier": "^3.10.1",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.72.2",
+    "vitest": "^4.1.12",
+    "wgsl_reflect": "^1.6.0"
   }
 }

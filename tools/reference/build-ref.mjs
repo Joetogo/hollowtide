@@ -20,8 +20,10 @@ const git = (...args) => execFileSync('git', ['-C', cloneDir, ...args], { encodi
 
 export function buildReference() {
   const sha = git('rev-parse', 'HEAD');
-  if (sha !== upstream.sha) throw new Error(`reference clone is at ${sha}, expected ${upstream.sha} (see upstream.json)`);
-  if (git('status', '--porcelain')) throw new Error(`reference clone at ${cloneDir} has local changes; it must stay pristine`);
+  if (sha !== upstream.sha)
+    throw new Error(`reference clone is at ${sha}, expected ${upstream.sha} (see upstream.json)`);
+  if (git('status', '--porcelain'))
+    throw new Error(`reference clone at ${cloneDir} has local changes; it must stay pristine`);
 
   const src = (f) => readFileSync(path.join(cloneDir, 'source/src', f), 'utf8');
   const hook = (f) => readFileSync(path.join(here, f), 'utf8');
@@ -34,7 +36,15 @@ export function buildReference() {
 
   const page = (files) => template.replace('/*SCRIPT*/', () => wrap(files.join('\n')));
   // upstream order: quality, math, shaders, world, main, audio (+ dev)
-  const head = [src('quality.js'), src('math.js'), src('shaders.js'), src('world.js'), hook('capture-pre.js'), src('main.js'), src('audio.js')];
+  const head = [
+    src('quality.js'),
+    src('math.js'),
+    src('shaders.js'),
+    src('world.js'),
+    hook('capture-pre.js'),
+    src('main.js'),
+    src('audio.js'),
+  ];
   mkdirSync(outDir, { recursive: true });
   writeFileSync(path.join(outDir, 'reference.html'), page([...head, hook('capture-post.js')]));
   writeFileSync(path.join(outDir, 'reference-bench.html'), page([...head, src('dev.js'), hook('capture-post.js')]));

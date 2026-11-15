@@ -10,7 +10,29 @@ and the milestone list.
 
 ## Status
 
-Milestone 0 (reference rig) is done. The rebuild itself starts at milestone 1.
+Done: milestone 0 (reference rig and baseline) and milestone 1 (scaffold). The page currently shows only the
+scaffold's self-tests; the renderer arrives with milestones 2 to 6.
+
+## Working on it
+
+```bash
+npm install
+npm run dev            # http://127.0.0.1:5173, rebuilds and reloads on save
+npm run check          # typecheck, lint, unit tests
+npm run build          # dist/index.html: one self-contained file, size printed, 130 kB budget enforced
+npm run test:browser   # opens the built file from file:// in Chrome and checks its start-up report
+npm run test:safari    # the same in Safari (which is left open on the test page)
+```
+
+How it is put together:
+
+- `src/main.ts` is one bundle with two roles: the page runs it as the main thread, and the main thread starts the
+  world-generation worker from a Blob of the same script. That keeps the build to a single file that also runs
+  from `file://`.
+- `src/gpu/struct.ts` and `src/gpu/bindings.ts` define uniform structs and bind groups once and generate both the
+  WGSL declarations and the typed offsets, so shaders and the code that feeds them cannot drift apart.
+- `src/shaders/*.wgsl` are real files with `#include "…"`; `tools/wgsl.mjs` resolves the includes and minifies
+  them for the shipped build.
 
 ## The reference rig
 
