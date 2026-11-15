@@ -19,7 +19,16 @@ export interface BootReport {
 declare global {
   interface Window {
     /** A handle for tests and harnesses; `ready` is set once start-up has finished or failed. */
-    __abyssal?: { ready?: boolean; error?: string; report?: BootReport; harness?: Harness; frames?: number };
+    __abyssal?: {
+      ready?: boolean;
+      error?: string;
+      report?: BootReport;
+      harness?: Harness;
+      /** frames drawn by the loop so far */
+      frames?: number;
+      /** set by a test to stop the loop drawing, so that only the frames it asks for exist */
+      paused?: boolean;
+    };
   }
 }
 
@@ -113,6 +122,7 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
     const frame = (now: number) => {
       requestAnimationFrame(frame);
       first ||= now;
+      if (hook.paused) return;
       renderer.resize();
       renderer.render((now - first) / 1000);
       hook.frames = (hook.frames ?? 0) + 1;

@@ -18,8 +18,10 @@ Done so far:
 | 1. Scaffold | TypeScript modules, single-file build with its worker, WGSL files, generated uniform layouts, tests, CI | Starts from `file://` in Chrome and Safari; layouts agree with an independent WGSL parser |
 | 2. Engine core | Device, camera, frame uniforms, render targets, bloom and composite passes, capture hooks | Frame uniforms equal the original's bit for bit (18 frames); bloom is bit-identical and the composited frame differs in 0 of 921,600 pixels at all six viewpoints |
 
-The scene pass is still empty, so the page itself shows almost nothing yet. Next is milestone 3 (the one-time
-bakes: rock detail texture, water texture, shadow map), then the scene shaders on the original's dumped data.
+| 3. Bakes | Rock detail texture, animated water texture, sun shadow map; the world-data contract and its GPU buffers | All three equal the original's value for value (4.2M, 1.0M and 16.8M values), the shadow map baked from the original's dumped world |
+
+The scene pass is still empty, so the page itself shows almost nothing yet. Next is milestone 4: the rock and
+terrain shader, fog, the water surface and the backdrop, drawn from the original's dumped world.
 
 ## Working on it
 

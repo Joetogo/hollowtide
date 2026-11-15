@@ -46,11 +46,17 @@ export async function launch({ dpr = 1 } = {}) {
   return {
     page,
     errors,
-    /** Opens a URL and waits until the app has finished starting (or failed to). */
-    async open(url) {
+    /**
+     * Opens a URL and waits until the app has finished starting (or failed to). With `pause`, the app's own
+     * frame loop then stops drawing, so the only frames are the ones the test asks for.
+     */
+    async open(url, { pause = false } = {}) {
       await page.goto(url);
       await page.waitForFunction(() => window.__abyssal?.ready, null, { timeout: 60_000 });
-      return page.evaluate(() => ({ error: window.__abyssal.error, report: window.__abyssal.report }));
+      return page.evaluate((pause) => {
+        window.__abyssal.paused = pause;
+        return { error: window.__abyssal.error, report: window.__abyssal.report };
+      }, pause);
     },
     async close() {
       await context.close();

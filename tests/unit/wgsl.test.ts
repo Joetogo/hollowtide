@@ -4,8 +4,14 @@ import { loadWgsl, minifyWgsl } from '../../tools/wgsl.mjs';
 import { declarations } from '../../src/gpu/bindings';
 import { BlitGroup } from '../../src/render/passes/blit';
 import { postGroup } from '../../src/render/passes/post';
+import { WaterGroup } from '../../src/render/passes/water';
+import { SceneGroup } from '../../src/render/scene';
 import blit from '../../src/shaders/blit.wgsl';
+import detail from '../../src/shaders/detail.wgsl';
+import leaf from '../../src/shaders/leaf.wgsl';
 import post from '../../src/shaders/post.wgsl';
+import solid from '../../src/shaders/solid.wgsl';
+import water from '../../src/shaders/water.wgsl';
 
 describe('minifyWgsl', () => {
   const cases: [string, string][] = [
@@ -60,6 +66,10 @@ describe('loadWgsl', () => {
       vertex: ['fullscreenVertex'],
       fragment: ['composite'],
     },
+    detail: { source: detail, header: '', vertex: ['fullscreenVertex'], fragment: ['bakeDetail'] },
+    water: { source: water, header: declarations(WaterGroup), vertex: ['fullscreenVertex'], fragment: ['drawWater'] },
+    solid: { source: solid, header: declarations(SceneGroup), vertex: ['solidVertex'], fragment: [] },
+    leaf: { source: leaf, header: declarations(SceneGroup), vertex: ['leafVertex'], fragment: [] },
   };
   for (const [name, shader] of Object.entries(shaders)) {
     it(`${name} parses, as written and minified, with the entry points the pipelines ask for`, () => {

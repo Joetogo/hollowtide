@@ -3,6 +3,7 @@
 import { lookAt } from '../camera/camera';
 import { shaderErrors } from '../gpu/shader';
 import type { Renderer } from '../render/renderer';
+import type { CellTable, MeshRange, WorldData } from '../world/data';
 
 export interface FrameDiff {
   pixels: number;
@@ -35,8 +36,17 @@ export interface Harness {
   releaseScene(): void;
   /** Draws a frame and compares it with a PNG, pixel by pixel. */
   compareFrame(pose: number[], time: number, pngUrl: string): Promise<FrameDiff>;
-  /** Compares a half-float target with a raw dump of the original's (call after a frame has been drawn). */
-  compareTexture(name: 'scene' | 'bloom0', dumpUrl: string): Promise<TextureDiff>;
+  /** Compares a texture with a raw dump of the original's (call after a frame has been drawn). */
+  compareTexture(name: TextureName, dumpUrl: string): Promise<TextureDiff>;
+  /** Builds the world from a dump of the original (index.json and the .bin files under `baseUrl`) and uploads it. */
+  loadReferenceWorld(baseUrl: string): Promise<void>;
+}
+
+export type TextureName = 'scene' | 'bloom0' | 'water' | 'detail' | 'shadow';
+
+/** The part of a fixture dump's index.json that describes the world. */
+interface DumpIndex {
+  meta: { poses: number[][]; meshes: MeshRange[]; solidRanges: [number, number][] };
 }
 
 const bytesFrom = async (url: string) => {
@@ -100,7 +110,7 @@ export function createHarness(renderer: Renderer): Harness {
       setPose(pose);
       renderer.render(time);
       const { width, height } = renderer.targets;
-      return { png: canvas.toDataURL('image/png'), uniforms: Array.from(renderer.frameData), width, height };
+      return { png: canvas.toDataURL('image/png'), uniforms: Array.from(renderer.scene.frameData), width, height };
     },
 
     async holdReferenceScene(baseUrl, id) {
@@ -150,19 +160,77 @@ export function createHarness(renderer: Renderer): Harness {
     },
 
     async compareTexture(name, dumpUrl) {
-      const texture = name === 'scene' ? renderer.targets.scene : renderer.targets.bloom[0]!;
-      const mine = new Uint16Array((await readTexture(texture, 8)).buffer);
-      const theirs = new Uint16Array((await bytesFrom(dumpUrl)).buffer);
-      if (mine.length !== theirs.length)
+      const { scene, targets } = renderer;
+      const texture = {
+        scene: targets.scene,
+        bloom0: targets.bloom[0]!,
+        water: scene.water,
+        detail: scene.detail,
+        shadow: scene.shadowMap,
+      }[name];
+      // the values as stored, and how to turn one into a number
+      const [View, bytesPerPixel, toNumber] =
+        texture.format === 'rgba16float'
+          ? ([Uint16Array, 8, half] as const)
+          : texture.format === 'depth32float'
+            ? ([Float32Array, 4, (x: number) => x] as const)
+            : ([Uint8Array, 4, (x: number) => x] as const);
+      const mine = new View((await readTexture(texture, bytesPerPixel)).buffer);
+      const theirs = new View((await bytesFrom(dumpUrl)).buffer);
+      if (mine.length !== theirs.length) {
         throw new Error(`${dumpUrl}: ${theirs.length} values, expected ${mine.length}`);
+      }
       const diff: TextureDiff = { values: mine.length, differing: 0, max: 0 };
       for (let i = 0; i < mine.length; i++) {
         if (mine[i] === theirs[i]) continue;
         diff.differing++;
-        const d = Math.abs(half(mine[i]!) - half(theirs[i]!));
+        const d = Math.abs(toNumber(mine[i]!) - toNumber(theirs[i]!));
         if (d > diff.max) diff.max = d;
       }
       return diff;
+    },
+
+    async loadReferenceWorld(baseUrl) {
+      const index = (await (await fetch(baseUrl + 'index.json')).json()) as DumpIndex;
+      const bytes = (name: string) => bytesFrom(`${baseUrl}${name}.bin`);
+      const floats = async (name: string) => new Float32Array((await bytes(name)).buffer);
+      const words = async (name: string) => new Uint32Array((await bytes(name)).buffer);
+      const cells = async (name: string): Promise<CellTable> => ({
+        start: await words(name + 'Start'),
+        lo: await floats(name + 'Lo'),
+        hi: await floats(name + 'Hi'),
+      });
+      const sorted = async (name: string) => ({ instances: await floats(name), cells: await cells(name) });
+      const leaves = async (name: string) => ({ instances: await bytes(name), cells: await cells(name) });
+      const data: WorldData = {
+        terrain: {
+          vertices: await bytes('terrainVertices'),
+          indices: await words('terrainIndices'),
+          cells: await cells('terrain'),
+        },
+        meshes: {
+          vertices: await bytes('meshVertices'),
+          indices: await words('meshIndices'),
+          ranges: index.meta.meshes,
+        },
+        solids: { instances: await floats('solids'), ranges: index.meta.solidRanges },
+        chunks: await Promise.all([0, 1, 2, 3, 4, 5, 6].map((i) => sorted('chunks' + i))),
+        props: await Promise.all([0, 1, 2, 3, 4, 5].map((i) => sorted('props' + i))),
+        leaves: {
+          big: await leaves('leavesBig'),
+          bigFar: await leaves('leavesBigF'),
+          small: await leaves('leavesSmall'),
+        },
+        glints: await floats('glints'),
+        bubbles: await floats('bubbles'),
+        fish: await floats('fish'),
+        mantas: await floats('mantas'),
+        snow: await floats('snow'),
+        volume: await bytes('volume'),
+        groundMap: await bytes('groundMap'),
+        viewpoints: index.meta.poses,
+      };
+      renderer.setWorld(data);
     },
   };
 }

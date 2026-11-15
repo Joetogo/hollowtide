@@ -1,13 +1,19 @@
-// The renderer: owns the frame uniforms, the size-dependent targets and the passes, and draws a frame.
+// The renderer: owns the shared scene resources, the size-dependent targets and the passes, and draws a frame.
 // So far the scene pass only clears; terrain, plants and life are added pass by pass in the next milestones.
 import { createCamera, type Camera } from '../camera/camera';
 import type { Quality } from '../config/quality';
 import type { Gpu } from '../gpu/context';
-import { createFrameData, Frame, writeFrame } from './frame';
+import type { WorldData } from '../world/data';
+import { writeFrame } from './frame';
 import { createBlit } from './passes/blit';
 import { createBloom } from './passes/bloom';
+import { bakeDetail } from './passes/detail';
 import { createPost } from './passes/post';
+import { createShadowBake } from './passes/shadow';
+import { createWater } from './passes/water';
+import { createScene, type Scene } from './scene';
 import { createTargets, renderSize, type Targets } from './targets';
+import { uploadWorld, type WorldBuffers } from './world';
 
 /** The most pixels a frame is rendered at; a larger canvas is scaled up from that. */
 export const MAX_PIXELS = 2560 * 1440;
@@ -15,8 +21,10 @@ export const MAX_PIXELS = 2560 * 1440;
 export interface Renderer {
   readonly gpu: Gpu;
   readonly camera: Camera;
-  /** The frame uniform block as last written. */
-  readonly frameData: Float32Array;
+  /** Samplers, the frame block and the textures every scene shader shares. */
+  readonly scene: Scene;
+  /** The world on the GPU, once setWorld() has been given one. */
+  world: WorldBuffers | null;
   /** Draw-distance scale, 1 = full. */
   detail: number;
   /** Pixel budget for the render size. */
@@ -25,6 +33,8 @@ export interface Renderer {
   targets: Targets;
   /** While set, the scene pass is skipped and whatever the scene target holds is composited (used by the harness). */
   holdScene: boolean;
+  /** Uploads a world and bakes the shadow map for it. */
+  setWorld(data: WorldData): void;
   /** Matches the render size to the canvas. Returns true if the targets were rebuilt. */
   resize(): boolean;
   /** Draws one frame for `time` seconds. */
@@ -33,28 +43,31 @@ export interface Renderer {
 
 export async function createRenderer(gpu: Gpu, quality: Quality): Promise<Renderer> {
   const { device, queue, canvas, context } = gpu;
-  const linearSampler = device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
-  const frameData = createFrameData();
-  const frameBuffer = device.createBuffer({
-    label: 'frame',
-    size: Frame.size,
-    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-  });
-  const [blit, post] = await Promise.all([
-    createBlit(gpu, linearSampler),
-    createPost(gpu, frameBuffer, linearSampler, quality.samples),
+  const scene = createScene(gpu, quality);
+  const [blit, post, shadow] = await Promise.all([
+    createBlit(gpu, scene.linearSampler),
+    createPost(gpu, scene.frameBuffer, scene.linearSampler, quality.samples),
+    createShadowBake(gpu, scene, quality),
   ]);
+  const [water] = await Promise.all([createWater(gpu, blit, scene.water), bakeDetail(gpu, blit, scene.detail)]);
   const bloom = createBloom(blit);
   let scenePass: GPURenderPassDescriptor;
 
   const renderer: Renderer = {
     gpu,
     camera: createCamera(),
-    frameData,
+    scene,
+    world: null,
     detail: 1,
     pixelBudget: MAX_PIXELS,
     targets: undefined as unknown as Targets, // set by the resize() below
     holdScene: false,
+
+    setWorld(data) {
+      renderer.world?.destroy();
+      renderer.world = uploadWorld(gpu, scene, data);
+      shadow.bake(renderer.world);
+    },
 
     resize() {
       const [width, height] = renderSize(
@@ -98,9 +111,10 @@ export async function createRenderer(gpu: Gpu, quality: Quality): Promise<Render
 
     render(time) {
       const { targets } = renderer;
-      writeFrame(frameData, renderer.camera, targets.width, targets.height, time, renderer.detail);
-      queue.writeBuffer(frameBuffer, 0, frameData);
+      writeFrame(scene.frameData, renderer.camera, targets.width, targets.height, time, renderer.detail);
+      queue.writeBuffer(scene.frameBuffer, 0, scene.frameData);
       const encoder = device.createCommandEncoder();
+      water.encode(encoder, time);
       if (!renderer.holdScene) encoder.beginRenderPass(scenePass).end();
       bloom.encode(encoder);
       post.encode(encoder, context.getCurrentTexture().createView());
