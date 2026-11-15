@@ -27,6 +27,8 @@ export interface Scene {
   readonly frameData: Float32Array;
   readonly frameBuffer: GPUBuffer;
   readonly linearSampler: GPUSampler;
+  readonly repeatSampler: GPUSampler;
+  readonly shadowSampler: GPUSampler;
   readonly shadowMap: GPUTexture;
   readonly shadowSize: number;
   readonly water: GPUTexture;
@@ -42,8 +44,7 @@ export interface Scene {
 
 export function createScene(gpu: Gpu, quality: Quality): Scene {
   const { device, queue } = gpu;
-  const shadowSize = quality.level ? 2048 : 4096;
-  const waterSize = quality.level > 1 ? 256 : 512;
+  const { shadowSize, waterSize } = quality;
   // harness builds also read the bakes back, to compare them with the original's
   const readable = __HARNESS__ ? GPUTextureUsage.COPY_SRC : 0;
   const drawn = GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | readable;
@@ -55,7 +56,7 @@ export function createScene(gpu: Gpu, quality: Quality): Scene {
     magFilter: 'linear',
     minFilter: 'linear',
     mipmapFilter: 'linear',
-    maxAnisotropy: quality.level > 1 ? 1 : 8,
+    maxAnisotropy: quality.low ? 1 : 8,
   });
   const linearSampler = device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
   const shadowSampler = device.createSampler({ compare: 'less-equal', magFilter: 'linear', minFilter: 'linear' });
@@ -130,6 +131,8 @@ export function createScene(gpu: Gpu, quality: Quality): Scene {
     frameData,
     frameBuffer,
     linearSampler,
+    repeatSampler,
+    shadowSampler,
     shadowMap,
     shadowSize,
     water,

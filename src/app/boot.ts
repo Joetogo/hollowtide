@@ -106,7 +106,9 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
   const hook: NonNullable<Window['__abyssal']> = (window.__abyssal = { frames: 0 });
   try {
     const gpu = await createGpu(document.getElementById('c') as HTMLCanvasElement);
-    const renderer = await createRenderer(gpu, quality(0));
+    // dev and harness builds take the detail level from ?level=0|1|2; the menu that sets it comes later
+    const asked = __DEV__ || __HARNESS__ ? Number(new URLSearchParams(location.search).get('level')) : 0;
+    const renderer = await createRenderer(gpu, quality(asked === 1 || asked === 2 ? asked : 0));
     const view = VIEWPOINTS[0] as [number, number, number, number, number, number];
     lookAt(renderer.camera, view[0], PROVISIONAL_SEABED + view[1], view[2], view[3], view[4], view[5]);
 

@@ -58,6 +58,13 @@ interface PipelineOptions {
   blend?: GPUBlendState;
 }
 
+/**
+ * Harness builds only: names of draws to leave out ('fish', 'bubbles', 'glints', 'snow'), to compare frames with
+ * and without them. Always empty in the shipped file.
+ */
+export const skippedDraws = new Set<string>();
+const skipped = (name: string) => __HARNESS__ && skippedDraws.has(name);
+
 export interface ScenePass {
   /** Draws into a pass the renderer has begun. */
   encode(pass: GPURenderPassEncoder, world: WorldBuffers, view: CullView): void;
@@ -70,7 +77,7 @@ export async function createScenePass(gpu: Gpu, scene: Scene, quality: Quality):
   const creaturesModule = shaderModule(device, 'creatures', [SceneGroup], creaturesSource);
   const leafModule = shaderModule(device, 'leaf', [SceneGroup], leafSource);
   const spritesModule = shaderModule(device, 'sprites', [SceneGroup], spritesSource);
-  const shadowConstants = { LOW: quality.level > 1 ? 1 : 0, SHADOW_SIZE: scene.shadowSize };
+  const shadowConstants = { LOW: quality.low ? 1 : 0, SHADOW_SIZE: scene.shadowSize };
 
   const pipeline = (
     label: string,
@@ -195,9 +202,11 @@ export async function createScenePass(gpu: Gpu, scene: Scene, quality: Quality):
       pass.setVertexBuffer(1, world.mantas.buffer);
       pass.drawIndexed(mantaMesh.indexCount, world.mantas.count, mantaMesh.firstIndex, mantaMesh.firstVertex, 0);
       const fishMesh = world.meshes[MESH.fish]!;
-      pass.setPipeline(fish);
-      pass.setVertexBuffer(1, world.fish.buffer);
-      pass.drawIndexed(fishMesh.indexCount, world.fish.count, fishMesh.firstIndex, fishMesh.firstVertex, 0);
+      if (!skipped('fish')) {
+        pass.setPipeline(fish);
+        pass.setVertexBuffer(1, world.fish.buffer);
+        pass.drawIndexed(fishMesh.indexCount, world.fish.count, fishMesh.firstIndex, fishMesh.firstVertex, 0);
+      }
 
       // kelp and plants
       pass.setPipeline(leafNear);
@@ -218,15 +227,21 @@ export async function createScenePass(gpu: Gpu, scene: Scene, quality: Quality):
       pass.draw(4);
 
       // blended, in this order: bubbles over the scene, then the additive glints and particles
-      pass.setPipeline(bubbles);
-      pass.setVertexBuffer(0, world.bubbles.buffer);
-      pass.draw(4, world.bubbles.count);
-      pass.setPipeline(glints);
-      pass.setVertexBuffer(0, world.glints.buffer);
-      pass.draw(4, world.glints.count);
-      pass.setPipeline(snow);
-      pass.setVertexBuffer(0, world.snow.buffer);
-      pass.draw(4, world.snow.count);
+      if (!skipped('bubbles')) {
+        pass.setPipeline(bubbles);
+        pass.setVertexBuffer(0, world.bubbles.buffer);
+        pass.draw(4, world.bubbles.count);
+      }
+      if (!skipped('glints')) {
+        pass.setPipeline(glints);
+        pass.setVertexBuffer(0, world.glints.buffer);
+        pass.draw(4, world.glints.count);
+      }
+      if (!skipped('snow')) {
+        pass.setPipeline(snow);
+        pass.setVertexBuffer(0, world.snow.buffer);
+        pass.draw(4, world.snow.count);
+      }
     },
   };
 }

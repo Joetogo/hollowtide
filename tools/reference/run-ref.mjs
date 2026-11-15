@@ -28,7 +28,9 @@ const level = +opt('level', 0);
 const times = String(opt('times', '2,11,47')).split(',').map(Number);
 const flyFrames = +opt('fly', 30);
 const VIEW = { width: 1280, height: 720 };
-const runDir = path.join(outDir, upstream.sha.slice(0, 7), 'L' + level);
+// --tag b writes to L<level>-b instead: a second capture to compare the first against (tests/browser/noise.mjs)
+const tag = opt('tag', '');
+const runDir = path.join(outDir, upstream.sha.slice(0, 7), 'L' + level + (tag ? '-' + tag : ''));
 const sha256 = (buf) => createHash('sha256').update(buf).digest('hex');
 const writeJson = (file, value) => writeFileSync(file, JSON.stringify(value, null, 1) + '\n');
 const rel = (p) => path.relative(root, p);
@@ -218,7 +220,8 @@ async function dump(dir) {
   try {
     const { page, state } = s;
     const data = await page.evaluate(() => window.__ref.manifest());
-    await page.evaluate(() => window.__ref.dumpData());
+    // the density field is the same at every level and 168 MB: one copy, at High, is enough
+    await page.evaluate((skip) => window.__ref.dumpData(skip), level ? ['density', 'densityRaw'] : []);
     const textures = {};
     const tex = async (name, mip, file) => {
       textures[file] = await page.evaluate(([n, m, f]) => window.__ref.dumpTexture(n, m, f), [name, mip, file]);

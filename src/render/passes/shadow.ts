@@ -74,7 +74,7 @@ export async function createShadowBake(gpu: Gpu, scene: Scene, quality: Quality)
       pass.setIndexBuffer(world.meshIndices, 'uint32');
       world.solidRanges.forEach(([first, count], mesh) => count && drawMesh(mesh, count, first));
       // small rocks, sponges and corals are about 35 million triangles: only on High
-      if (quality.level === 0) {
+      if (quality.detailShadows) {
         world.chunks.forEach((chunk, i) => {
           pass.setVertexBuffer(1, chunk.buffer);
           drawMesh(MESH.chunk + i, chunk.count, 0);

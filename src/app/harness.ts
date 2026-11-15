@@ -1,7 +1,9 @@
 // Hooks for tests and for comparing against the original. Compiled into dev and harness builds only; the shipped
 // file has none of this.
 import { lookAt } from '../camera/camera';
+import { flyPoint } from '../camera/path';
 import { shaderErrors } from '../gpu/shader';
+import { skippedDraws } from '../render/passes/scene';
 import type { Renderer } from '../render/renderer';
 import type { CellTable, MeshRange, WorldData } from '../world/data';
 
@@ -13,6 +15,8 @@ export interface FrameDiff {
   over1: number;
   /** largest difference in any channel, in 8-bit steps */
   max: number;
+  /** on request: a PNG data URL, the first image dimmed with every differing pixel marked (red: by more than 1) */
+  heatmap?: string;
 }
 
 export interface TextureDiff {
@@ -24,6 +28,10 @@ export interface TextureDiff {
 }
 
 export interface Harness {
+  /** Leaves out draws by name ('fish', 'bubbles', 'glints', 'snow') until called again; no names draws all. */
+  skipDraws(...names: string[]): void;
+  /** The pose [eye xyz, target xyz] of the scripted fly-through at `seconds`. */
+  flyPose(seconds: number): number[];
   /** Shader compile errors and uncaptured GPU validation errors so far. */
   gpuErrors(): string[];
   /** Draws one frame from a pose [eye xyz, target xyz] and returns it with the uniform block that produced it. */
@@ -34,10 +42,14 @@ export interface Harness {
    */
   holdReferenceScene(baseUrl: string, id: string): Promise<void>;
   releaseScene(): void;
-  /** Draws a frame and compares it with a PNG, pixel by pixel. */
-  compareFrame(pose: number[], time: number, pngUrl: string): Promise<FrameDiff>;
+  /** Draws a frame and compares it with a PNG, pixel by pixel. `heatmap` adds a picture of where they differ. */
+  compareFrame(pose: number[], time: number, pngUrl: string, heatmap?: boolean): Promise<FrameDiff>;
+  /** Compares two PNGs of the canvas's size: used to measure how much the original varies from run to run. */
+  compareImages(urlA: string, urlB: string, heatmap?: boolean): Promise<FrameDiff>;
   /** Compares a texture with a raw dump of the original's (call after a frame has been drawn). */
   compareTexture(name: TextureName, dumpUrl: string): Promise<TextureDiff>;
+  /** SHA-256 of a texture's contents, to tell whether two renders produced the same values. */
+  textureHash(name: TextureName | 'shafts' | 'shaftsBlurred'): Promise<string>;
   /**
    * Builds the world from a dump of the original (index.json and the .bin files under `baseUrl`) and uploads it.
    * Resolves with its six viewpoints.
@@ -66,6 +78,49 @@ function half(h: number): number {
   if (exponent === 0) return sign * 2 ** -14 * (mantissa / 1024);
   if (exponent === 31) return mantissa ? NaN : sign * Infinity;
   return sign * 2 ** (exponent - 15) * (1 + mantissa / 1024);
+}
+
+/** Compares two RGBA images of the same size, channel by channel (alpha ignored). */
+function diffImages(
+  a: Uint8ClampedArray,
+  b: Uint8ClampedArray,
+  width: number,
+  height: number,
+  heatmap: boolean,
+): FrameDiff {
+  if (a.length !== b.length || a.length !== width * height * 4) throw new Error('images differ in size');
+  const diff: FrameDiff = { pixels: a.length / 4, differing: 0, over1: 0, max: 0 };
+  const marked = heatmap ? new ImageData(width, height) : null;
+  for (let i = 0; i < a.length; i += 4) {
+    const d = Math.max(Math.abs(a[i]! - b[i]!), Math.abs(a[i + 1]! - b[i + 1]!), Math.abs(a[i + 2]! - b[i + 2]!));
+    if (d > 0) diff.differing++;
+    if (d > 1) diff.over1++;
+    if (d > diff.max) diff.max = d;
+    if (marked) {
+      const out = marked.data;
+      // the picture at a third of its brightness; a differing pixel in yellow, or red if off by more than 1
+      out[i] = d > 0 ? 255 : a[i]! / 3;
+      out[i + 1] = d > 1 ? 0 : d > 0 ? 255 : a[i + 1]! / 3;
+      out[i + 2] = d > 0 ? 0 : a[i + 2]! / 3;
+      out[i + 3] = 255;
+    }
+  }
+  if (marked) {
+    const picture = document.createElement('canvas');
+    picture.width = width;
+    picture.height = height;
+    picture.getContext('2d')!.putImageData(marked, 0, 0);
+    diff.heatmap = picture.toDataURL('image/png');
+  }
+  return diff;
+}
+
+/** A PNG's pixels as RGBA bytes. */
+async function decodePng(url: string): Promise<Uint8ClampedArray> {
+  const bitmap = await createImageBitmap(new Blob([await bytesFrom(url)], { type: 'image/png' }));
+  const copy = new OffscreenCanvas(bitmap.width, bitmap.height).getContext('2d', { willReadFrequently: true })!;
+  copy.drawImage(bitmap, 0, 0);
+  return copy.getImageData(0, 0, bitmap.width, bitmap.height).data;
 }
 
 export function createHarness(renderer: Renderer): Harness {
@@ -107,6 +162,17 @@ export function createHarness(renderer: Renderer): Harness {
   };
 
   return {
+    skipDraws(...names) {
+      skippedDraws.clear();
+      for (const name of names) skippedDraws.add(name);
+    },
+
+    flyPose(seconds) {
+      const pose = new Float64Array(6);
+      flyPoint(seconds, pose);
+      return Array.from(pose);
+    },
+
     gpuErrors: () => [...shaderErrors, ...errors],
 
     capture(pose, time) {
@@ -135,31 +201,17 @@ export function createHarness(renderer: Renderer): Harness {
       renderer.holdScene = false;
     },
 
-    async compareFrame(pose, time, pngUrl) {
+    async compareFrame(pose, time, pngUrl, heatmap = false) {
       setPose(pose);
       renderer.render(time);
       const mine = readCanvas();
-      const bitmap = await createImageBitmap(new Blob([await bytesFrom(pngUrl)], { type: 'image/png' }));
-      if (bitmap.width !== canvas.width || bitmap.height !== canvas.height) {
-        throw new Error(
-          `${pngUrl} is ${bitmap.width}x${bitmap.height}, the canvas is ${canvas.width}x${canvas.height}`,
-        );
-      }
-      const copy = new OffscreenCanvas(bitmap.width, bitmap.height).getContext('2d', { willReadFrequently: true })!;
-      copy.drawImage(bitmap, 0, 0);
-      const theirs = copy.getImageData(0, 0, bitmap.width, bitmap.height).data;
-      const diff: FrameDiff = { pixels: mine.length / 4, differing: 0, over1: 0, max: 0 };
-      for (let i = 0; i < mine.length; i += 4) {
-        const d = Math.max(
-          Math.abs(mine[i]! - theirs[i]!),
-          Math.abs(mine[i + 1]! - theirs[i + 1]!),
-          Math.abs(mine[i + 2]! - theirs[i + 2]!),
-        );
-        if (d > 0) diff.differing++;
-        if (d > 1) diff.over1++;
-        if (d > diff.max) diff.max = d;
-      }
-      return diff;
+      return diffImages(mine, await decodePng(pngUrl), canvas.width, canvas.height, heatmap);
+    },
+
+    async compareImages(urlA, urlB, heatmap = false) {
+      const a = await decodePng(urlA);
+      const b = await decodePng(urlB);
+      return diffImages(a, b, canvas.width, canvas.height, heatmap);
     },
 
     async compareTexture(name, dumpUrl) {
@@ -191,6 +243,24 @@ export function createHarness(renderer: Renderer): Harness {
         if (d > diff.max) diff.max = d;
       }
       return diff;
+    },
+
+    async textureHash(name) {
+      const { scene, targets } = renderer;
+      const texture = {
+        scene: targets.scene,
+        bloom0: targets.bloom[0]!,
+        shafts: targets.shafts,
+        shaftsBlurred: targets.shaftsBlurred,
+        water: scene.water,
+        detail: scene.detail,
+        shadow: scene.shadowMap,
+      }[name];
+      const bytes = await readTexture(texture, texture.format === 'rgba16float' ? 8 : 4);
+      const digest = await crypto.subtle.digest('SHA-256', bytes);
+      return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0'))
+        .join('')
+        .slice(0, 16);
     },
 
     async loadReferenceWorld(baseUrl) {

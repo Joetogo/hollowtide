@@ -65,16 +65,28 @@ export async function launch({ dpr = 1 } = {}) {
   };
 }
 
-/** Serves one built page at / and the reference fixtures at /fixtures/. */
-export function serve(pageFile, fixtures) {
+/** Where `npm run ref:capture` puts the original's frames for a detail level. */
+export const shotsDir = (level = 0) =>
+  path.join(root, '.cache/reference', upstream.sha.slice(0, 7), 'L' + level, 'shots');
+
+/**
+ * Serves one built page at / and what the reference rig recorded:
+ *   /fixtures/<file>                      the dumped world and textures at High detail
+ *   /reference/L<level>/fixtures/<file>   the same for any level
+ *   /reference/L<level>/shots/<file>      the captured frames
+ */
+export function serve(pageFile, fixtures = fixturesDir(0)) {
+  const resolve = (pathname) => {
+    if (pathname === '/') return pageFile;
+    let m = /^\/fixtures\/([\w.-]+)$/.exec(pathname);
+    if (m) return path.join(fixtures, m[1]);
+    m = /^\/reference\/L([012](?:-\w+)?)\/(fixtures|shots)\/([\w.-]+)$/.exec(pathname);
+    if (m) return path.join(m[2] === 'shots' ? shotsDir(m[1]) : fixturesDir(m[1]), m[3]);
+    return null;
+  };
   const server = http.createServer((req, res) => {
     const { pathname } = new URL(req.url, 'http://localhost');
-    const file =
-      pathname === '/'
-        ? pageFile
-        : /^\/fixtures\/[\w.-]+$/.test(pathname)
-          ? path.join(fixtures, pathname.slice(10))
-          : null;
+    const file = resolve(pathname);
     if (!file || !existsSync(file)) {
       res.writeHead(pathname === '/favicon.ico' ? 204 : 404);
       res.end();

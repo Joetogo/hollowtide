@@ -73,7 +73,7 @@
       return out;
     };
     const put = async (file, bytes) => { const r = await fetch('/dump/' + file, { method: 'PUT', body: bytes }); if (!r.ok) throw new Error(`dump ${file}: ${r.status}`); };
-    ref.dumpData = async () => { for (const [k, v] of Object.entries(ref.data)) await put(k + '.bin', bytesOf(v)); return Object.keys(ref.data); };
+    ref.dumpData = async (skip = []) => { for (const [k, v] of Object.entries(ref.data)) if (!skip.includes(k)) await put(k + '.bin', bytesOf(v)); return Object.keys(ref.data); };
     ref.dumpTexture = async (name, mip, file) => { const r = await ref.readTexture(name, mip); await put(file, r.bytes); return { format: r.format, width: r.width, height: r.height, layers: r.layers }; };
   } else {
     // ---- baseline timings: upstream's own loop keeps running, at a held resolution

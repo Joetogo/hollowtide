@@ -12,6 +12,7 @@ import { bakeDetail } from './passes/detail';
 import { createPost } from './passes/post';
 import { createScenePass } from './passes/scene';
 import { createShadowBake } from './passes/shadow';
+import { createShafts } from './passes/shafts';
 import { createWater } from './passes/water';
 import { createScene, type Scene } from './scene';
 import { createTargets, renderSize, type Targets } from './targets';
@@ -46,11 +47,12 @@ export interface Renderer {
 export async function createRenderer(gpu: Gpu, quality: Quality): Promise<Renderer> {
   const { device, queue, canvas, context } = gpu;
   const scene = createScene(gpu, quality);
-  const [blit, post, shadow, sceneDraw] = await Promise.all([
+  const [blit, post, shadow, sceneDraw, shafts] = await Promise.all([
     createBlit(gpu, scene.linearSampler),
     createPost(gpu, scene.frameBuffer, scene.linearSampler, quality.samples),
     createShadowBake(gpu, scene, quality),
     createScenePass(gpu, scene, quality),
+    createShafts(gpu, scene, quality),
   ]);
   const [water] = await Promise.all([createWater(gpu, blit, scene.water), bakeDetail(gpu, blit, scene.detail)]);
   const bloom = createBloom(blit);
@@ -109,6 +111,7 @@ export async function createRenderer(gpu: Gpu, quality: Quality): Promise<Render
           depthStoreOp: 'store',
         },
       };
+      shafts.resize(targets);
       bloom.resize(targets);
       post.resize(targets);
       return true;
@@ -127,6 +130,8 @@ export async function createRenderer(gpu: Gpu, quality: Quality): Promise<Render
           sceneDraw.encode(pass, renderer.world, cullView);
         }
         pass.end();
+        // with no world there is no shadow map to march through, and the shafts stay empty
+        if (renderer.world) shafts.encode(encoder);
       }
       bloom.encode(encoder);
       post.encode(encoder, context.getCurrentTexture().createView());

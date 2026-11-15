@@ -24,10 +24,19 @@ Done so far:
 
 | 5. Plants and life | Kelp, plants and their glints, fish, manta rays, bubbles, drifting particles | With only the light shafts off on both sides, six viewpoints at three times each: at most 4 of 921,600 pixels differ, by 1/255 |
 
-The renderer is being built first, drawing a dump of the original's world; the rebuild's own world generator
-follows in milestones 7 and 8. To see it: `npm run ref:dump` once, then `npm run dev` and open
-`http://127.0.0.1:5173/?world=reference`, or `npm run shots` to save frames to `test-results/shots/`. Still to
-come in the picture: light shafts (milestone 6). There are no controls yet (milestone 9).
+| 6. Light shafts, detail levels | Volumetric light shafts and their blur; Medium and Low variants; the scripted camera path | Whole frames against the original at High, Medium and Low: six viewpoints at three times each, plus 30 frames along the fly-through at High. At High and Medium at most 11 of 921,600 pixels differ, by 1/255 |
+
+**The renderer is complete**: drawing a dump of the original's world, it reproduces the original's frames. It is
+being built first; the rebuild's own world generator follows in milestones 7 and 8. To see it: `npm run ref:dump`
+once, then `npm run dev` and open `http://127.0.0.1:5173/?world=reference` (add `&level=1` or `2` for Medium or
+Low), or `npm run shots` to save frames to `test-results/shots/`. There are no controls yet (milestone 9).
+
+Known issue, inherited from the original: at Low detail (no anti-aliasing), and now and then at Medium, the scene
+is not exactly repeatable from one render to the next on this Apple GPU. A few hundred isolated pixels on the
+plants change while the depth buffer stays identical. Two loads of the original differ by up to 722 pixels in a
+frame (`tests/browser/noise.mjs` measures it), and the rebuild behaves the same way, so the Low comparison allows
+0.2 % of pixels to differ. Ruled out so far: the blended draws, the fish, shadow sampling in vertex shaders, the
+sine hash, and the timing of the shadow bake. Finding the cause is on the list for milestone 11.
 
 ## Working on it
 
