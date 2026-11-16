@@ -1,7 +1,7 @@
 import { readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { DUSK, inMood, MOODS, MOON, moodNamed, NOON } from '../../src/config/mood';
-import { loadWgsl } from '../../tools/wgsl.mjs';
+import { allPieces, headerNames, loadWgsl, renameWgsl, wgslRenames } from '../../tools/wgsl.mjs';
 
 const shaders = readdirSync('src/shaders').filter((name) => name.endsWith('.wgsl'));
 
@@ -46,6 +46,15 @@ describe('moods', () => {
     }
     // everything that draws into the scene, and the light shafts
     expect(lit).toBeGreaterThanOrEqual(2 * 9);
+  });
+
+  it('and so it does when the shaders have the short names production builds give them', () => {
+    const renames = wgslRenames([...allPieces('src/shaders').values()], headerNames('src'));
+    const { code } = loadWgsl('src/shaders/leaf.wgsl', { minify: true });
+    const moon = inMood(renameWgsl(code, renames), MOON);
+    expect(moon).toMatch(/const MOOD_SUN = vec3f\(0\.09, 0\.14, 0\.24\);/);
+    expect(moon).toMatch(/const MOOD_GLOW = 1\.;/);
+    expect(moon.match(/MOOD_GLOW/g)!.length).toBeGreaterThan(2); // still used where it was
   });
 
   it('a source with the constants in a form that cannot be rewritten is refused, not left at noon', () => {

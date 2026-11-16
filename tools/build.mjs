@@ -17,9 +17,9 @@ import { wgslPlugin } from './wgsl.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dev = process.argv.includes('--dev');
 const harness = process.argv.includes('--harness');
-// The original ships at 97 kB. This is larger for what it adds (the swimmer, the opening, new animals) and
-// because its shaders keep their readable names: the build strips their whitespace and comments and ships the
-// code they share once (tools/wgsl.mjs), but does not rename anything.
+// The original ships at 97 kB. This is larger for what it adds (the swimmer, the opening, new animals, moods).
+// The build strips the shaders' whitespace and comments, ships the code they share once and gives their own
+// names short ones (tools/wgsl.mjs).
 const BUDGET_KB = 200;
 const PORT = 5173;
 const upstream = JSON.parse(readFileSync(path.join(root, 'tools/reference/upstream.json'), 'utf8'));

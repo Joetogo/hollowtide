@@ -1,7 +1,15 @@
 import { readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { WgslReflect } from 'wgsl_reflect';
-import { loadWgsl, minifyWgsl, wgslPieces } from '../../tools/wgsl.mjs';
+import {
+  allPieces,
+  headerNames,
+  loadWgsl,
+  minifyWgsl,
+  renameWgsl,
+  wgslPieces,
+  wgslRenames,
+} from '../../tools/wgsl.mjs';
 import { declarations } from '../../src/gpu/bindings';
 import { BlitGroup } from '../../src/render/passes/blit';
 import { postGroup } from '../../src/render/passes/post';
@@ -135,6 +143,80 @@ describe('loadWgsl', () => {
       fragment: ['bubbleFragment', 'snowFragment'],
     },
   };
+  // ---- the short names production builds give the shaders' own names
+  const pieces: Map<string, string> = allPieces('src/shaders');
+  const keep: Set<string> = headerNames('src');
+  const renames: Map<string, string> = wgslRenames([...pieces.values()], keep);
+  const words = (text: string) => text.match(/(?<![A-Za-z0-9_])[A-Za-z_][A-Za-z0-9_]*/g) ?? [];
+
+  it('the names TypeScript declares in front of a shader are all known to the renamer, and kept', () => {
+    const headers = new Set(Object.values(shaders).map((shader) => shader.header));
+    expect(headers.size).toBeGreaterThan(6);
+    for (const header of headers) {
+      for (const word of words(header)) {
+        // (what is not a name of ours is a word of the language, which the renamer never touches either)
+        if (!keep.has(word)) expect(renameWgsl(word, renames), word).toBe(word);
+        expect(renames.has(word), word).toBe(false);
+      }
+    }
+    for (const name of ['frame', 'camPos', 'lamp', 'shadowMap', 'sourceTexture', 'Frame'])
+      expect(keep.has(name)).toBe(true);
+  });
+
+  it('renaming changes names and nothing else: the same shader, word for word', () => {
+    expect(renames.size).toBeGreaterThan(250);
+    // no two names share a short one, and no short one was a name already
+    const shorts = new Set(renames.values());
+    expect(shorts.size).toBe(renames.size);
+    const all = new Set([...pieces.values()].flatMap(words));
+    for (const short of shorts) expect(all.has(short) || keep.has(short), short).toBe(false);
+    let saved = 0;
+    for (const [key, text] of pieces) {
+      const renamed = renameWgsl(text, renames);
+      saved += text.length - renamed.length;
+      const [before, after] = [words(text), words(renamed)];
+      expect(after.length, key).toBe(before.length);
+      before.forEach((word, i) => expect(after[i], `${key}: ${word}`).toBe(renames.get(word) ?? word));
+      // and what stands between the words is untouched
+      const gaps = (t: string) => t.replace(/(?<![A-Za-z0-9_])[A-Za-z_][A-Za-z0-9_]*/g, '\u0000');
+      expect(gaps(renamed), key).toBe(gaps(text));
+    }
+    expect(saved).toBeGreaterThan(9000);
+  });
+
+  it('what the program asks a shader for by name keeps its name', () => {
+    const asked = new Set(Object.values(shaders).flatMap((shader) => [...shader.vertex, ...shader.fragment]));
+    for (const text of pieces.values()) {
+      for (const m of text.matchAll(/\boverride\s+(\w+)/g)) asked.add(m[1]!);
+      for (const m of text.matchAll(/\b(MOOD_\w+)/g)) asked.add(m[1]!);
+    }
+    for (const name of [
+      'solidVertex',
+      'leafFragment',
+      'ROCK_FADE',
+      'SHADOW_SIZE',
+      'OWN',
+      'PART',
+      'MOOD_SUN',
+      'MOOD_GLOW',
+    ]) {
+      expect(asked.has(name), name).toBe(true);
+    }
+    for (const name of asked) expect(renames.has(name), name).toBe(false);
+    // nor are the language's own words, where a shader has used one for a variable, or short names
+    for (const name of ['length', 'position', 'normalize', 'sample', 'xyz', 'rgb', 'uv']) {
+      expect(renames.has(name), name).toBe(false);
+    }
+  });
+
+  for (const [name, shader] of Object.entries(shaders)) {
+    it(`${name} parses with short names, and has the same entry points`, () => {
+      const parsed = new WgslReflect(shader.header + renameWgsl(minifyWgsl(shader.source), renames));
+      expect(parsed.entry.vertex.map((f) => f.name)).toEqual(shader.vertex);
+      expect(parsed.entry.fragment.map((f) => f.name)).toEqual(shader.fragment);
+    });
+  }
+
   for (const [name, shader] of Object.entries(shaders)) {
     it(`${name} parses, as written and minified, with the entry points the pipelines ask for`, () => {
       expect(shader.source).not.toContain('#include');

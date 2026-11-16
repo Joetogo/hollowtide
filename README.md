@@ -230,7 +230,7 @@ taken minutes apart cannot be compared.
 | Load time on a cool machine (separate sittings) | 3.4 s | 1.6 s |
 | Peak memory while loading, page / whole browser | 1.1 GB / 1.9 GB | 0.5 GB / 1.2 GB |
 | Loading bar | timed animation | real progress from the generator |
-| Shipped file | 97 kB | 196 kB (76 kB gzipped), with the swimmer, the opening, the moods, the lamp, jellyfish and turtles that the original does not have. Shaders keep their readable names; the code they share is in the file once and joined to each when the page starts (spliced into each, it was there eight times: 28 kB) |
+| Shipped file | 97 kB | 186 kB (75 kB gzipped), with the swimmer, the opening, the moods, the lamp, jellyfish and turtles that the original does not have. The shader code the shaders share is in the file once and joined to each when the page starts (spliced into each, it was there eight times: 28 kB), and the build gives the shaders' own names short ones (12 kB) |
 | Frame at 2560×1440, six viewpoints | 45.7 / 35.4 / 26.9 / 38.5 / 35.9 / 35.7 ms | the same within 3 % |
 | Frame at 640×360, six viewpoints | 26.2 / 19.1 / 19.6 / 20.3 / 21.2 / 19.2 ms | the same within 3 % |
 | 60 s fly-through at 2560×1440, average | 37.8 ms | 37.1 ms |
