@@ -91,7 +91,7 @@ ESLint + Prettier; Vitest for unit tests; Playwright driving the installed Chrom
 anything that needs a GPU.
 
 ```
-~/Project.Git/abyssal-garden-rebuild/        (working name; a one-line change later)
+~/Project.Git/hollowtide/
   src/
     main.ts              boot: main thread or worker, decided at start-up
     config/quality.ts    detail levels and persisted settings (JSON)
