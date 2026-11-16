@@ -26,6 +26,7 @@
     ref.data.meshVertices = allV; ref.data.meshIndices = allI; ref.data.collisionIndex = CI; ref.data.collisionBricks = CG;
 
     // every frame from here on is one the harness asks for, at full resolution and full draw distance
+    const upstreamFrame = frame;
     frame = () => {};
     pix = PIXMAX; det = 1; resize();
 
@@ -33,6 +34,23 @@
     const shot = () => { render(); return { png: canvas.toDataURL('image/png'), uniforms: Array.from(UB), width: W, height: H }; };
     ref.capture = (pose, time) => { lookAt(...POSES[pose]); F[TIME] = time; return shot(); };
     ref.captureFly = (flyTime, time) => { F[FLT] = flyTime; flyAt(); F[TIME] = time; return shot(); };
+
+    // ---- a scripted swim: upstream's own frame() fed synthetic frame times, with its input variables set directly.
+    // Returns x, y, z, yaw, pitch after every step. Nothing is drawn while it runs.
+    ref.trace = (script) => {
+      const draw = render; render = () => {};
+      dynT = -Infinity; // no resolution tuning in between
+      lookAt(...POSES[script.pose]); F[VX] = F[VY] = F[VZ] = 0; lkx = lky = l2x = l2y = mdx = mdy = 0;
+      // frame times are differences of timestamps: start both sides' clock at zero so the differences round alike
+      let now = F[LAST] = 0; const out = [];
+      for (const st of script.steps) {
+        kf = st.f; kb = st.b; kl = st.l; kr = st.r; ku = st.u; kd = st.d; ks = st.s; mdx += st.dx; mdy += st.dy;
+        now += st.ms; upstreamFrame(now);
+        out.push(F[CX], F[CY], F[CZ], F[YAW], F[PIT]);
+      }
+      release(); render = draw;
+      return out;
+    };
 
     // ---- pipelines by creation order in main.js (the last one is the one-off detail bake)
     ref.pipelineNames = ['mip8', 'mip16', 'bloomDown0', 'bloomDown', 'bloomUp', 'terrain', 'solid', 'leaf9', 'leaf5', 'leafSmall', 'leafFar', 'fish', 'manta',

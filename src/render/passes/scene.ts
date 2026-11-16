@@ -59,11 +59,11 @@ interface PipelineOptions {
 }
 
 /**
- * Harness builds only: names of draws to leave out ('fish', 'bubbles', 'glints', 'snow'), to compare frames with
+ * Harness builds only: names of draws to leave out ('mantas', 'fish', 'leaves', 'bubbles', 'glints', 'snow', and 'shafts'), to compare frames with
  * and without them. Always empty in the shipped file.
  */
 export const skippedDraws = new Set<string>();
-const skipped = (name: string) => __HARNESS__ && skippedDraws.has(name);
+export const skipped = (name: string) => __HARNESS__ && skippedDraws.has(name);
 
 export interface ScenePass {
   /** Draws into a pass the renderer has begun. */
@@ -198,9 +198,11 @@ export async function createScenePass(gpu: Gpu, scene: Scene, quality: Quality):
 
       // animals: the mesh buffers are still bound
       const mantaMesh = world.meshes[MESH.manta]!;
-      pass.setPipeline(manta);
-      pass.setVertexBuffer(1, world.mantas.buffer);
-      pass.drawIndexed(mantaMesh.indexCount, world.mantas.count, mantaMesh.firstIndex, mantaMesh.firstVertex, 0);
+      if (!skipped('mantas')) {
+        pass.setPipeline(manta);
+        pass.setVertexBuffer(1, world.mantas.buffer);
+        pass.drawIndexed(mantaMesh.indexCount, world.mantas.count, mantaMesh.firstIndex, mantaMesh.firstVertex, 0);
+      }
       const fishMesh = world.meshes[MESH.fish]!;
       if (!skipped('fish')) {
         pass.setPipeline(fish);
@@ -209,17 +211,19 @@ export async function createScenePass(gpu: Gpu, scene: Scene, quality: Quality):
       }
 
       // kelp and plants
-      pass.setPipeline(leafNear);
-      pass.setVertexBuffer(0, world.leavesBig.buffer);
-      drawLeaves(world.leavesBig, 9, 5, 0, LEAF_NEAR);
-      pass.setPipeline(leafMid);
-      drawLeaves(world.leavesBig, 5, 5, LEAF_NEAR, LEAF_MID);
-      pass.setPipeline(leafFar);
-      pass.setVertexBuffer(0, world.leavesBigFar.buffer);
-      drawLeaves(world.leavesBigFar, 3, 5, LEAF_MID, LEAF_FAR);
-      pass.setPipeline(leafSmall);
-      pass.setVertexBuffer(0, world.leavesSmall.buffer);
-      drawLeaves(world.leavesSmall, 3, 1.5, 0, SMALL_LEAF_DISTANCE);
+      if (!skipped('leaves')) {
+        pass.setPipeline(leafNear);
+        pass.setVertexBuffer(0, world.leavesBig.buffer);
+        drawLeaves(world.leavesBig, 9, 5, 0, LEAF_NEAR);
+        pass.setPipeline(leafMid);
+        drawLeaves(world.leavesBig, 5, 5, LEAF_NEAR, LEAF_MID);
+        pass.setPipeline(leafFar);
+        pass.setVertexBuffer(0, world.leavesBigFar.buffer);
+        drawLeaves(world.leavesBigFar, 3, 5, LEAF_MID, LEAF_FAR);
+        pass.setPipeline(leafSmall);
+        pass.setVertexBuffer(0, world.leavesSmall.buffer);
+        drawLeaves(world.leavesSmall, 3, 1.5, 0, SMALL_LEAF_DISTANCE);
+      }
 
       pass.setPipeline(surface);
       pass.draw(4);

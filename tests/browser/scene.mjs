@@ -18,6 +18,7 @@ try {
   const { error } = await chrome.open(host.origin + '/?world=none', { pause: true });
   check(!error, `starts${error ? ': ' + error : ''}`);
   await chrome.page.evaluate(() => window.__abyssal.harness.loadReferenceWorld('/fixtures/'));
+  await chrome.page.evaluate(() => window.__abyssal.harness.skipDraws('shafts')); // as in the original's frames here
   for (const [i, pose] of index.meta.poses.entries()) {
     for (const time of times) {
       const id = `pose${i + 1}_t${time}`;

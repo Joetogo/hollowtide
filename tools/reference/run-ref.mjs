@@ -18,6 +18,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { chromium } from 'playwright-core';
 import { buildReference, outDir, root, upstream } from './build-ref.mjs';
+import { swimScript } from './swim-script.mjs';
 
 const [mode = 'capture', ...rest] = process.argv.slice(2);
 const opt = (name, fallback) => {
@@ -182,6 +183,12 @@ async function capture(dir) {
       const ft = ((i + 0.5) * 60) / flyFrames;
       save(`fly${String(i).padStart(2, '0')}`, await page.evaluate((ft) => window.__ref.captureFly(ft, ft), ft));
     }
+    // the scripted swim, last: it leaves the camera somewhere else
+    const script = swimScript();
+    writeJson(path.join(dir, 'trace.json'), {
+      script,
+      path: await page.evaluate((s) => window.__ref.trace(s), script),
+    });
     const manifest = { upstream: upstream.sha, level, view: VIEW, info: state.info, meta: state.meta, data, shots };
     writeJson(path.join(dir, 'manifest.json'), manifest);
     return manifest;

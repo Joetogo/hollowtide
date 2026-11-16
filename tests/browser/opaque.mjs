@@ -17,6 +17,10 @@ try {
   const { error } = await chrome.open(host.origin + '/?world=none', { pause: true });
   check(!error, `starts${error ? ': ' + error : ''}`);
   await chrome.page.evaluate(() => window.__abyssal.harness.loadReferenceWorld('/fixtures/'));
+  // the original's frames for this test were captured with these switched off, so the rebuild leaves them out too
+  await chrome.page.evaluate(() =>
+    window.__abyssal.harness.skipDraws('mantas', 'fish', 'leaves', 'bubbles', 'glints', 'snow', 'shafts'),
+  );
   for (const id of Object.keys(index.frames)) {
     const pose = index.meta.poses[+id[4] - 1];
     const time = +id.split('_t')[1];

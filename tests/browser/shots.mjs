@@ -1,5 +1,6 @@
-// Saves frames from the rebuild (drawing the original's dumped world) to test-results/shots/, for looking at.
-//   node tests/browser/shots.mjs [time in seconds, default 2]
+// Saves frames from the rebuild to test-results/shots/, for looking at.
+//   node tests/browser/shots.mjs [time in seconds, default 2]               drawing the world it generates itself
+//   node tests/browser/shots.mjs [time] --reference                         drawing the original's dumped world
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fixturesDir, launch, need, root, serve } from './lib.mjs';
@@ -9,15 +10,16 @@ const fixtures = fixturesDir(0);
 need(page, 'run `npm run build:harness`');
 need(path.join(fixtures, 'index.json'), 'run `npm run ref:dump`');
 const index = JSON.parse(readFileSync(path.join(fixtures, 'index.json'), 'utf8'));
-const time = +(process.argv[2] ?? 2);
+const reference = process.argv.includes('--reference');
+const time = +(process.argv.slice(2).find((a) => !a.startsWith('--')) ?? 2);
 const out = path.join(root, 'test-results/shots');
 mkdirSync(out, { recursive: true });
 
 const host = await serve(page, fixtures);
 const chrome = await launch();
 try {
-  await chrome.open(host.origin + '/?world=none', { pause: true });
-  await chrome.page.evaluate(() => window.__abyssal.harness.loadReferenceWorld('/fixtures/'));
+  await chrome.open(host.origin + (reference ? '/?world=none' : '/'), { pause: true });
+  if (reference) await chrome.page.evaluate(() => window.__abyssal.harness.loadReferenceWorld('/fixtures/'));
   for (const [i, pose] of index.meta.poses.entries()) {
     const shot = await chrome.page.evaluate(
       ([pose, time]) => window.__abyssal.harness.capture(pose, time),

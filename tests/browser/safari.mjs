@@ -54,5 +54,17 @@ if (result.report) {
     `worker: ${worker?.megabytes} MB transferred there and back intact (${worker?.roundTripMs.toFixed(1)} ms)`,
   );
 }
+check(
+  (result.gpuErrors ?? ['none reported']).length === 0,
+  `no shader or validation errors${result.gpuErrors?.length ? ': ' + result.gpuErrors.join('; ') : ''}`,
+);
+if (result.frame) {
+  // viewpoint 1 is blue-green water, kelp and pale stone: in Chrome its mean colour is about 67, 141, 160
+  const [r, g, b] = result.frame.mean;
+  check(
+    g > 60 && b > 70 && b > r && result.frame.dark < 0.2,
+    `the first viewpoint has a picture in it: mean colour ${r}, ${g}, ${b}; ${(result.frame.dark * 100).toFixed(1)} % dark pixels`,
+  );
+}
 console.log('Safari was left open on the test page.');
 process.exitCode = failures.length ? 1 : 0;

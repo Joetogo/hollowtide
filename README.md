@@ -30,11 +30,29 @@ Done so far:
 
 | 8. Generator, part 2 | The 14 scatter systems (kelp, plants, glints, sponges, corals, rocks, set pieces, bubbles, fish, mantas, particles), the skylight volume, packing; the page now builds its own world | All 84 outputs have the same SHA-256 as the original's at all three levels; frames drawn from the generated world pass the same comparison as milestone 6 |
 
-**The scene is complete and self-contained.** `dist/index.html` builds the world in its worker (about 3.5 s, the
-page stays responsive) and draws it, and what it draws is the original's picture: same terrain, same 2.17 million
-leaves in the same places, same frames. `npm run dev`, or open `dist/index.html` after `npm run build`. There are
-no controls yet: the camera sits at the first viewpoint. Milestone 9 adds the menu, controls, collision, dynamic
-resolution and sound.
+| 9. Shell | Loading bar, menu, keyboard / mouse / touch, collision, dynamic resolution, detail levels and crash fallback, stats line, sound | A scripted swim of 536 frames (easing, turning, sprinting into rock and sliding along it) traces the original's path bit for bit; no main-thread task over 50 ms while loading; starts and draws in Safari 27 from `file://` |
+
+**Parity gate: passed.** The rebuild is the original, from scratch: `dist/index.html` builds the same world (all
+84 generator outputs have the original's checksums), draws the same frames (at High and Medium at most 11 of
+921,600 pixels differ, by 1/255; three of four spot-checked frames are byte-identical PNG files), and swims the
+same way. What is left is the part that goes beyond the original: milestones 10 to 13.
+
+```bash
+npm run build && open dist/index.html     # or: npm run dev
+```
+
+Controls are the original's: `W A S D` swim, `Q` / `E` down / up, `Shift` faster, `1`–`6` viewpoints, `Esc` menu,
+`M` mute, `H` stats. On a touchscreen: hold to swim forward, slide to steer, a second finger to go faster.
+
+What already differs from the original, on an Apple M3 with 8 GB at High detail:
+
+| | Original | Rebuild |
+|---|---|---|
+| Main thread blocked while loading | 3.2 s (longest task 1.7 s) | none (no task over 50 ms) |
+| Load time | 3.7 s | about 3.9 s |
+| Loading bar | timed animation | real progress from the generator |
+| Shipped file | 97 kB | 143 kB (its shaders keep readable names; renaming them at build time is on the list) |
+| Frame cost | see the baseline below | the same: the renderer is not optimised yet |
 
 For development the page can also draw a dump of the original's world instead of its own: `npm run ref:dump`
 once, then `http://127.0.0.1:5173/?world=reference` (add `&level=1` or `2` for Medium or Low). `npm run shots`
@@ -54,8 +72,8 @@ npm install
 npm run dev            # http://127.0.0.1:5173, rebuilds and reloads on save
 npm run check          # typecheck, lint, unit tests
 npm run build          # dist/index.html: one self-contained file, size printed, 130 kB budget enforced
-npm run test:browser   # Chrome: the built files start from file://, and the passes match the original
-npm run test:safari    # Safari: the build starts from file:// (Safari is left open on the test page)
+npm run test:browser   # Chrome: 519 checks against the original (frames, checksums, swimming) and of the shell
+npm run test:safari    # Safari: the build starts from file:// and draws (Safari is left open on the test page)
 ```
 
 How it is put together:

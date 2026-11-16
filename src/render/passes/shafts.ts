@@ -25,7 +25,8 @@ export const ShaftsBlurGroup = group(0, { shaftsTexture: 'texture_2d<f32>' });
 
 export interface Shafts {
   resize(targets: Targets): void;
-  encode(encoder: GPUCommandEncoder): void;
+  /** Marches and blurs the shafts. With `none`, only clears the result, so the composite adds nothing. */
+  encode(encoder: GPUCommandEncoder, none?: boolean): void;
 }
 
 export async function createShafts(gpu: Gpu, scene: Scene, quality: Quality): Promise<Shafts> {
@@ -79,7 +80,11 @@ export async function createShafts(gpu: Gpu, scene: Scene, quality: Quality): Pr
       marchPass = cleared(raw);
       blurPass = cleared(targets.shaftsBlurred.createView());
     },
-    encode(encoder) {
+    encode(encoder, none = false) {
+      if (none) {
+        encoder.beginRenderPass(blurPass).end();
+        return;
+      }
       let pass = encoder.beginRenderPass(marchPass);
       pass.setPipeline(march);
       pass.setBindGroup(0, marchGroup);

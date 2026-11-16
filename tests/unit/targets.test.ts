@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_PIXELS } from '../../src/render/renderer';
+import { MAX_PIXELS } from '../../src/render/dynres';
 import { renderSize } from '../../src/render/targets';
 
 describe('renderSize', () => {

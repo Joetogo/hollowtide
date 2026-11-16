@@ -10,8 +10,8 @@ export const WaterClock = struct('WaterClock', { time: 'f32' });
 export const WaterGroup = group(0, { clock: WaterClock });
 
 export interface Water {
-  /** Draws the texture for `time` seconds. */
-  encode(encoder: GPUCommandEncoder, time: number): void;
+  /** Draws the texture for `time` seconds. This is the frame's first pass, so it can carry the opening timestamp. */
+  encode(encoder: GPUCommandEncoder, time: number, timestamp?: GPURenderPassTimestampWrites): void;
 }
 
 export async function createWater(gpu: Gpu, blit: Blit, texture: GPUTexture): Promise<Water> {
@@ -46,9 +46,10 @@ export async function createWater(gpu: Gpu, blit: Blit, texture: GPUTexture): Pr
   const sources = views.map((view) => blit.source(view));
 
   return {
-    encode(encoder, time) {
+    encode(encoder, time, timestamp) {
       clock[WaterClock.at.time] = time;
       queue.writeBuffer(clockBuffer, 0, clock);
+      passes[0]!.timestampWrites = timestamp;
       let pass = encoder.beginRenderPass(passes[0]!);
       pass.setPipeline(pipeline);
       pass.setBindGroup(0, clockGroup);

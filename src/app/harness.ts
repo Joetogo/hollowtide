@@ -1,13 +1,16 @@
 // Hooks for tests and for comparing against the original. Compiled into dev and harness builds only; the shipped
 // file has none of this.
 import { lookAt } from '../camera/camera';
+import { createIntent, createSwimmer, stepSwimmer } from '../camera/controls';
 import { flyPoint } from '../camera/path';
 import type { Level } from '../config/quality';
 import { shaderErrors } from '../gpu/shader';
 import { skippedDraws } from '../render/passes/scene';
+import { MAX_PIXELS } from '../render/dynres';
 import type { Renderer } from '../render/renderer';
 import type { CellTable, MeshRange, WorldData } from '../world/data';
 import { generateWorld } from '../world/client';
+import { rockDistance, type CollisionField } from '../world/collision';
 
 export interface FrameDiff {
   pixels: number;
@@ -30,7 +33,18 @@ export interface TextureDiff {
 }
 
 export interface Harness {
-  /** Leaves out draws by name ('fish', 'bubbles', 'glints', 'snow') until called again; no names draws all. */
+  /**
+   * Plays a scripted swim from a pose: one frame per step, with its length in milliseconds, the keys held
+   * (f, b, l, r, u, d, s as 0 or 1) and the mouse movement. Resolves with x, y, z, yaw, pitch after every step.
+   */
+  trace(pose: number[], steps: SwimStep[]): number[];
+  /** Where the camera is, where it looks, and how far it is from the rock (negative: in open water). */
+  camera(): { x: number; y: number; z: number; yaw: number; pitch: number; rockDistance: number };
+  /** Draws a frame from where the camera is and sums it up: the mean colour (0..255) and the share of dark pixels. */
+  frameStats(time: number): { mean: number[]; dark: number };
+  /** The six viewpoints of the world being drawn: eye xyz, target xyz. */
+  viewpoints(): number[][];
+  /** Leaves out draws by name ('mantas', 'fish', 'leaves', 'bubbles', 'glints', 'snow', 'shafts') until called again; no names draws all. */
   skipDraws(...names: string[]): void;
   /** The pose [eye xyz, target xyz] of the scripted fly-through at `seconds`. */
   flyPose(seconds: number): number[];
@@ -64,6 +78,20 @@ export interface Harness {
    * Resolves with its six viewpoints.
    */
   loadReferenceWorld(baseUrl: string): Promise<number[][]>;
+}
+
+/** One frame of a scripted swim. */
+export interface SwimStep {
+  ms: number;
+  f: number;
+  b: number;
+  l: number;
+  r: number;
+  u: number;
+  d: number;
+  s: number;
+  dx: number;
+  dy: number;
 }
 
 /** Something the generator made: how many values, and their SHA-256. */
@@ -138,12 +166,25 @@ async function decodePng(url: string): Promise<Uint8ClampedArray> {
   return copy.getImageData(0, 0, bitmap.width, bitmap.height).data;
 }
 
-export function createHarness(renderer: Renderer, createWorker: () => Worker): Harness {
+export function createHarness(
+  renderer: Renderer,
+  createWorker: () => Worker,
+): Harness & { collision: CollisionField | null; generatedViewpoints: number[][] } {
+  let collision: CollisionField | null = null;
+  let viewpoints: number[][] = [];
   const { device, queue, canvas } = renderer.gpu;
   const errors: string[] = [];
   device.addEventListener('uncapturederror', (event) => errors.push(event.error.message));
 
+  /** Frames for comparison are drawn the way the reference rig draws its own: full size, full draw distance. */
+  const fullSize = () => {
+    renderer.pixelBudget = MAX_PIXELS;
+    renderer.detail = 1;
+    renderer.resize();
+  };
+
   const setPose = (pose: number[]) => {
+    fullSize();
     const [x, y, z, tx, ty, tz] = pose as [number, number, number, number, number, number];
     lookAt(renderer.camera, x, y, z, tx, ty, tz);
   };
@@ -177,6 +218,64 @@ export function createHarness(renderer: Renderer, createWorker: () => Worker): H
   };
 
   return {
+    /** set by the boot sequence once the generated world exists */
+    set collision(field: CollisionField | null) {
+      collision = field;
+    },
+    set generatedViewpoints(points: number[][]) {
+      viewpoints = points;
+    },
+    get collision() {
+      return collision;
+    },
+
+    trace(pose, steps) {
+      setPose(pose);
+      const camera = renderer.camera;
+      const swimmer = createSwimmer();
+      const intent = createIntent();
+      const path: number[] = [];
+      // the loop gets frame times as differences of timestamps, so the script's are replayed the same way
+      let now = 0;
+      let last = 0;
+      for (const step of steps) {
+        now += step.ms;
+        const frameMs = now - last;
+        last = now;
+        intent.forward = step.f - step.b;
+        intent.right = step.r - step.l;
+        intent.up = step.u - step.d;
+        intent.fast = !!step.s;
+        intent.lookX += step.dx;
+        intent.lookY += step.dy;
+        stepSwimmer(camera, swimmer, intent, collision, Math.min(frameMs / 1000, 0.1));
+        path.push(camera.x, camera.y, camera.z, camera.yaw, camera.pitch);
+      }
+      return path;
+    },
+
+    camera() {
+      const { x, y, z, yaw, pitch } = renderer.camera;
+      return { x, y, z, yaw, pitch, rockDistance: collision ? rockDistance(collision, x, y, z) : NaN };
+    },
+
+    frameStats(time) {
+      renderer.render(time);
+      const pixels = readCanvas();
+      const sum = [0, 0, 0];
+      let dark = 0;
+      for (let i = 0; i < pixels.length; i += 4) {
+        sum[0]! += pixels[i]!;
+        sum[1]! += pixels[i + 1]!;
+        sum[2]! += pixels[i + 2]!;
+        if (pixels[i]! + pixels[i + 1]! + pixels[i + 2]! < 24) dark++;
+      }
+      const count = pixels.length / 4;
+      return { mean: sum.map((v) => Math.round(v / count)), dark: dark / count };
+    },
+
+    viewpoints: () => viewpoints,
+
     skipDraws(...names) {
       skippedDraws.clear();
       for (const name of names) skippedDraws.add(name);
@@ -268,7 +367,8 @@ export function createHarness(renderer: Renderer, createWorker: () => Worker): H
 
     async useGeneratedWorld(level) {
       const { world } = await generateWorld(device, createWorker, level);
-      renderer.setWorld(world);
+      await renderer.setWorld(world);
+      viewpoints = world.viewpoints;
       return world.viewpoints;
     },
 
@@ -330,7 +430,8 @@ export function createHarness(renderer: Renderer, createWorker: () => Worker): H
         groundMap: await bytes('groundMap'),
         viewpoints: index.meta.poses,
       };
-      renderer.setWorld(data);
+      await renderer.setWorld(data);
+      viewpoints = data.viewpoints;
       return data.viewpoints;
     },
   };

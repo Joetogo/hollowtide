@@ -62,7 +62,15 @@ export async function computeDensity(device: GPUDevice): Promise<Float32Array<Ar
   device.queue.submit([encoder.finish()]);
 
   await readback.mapAsync(GPUMapMode.READ);
-  const density = new Float32Array(readback.getMappedRange().slice(0));
+  // copied out in slices, with a turn for the page in between: 84 MB in one go would hold the main thread
+  const mapped = new Uint8Array(readback.getMappedRange());
+  const copy = new Uint8Array(bytes);
+  const SLICE = 12 << 20;
+  for (let offset = 0; offset < bytes; offset += SLICE) {
+    copy.set(mapped.subarray(offset, Math.min(offset + SLICE, bytes)), offset);
+    await new Promise<void>((resolve) => setTimeout(resolve));
+  }
+  const density = new Float32Array(copy.buffer);
   readback.unmap();
   for (const buffer of [paramBuffer, shapeBuffer, grid, readback]) buffer.destroy();
   return density;

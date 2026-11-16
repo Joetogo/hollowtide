@@ -3,23 +3,22 @@
 import { createCamera, type Camera } from '../camera/camera';
 import type { Quality } from '../config/quality';
 import type { Gpu } from '../gpu/context';
+import { createFrameTimer } from '../gpu/timing';
 import type { WorldData } from '../world/data';
 import { createCullView, updateCullView } from './cull';
+import { MAX_PIXELS } from './dynres';
 import { writeFrame } from './frame';
 import { createBlit } from './passes/blit';
 import { createBloom } from './passes/bloom';
 import { bakeDetail } from './passes/detail';
 import { createPost } from './passes/post';
-import { createScenePass } from './passes/scene';
+import { createScenePass, skipped } from './passes/scene';
 import { createShadowBake } from './passes/shadow';
 import { createShafts } from './passes/shafts';
 import { createWater } from './passes/water';
 import { createScene, type Scene } from './scene';
 import { createTargets, renderSize, type Targets } from './targets';
 import { uploadWorld, type WorldBuffers } from './world';
-
-/** The most pixels a frame is rendered at; a larger canvas is scaled up from that. */
-export const MAX_PIXELS = 2560 * 1440;
 
 export interface Renderer {
   readonly gpu: Gpu;
@@ -37,14 +36,19 @@ export interface Renderer {
   /** While set, the scene pass is skipped and whatever the scene target holds is composited (used by the harness). */
   holdScene: boolean;
   /** Uploads a world and bakes the shadow map for it. */
-  setWorld(data: WorldData): void;
+  setWorld(data: WorldData): Promise<void>;
   /** Matches the render size to the canvas. Returns true if the targets were rebuilt. */
   resize(): boolean;
   /** Draws one frame for `time` seconds. */
   render(time: number): void;
 }
 
-export async function createRenderer(gpu: Gpu, quality: Quality): Promise<Renderer> {
+/** @param onGpuTime called with each frame's GPU time in milliseconds, a few frames late, where the GPU can measure it */
+export async function createRenderer(
+  gpu: Gpu,
+  quality: Quality,
+  onGpuTime: (ms: number) => void = () => undefined,
+): Promise<Renderer> {
   const { device, queue, canvas, context } = gpu;
   const scene = createScene(gpu, quality);
   const [blit, post, shadow, sceneDraw, shafts] = await Promise.all([
@@ -56,6 +60,7 @@ export async function createRenderer(gpu: Gpu, quality: Quality): Promise<Render
   ]);
   const [water] = await Promise.all([createWater(gpu, blit, scene.water), bakeDetail(gpu, blit, scene.detail)]);
   const bloom = createBloom(blit);
+  const timer = createFrameTimer(gpu, onGpuTime);
   let scenePass: GPURenderPassDescriptor;
   const camera = createCamera();
   const cullView = createCullView(camera);
@@ -70,10 +75,11 @@ export async function createRenderer(gpu: Gpu, quality: Quality): Promise<Render
     targets: undefined as unknown as Targets, // set by the resize() below
     holdScene: false,
 
-    setWorld(data) {
+    async setWorld(data) {
+      const next = await uploadWorld(gpu, scene, data);
       renderer.world?.destroy();
-      renderer.world = uploadWorld(gpu, scene, data);
-      shadow.bake(renderer.world);
+      renderer.world = next;
+      shadow.bake(next);
     },
 
     resize() {
@@ -122,7 +128,8 @@ export async function createRenderer(gpu: Gpu, quality: Quality): Promise<Render
       writeFrame(scene.frameData, renderer.camera, targets.width, targets.height, time, renderer.detail);
       queue.writeBuffer(scene.frameBuffer, 0, scene.frameData);
       const encoder = device.createCommandEncoder();
-      water.encode(encoder, time);
+      const stamps = timer.begin();
+      water.encode(encoder, time, stamps?.first);
       if (!renderer.holdScene) {
         const pass = encoder.beginRenderPass(scenePass);
         if (renderer.world) {
@@ -131,11 +138,13 @@ export async function createRenderer(gpu: Gpu, quality: Quality): Promise<Render
         }
         pass.end();
         // with no world there is no shadow map to march through, and the shafts stay empty
-        if (renderer.world) shafts.encode(encoder);
+        if (renderer.world) shafts.encode(encoder, skipped('shafts'));
       }
       bloom.encode(encoder);
-      post.encode(encoder, context.getCurrentTexture().createView());
+      post.encode(encoder, context.getCurrentTexture().createView(), stamps?.last);
+      timer.resolve(encoder);
       queue.submit([encoder.finish()]);
+      timer.submitted();
     },
   };
   renderer.resize();

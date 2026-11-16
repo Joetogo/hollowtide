@@ -97,28 +97,51 @@ export interface WorldBuffers {
 // position 0, scale 1; no rotation; material 0 (terrain), seed 0, no fade, no bob
 const IDENTITY_INSTANCE = [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0];
 
-export function uploadWorld(gpu: Gpu, scene: Scene, data: WorldData): WorldBuffers {
+/** Lets the page breathe: everything queued (input, painting the loading bar) runs before this resolves. */
+const breathe = () => new Promise<void>((resolve) => setTimeout(resolve));
+/** After uploading this much, the page gets a turn: a 48 MB buffer takes several milliseconds to hand over. */
+const YIELD_BYTES = 12 << 20;
+
+/**
+ * Uploads a world. This copies about 200 MB to the GPU process, so it is done in turns: no single task holds the
+ * main thread for long.
+ */
+export async function uploadWorld(gpu: Gpu, scene: Scene, data: WorldData): Promise<WorldBuffers> {
   const { device, queue } = gpu;
   const buffers: GPUBuffer[] = [];
-  const upload = (label: string, bytes: Uint8Array | Uint32Array | Float32Array, usage: number) => {
+  let sinceYield = 0;
+  const upload = async (label: string, bytes: Uint8Array | Uint32Array | Float32Array, usage: number) => {
     const buffer = device.createBuffer({
       label,
       size: (bytes.byteLength + 3) & ~3,
       usage: usage | GPUBufferUsage.COPY_DST,
     });
-    queue.writeBuffer(buffer, 0, bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    // large buffers go over in slices, with a turn for the page in between
+    for (let offset = 0; offset < bytes.byteLength || offset === 0; offset += YIELD_BYTES) {
+      const size = Math.min(YIELD_BYTES, bytes.byteLength - offset);
+      if (size > 0) queue.writeBuffer(buffer, offset, bytes.buffer, bytes.byteOffset + offset, size);
+      sinceYield += size;
+      if (sinceYield >= YIELD_BYTES) {
+        sinceYield = 0;
+        await breathe();
+      }
+      if (size <= 0) break;
+    }
     buffers.push(buffer);
     return buffer;
   };
   const VERTEX = GPUBufferUsage.VERTEX;
-  const cellBuffer = (label: string, set: CellInstances<Uint8Array | Float32Array>, stride: number): CellBuffer => ({
-    buffer: upload(label, set.instances, VERTEX),
+  const cellBuffer = async (
+    label: string,
+    set: CellInstances<Uint8Array | Float32Array>,
+    stride: number,
+  ): Promise<CellBuffer> => ({
+    buffer: await upload(label, set.instances, VERTEX),
     count: set.instances.byteLength / stride,
     cells: set.cells,
   });
-
-  const instances = (label: string, floats: Float32Array, perInstance: number): InstanceBuffer => ({
-    buffer: upload(label, floats, VERTEX),
+  const instances = async (label: string, floats: Float32Array, perInstance: number): Promise<InstanceBuffer> => ({
+    buffer: await upload(label, floats, VERTEX),
     count: floats.length / perInstance,
   });
 
@@ -137,27 +160,31 @@ export function uploadWorld(gpu: Gpu, scene: Scene, data: WorldData): WorldBuffe
     GROUND_MAP_SIZE,
   ]);
 
+  const chunks: CellBuffer[] = [];
+  for (const [i, c] of data.chunks.entries()) chunks.push(await cellBuffer(`chunks ${i}`, c, SOLID_BYTES));
+  const props: CellBuffer[] = [];
+  for (const [i, c] of data.props.entries()) props.push(await cellBuffer(`props ${i}`, c, SOLID_BYTES));
   return {
-    terrainVertices: upload('terrain vertices', data.terrain.vertices, VERTEX),
-    terrainIndices: upload('terrain indices', data.terrain.indices, GPUBufferUsage.INDEX),
+    terrainVertices: await upload('terrain vertices', data.terrain.vertices, VERTEX),
+    terrainIndices: await upload('terrain indices', data.terrain.indices, GPUBufferUsage.INDEX),
     terrainIndexCount: data.terrain.indices.length,
     terrainCells: data.terrain.cells,
-    meshVertices: upload('mesh vertices', data.meshes.vertices, VERTEX),
-    meshIndices: upload('mesh indices', data.meshes.indices, GPUBufferUsage.INDEX),
+    meshVertices: await upload('mesh vertices', data.meshes.vertices, VERTEX),
+    meshIndices: await upload('mesh indices', data.meshes.indices, GPUBufferUsage.INDEX),
     meshes: data.meshes.ranges,
-    solids: upload('solids', solids, VERTEX),
+    solids: await upload('solids', solids, VERTEX),
     solidRanges: data.solids.ranges,
     identityInstance: solidCount,
-    chunks: data.chunks.map((c, i) => cellBuffer(`chunks ${i}`, c, SOLID_BYTES)),
-    props: data.props.map((c, i) => cellBuffer(`props ${i}`, c, SOLID_BYTES)),
-    leavesBig: cellBuffer('leaves', data.leaves.big, LEAF_BYTES),
-    leavesBigFar: cellBuffer('far leaves', data.leaves.bigFar, LEAF_BYTES),
-    leavesSmall: cellBuffer('small leaves', data.leaves.small, LEAF_BYTES),
-    fish: instances('fish', data.fish, 8),
-    mantas: instances('mantas', data.mantas, 8),
-    bubbles: instances('bubbles', data.bubbles, 8),
-    glints: instances('glints', data.glints, 8),
-    snow: instances('snow', data.snow, 4),
+    chunks,
+    props,
+    leavesBig: await cellBuffer('leaves', data.leaves.big, LEAF_BYTES),
+    leavesBigFar: await cellBuffer('far leaves', data.leaves.bigFar, LEAF_BYTES),
+    leavesSmall: await cellBuffer('small leaves', data.leaves.small, LEAF_BYTES),
+    fish: await instances('fish', data.fish, 8),
+    mantas: await instances('mantas', data.mantas, 8),
+    bubbles: await instances('bubbles', data.bubbles, 8),
+    glints: await instances('glints', data.glints, 8),
+    snow: await instances('snow', data.snow, 4),
     destroy: () => buffers.forEach((b) => b.destroy()),
   };
 }

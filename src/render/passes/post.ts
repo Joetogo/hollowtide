@@ -19,7 +19,8 @@ export const postGroup = (multisampled: boolean) =>
 
 export interface Post {
   resize(targets: Targets): void;
-  encode(encoder: GPUCommandEncoder, canvasView: GPUTextureView): void;
+  /** The frame's last pass, so it can carry the closing timestamp. */
+  encode(encoder: GPUCommandEncoder, canvasView: GPUTextureView, timestamp?: GPURenderPassTimestampWrites): void;
 }
 
 export async function createPost(
@@ -57,8 +58,9 @@ export async function createPost(
         depthTexture: targets.depth.createView(),
       });
     },
-    encode(encoder, canvasView) {
+    encode(encoder, canvasView, timestamp) {
       attachment.view = canvasView;
+      pass.timestampWrites = timestamp;
       const p = encoder.beginRenderPass(pass);
       p.setPipeline(pipeline);
       p.setBindGroup(0, bindGroup);
