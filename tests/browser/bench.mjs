@@ -1,4 +1,4 @@
-// Load time, memory and frame cost of the rebuild next to the original's, on this machine.
+// Load time, memory and frame cost of the hollowtide next to the original's, on this machine.
 // Leave both Chrome windows visible and untouched while it runs (about five minutes).
 //   node tests/browser/bench.mjs [level, default 0] [--quick]      --quick skips the fly-through
 //
@@ -59,7 +59,7 @@ const host = await serve(page);
 const out = { level, date: new Date().toISOString(), load: {}, poses: {}, fly: {} };
 const browsers = [];
 try {
-  // ---- the original: loads first, so the rebuild is the one that loads on the warmer, fuller machine
+  // ---- the original: loads first, so the hollowtide is the one that loads on the warmer, fuller machine
   const theirs = await launch(options);
   browsers.push(theirs);
   await theirs.page.addInitScript((level) => {
@@ -90,7 +90,7 @@ try {
     peakMemory: { ...theirs.peak },
   };
 
-  // ---- the rebuild
+  // ---- the hollowtide
   const mine = await launch(options);
   browsers.push(mine);
   await mine.page.addInitScript(() => {
@@ -115,29 +115,29 @@ try {
     ms,
     during: loading.stages.findLast(([, since]) => since <= at)?.[0] ?? 'before the first loading message',
   }));
-  out.load.rebuild = {
+  out.load.hollowtide = {
     totalMs: report.loadMs,
     ...long(loading.tasks.map((t) => t[1])),
     longTasks: placed,
     peakMemory: { ...mine.peak },
   };
 
-  const [a, b] = [out.load.original, out.load.rebuild];
-  console.log('                  original        rebuild');
+  const [a, b] = [out.load.original, out.load.hollowtide];
+  console.log('                  original        Hollowtide');
   const row = (label, x, y) => console.log(`${label.padEnd(18)}${String(x).padEnd(16)}${y}`);
   row('load', `${(a.totalMs / 1000).toFixed(1)} s`, `${(b.totalMs / 1000).toFixed(1)} s`);
   row('main thread held', `${a.blockedMs} ms`, `${b.blockedMs} ms`);
   row('longest task', `${a.longestTaskMs} ms`, `${b.longestTaskMs} ms`);
   row('peak memory, page', `${Math.round(a.peakMemory.rendererMB)} MB`, `${Math.round(b.peakMemory.rendererMB)} MB`);
   row('peak, browser', `${Math.round(a.peakMemory.totalMB)} MB`, `${Math.round(b.peakMemory.totalMB)} MB`);
-  for (const t of placed) console.log(`  rebuild: a ${t.ms} ms task ${t.at} ms in, during "${t.during}"`);
+  for (const t of placed) console.log(`  hollowtide: a ${t.ms} ms task ${t.at} ms in, during "${t.during}"`);
   await mine.page.waitForTimeout(1500);
 
   // ---- frame cost, in turns
-  const viewpoints = await mine.page.evaluate(() => window.__abyssal.harness.viewpoints());
+  const viewpoints = await mine.page.evaluate(() => window.__hollowtide.harness.viewpoints());
   const flySeconds = Array.from({ length: FLY_FRAMES }, (_, i) => ((i + 0.5) * 60) / FLY_FRAMES);
   const flyPath = await mine.page.evaluate(
-    (seconds) => seconds.map((s) => window.__abyssal.harness.flyPose(s)),
+    (seconds) => seconds.map((s) => window.__hollowtide.harness.flyPose(s)),
     flySeconds,
   );
   const turns = async (first, second) => {
@@ -147,7 +147,7 @@ try {
   };
   for (const [label, pixels] of SIZES) {
     const size = await theirs.page.evaluate((pixels) => window.__ref.hold(pixels), pixels);
-    const poses = (out.poses[label] = { size, original: [], rebuild: [] });
+    const poses = (out.poses[label] = { size, original: [], hollowtide: [] });
     for (let p = 0; p < 6; p++) {
       const [o, r] = await turns(
         async () =>
@@ -155,19 +155,19 @@ try {
         async () =>
           (
             await mine.page.evaluate(
-              ([pose, n, pixels]) => window.__abyssal.harness.frameCost([pose], n, pixels),
+              ([pose, n, pixels]) => window.__hollowtide.harness.frameCost([pose], n, pixels),
               [viewpoints[p], BURST, pixels],
             )
           ).totalMs.slice(WARM),
       );
       poses.original.push(median(o));
-      poses.rebuild.push(median(r));
+      poses.hollowtide.push(median(r));
     }
     const sum = (a) => a.reduce((x, y) => x + y, 0);
     console.log(`\n${label}, the six viewpoints, median frame in ms`);
     console.log(`  original  ${poses.original.map((v) => String(v).padStart(5)).join(' ')}`);
     console.log(
-      `  rebuild   ${poses.rebuild.map((v) => String(v).padStart(5)).join(' ')}   ${percent(sum(poses.rebuild), sum(poses.original))}`,
+      `  hollowtide   ${poses.hollowtide.map((v) => String(v).padStart(5)).join(' ')}   ${percent(sum(poses.hollowtide), sum(poses.original))}`,
     );
     if (quick || label === '640x360') continue;
 
@@ -184,22 +184,22 @@ try {
             )
           ).totalMs,
         );
-      const rebuild = async () => {
+      const hollowtide = async () => {
         const lead = Array(WARM).fill(from);
         const frames = [...lead, ...Array.from({ length: FLY_SEGMENT }, (_, i) => from + i)];
         const cost = await mine.page.evaluate(
-          ([poses, n, pixels, seconds]) => window.__abyssal.harness.frameCost(poses, n, pixels, seconds),
+          ([poses, n, pixels, seconds]) => window.__hollowtide.harness.frameCost(poses, n, pixels, seconds),
           [frames.map((i) => flyPath[i]), frames.length, pixels, frames.map((i) => flySeconds[i])],
         );
         r.push(...cost.totalMs.slice(WARM));
       };
-      for (const run of turn % 2 ? [rebuild, original] : [original, rebuild]) await run();
+      for (const run of turn % 2 ? [hollowtide, original] : [original, hollowtide]) await run();
     }
-    const fly = (out.fly[label] = { original: stats(o), rebuild: stats(r) });
+    const fly = (out.fly[label] = { original: stats(o), hollowtide: stats(r) });
     console.log(`${label}, the 60 s fly-through, ${FLY_FRAMES} frames`);
     console.log(`  original  avg ${fly.original.avg}  p99 ${fly.original.p99}  worst ${fly.original.max} ms`);
     console.log(
-      `  rebuild   avg ${fly.rebuild.avg}  p99 ${fly.rebuild.p99}  worst ${fly.rebuild.max} ms   ${percent(fly.rebuild.avg, fly.original.avg)}`,
+      `  hollowtide   avg ${fly.hollowtide.avg}  p99 ${fly.hollowtide.p99}  worst ${fly.hollowtide.max} ms   ${percent(fly.hollowtide.avg, fly.original.avg)}`,
     );
   }
   const dir = path.join(root, 'test-results');

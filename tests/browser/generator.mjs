@@ -1,4 +1,4 @@
-// The rebuild's own world generator against the original: the density field, and everything the worker makes
+// Hollowtide's own world generator against the original: the density field, and everything the worker makes
 // from it, must have the same SHA-256 as what the original computed. Needs the reference manifest of each level:
 // `npm run ref:dump -- --level N`.
 //   node tests/browser/generator.mjs [levels, default 0,1,2]
@@ -20,7 +20,7 @@ try {
     need(path.join(fixturesDir(level), 'index.json'), `run \`npm run ref:dump -- --level ${level}\``);
     const reference = JSON.parse(readFileSync(path.join(fixturesDir(level), 'index.json'), 'utf8')).data;
     const started = Date.now();
-    const made = await chrome.page.evaluate((level) => window.__abyssal.harness.generate(level), level);
+    const made = await chrome.page.evaluate((level) => window.__hollowtide.harness.generate(level), level);
     const names = Object.keys(made);
     console.log(`${NAMES[level]}: ${names.length} outputs in ${((Date.now() - started) / 1000).toFixed(1)} s`);
     for (const name of names) {
@@ -42,7 +42,7 @@ try {
         `       not generated yet: ${missing.length} of the original's ${Object.keys(reference).length} outputs`,
       );
   }
-  const gpuErrors = await chrome.page.evaluate(() => window.__abyssal.harness.gpuErrors());
+  const gpuErrors = await chrome.page.evaluate(() => window.__hollowtide.harness.gpuErrors());
   check(gpuErrors.length === 0, `no shader or validation errors${gpuErrors.length ? ': ' + gpuErrors.join('; ') : ''}`);
   check(chrome.errors.length === 0, `no console errors${chrome.errors.length ? ': ' + chrome.errors.join('; ') : ''}`);
 } finally {

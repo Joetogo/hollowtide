@@ -93,11 +93,11 @@ export interface Harness {
   /** Compares a texture with a raw dump of the original's (call after a frame has been drawn). */
   compareTexture(name: TextureName, dumpUrl: string): Promise<TextureDiff>;
   /**
-   * Runs the rebuild's own world generator and resolves with the SHA-256 of everything it made, under the names
+   * Runs Hollowtide's own world generator and resolves with the SHA-256 of everything it made, under the names
    * the reference rig gives the same data.
    */
   generate(level: Level): Promise<Record<string, Made>>;
-  /** Runs the rebuild's own generator and draws its world from then on. Resolves with the six viewpoints. */
+  /** Runs Hollowtide's own generator and draws its world from then on. Resolves with the six viewpoints. */
   useGeneratedWorld(level: Level): Promise<number[][]>;
   /** SHA-256 of a texture's contents, to tell whether two renders produced the same values. */
   textureHash(name: TextureName | 'shafts' | 'shaftsBlurred'): Promise<string>;

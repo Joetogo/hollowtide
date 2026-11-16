@@ -59,8 +59,8 @@ function run(
         case 'body':
         case 'world':
         case 'collision':
-          // the marks named abyssal:… are how the benchmark sees where loading time goes
-          performance.mark('abyssal:' + data.type);
+          // the marks named hollowtide:… are how the benchmark sees where loading time goes
+          performance.mark('hollowtide:' + data.type);
           onResult(data);
           break;
         case 'done':
@@ -103,7 +103,7 @@ export async function generateWorld(
   // both workers start at once: one builds the meshes straight away, the other waits for the density field
   const workers = [createWorker(), createWorker()] as const;
   const density = computeDensity(device).then(async (field) => {
-    performance.mark('abyssal:density');
+    performance.mark('hollowtide:density');
     if (checksums) {
       const digest = await crypto.subtle.digest('SHA-256', field);
       const sha256 = Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');

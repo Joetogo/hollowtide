@@ -1,12 +1,14 @@
-# Abyssal Garden, rebuilt
+# Hollowtide
 
-A from-scratch rebuild of [Abyssal Garden](https://github.com/Noniv/abyssal-garden) by Noniv (Maksymilian Dendura):
-a procedural WebGPU underwater world with no engine and no asset files. The original is the reference this project
-is checked against, and the source of the scene's design, layout and shading. Both are MIT-licensed; see `LICENSE`.
+A procedural underwater world for the browser, to swim through: kelp forests, light shafts, a wreck, mantas, and
+your own arms pulling you along. WebGPU, no engine, no asset files, one HTML file.
 
-The goal is the same scene in a codebase that is typed, modular and tested, and then to go further: faster loading,
-better performance on laptops, new creatures and moods, photo mode and a guided tour. `PLAN.md` has the full plan
-and the milestone list.
+Hollowtide grew from [Abyssal Garden](https://github.com/Noniv/abyssal-garden) by Noniv (Maksymilian Dendura). It
+began as a from-scratch rebuild of that scene in a typed, modular, tested codebase, and the world itself (its
+design, layout and shading) is still the original's: the original is kept as a reference and Hollowtide's world
+and frames are checked against it, to the checksum and to the pixel. What Hollowtide adds is on top: loading in
+half the time without freezing the page, a swimmer with a body, a scooter, and more to come. Both are
+MIT-licensed; see `LICENSE`. `PLAN.md` has the plan and the milestone list.
 
 ## Status
 
@@ -33,8 +35,9 @@ Done so far:
 | 9. Shell | Loading bar, menu, keyboard / mouse / touch, collision, dynamic resolution, detail levels and crash fallback, stats line, sound | A scripted swim of 536 frames (easing, turning, sprinting into rock and sliding along it) traces the original's path bit for bit; no main-thread task over 50 ms while loading; starts and draws in Safari 27 from `file://` |
 | 10. Speed-ups that do not change a pixel | The world is built by two workers side by side and starts alongside shader compilation; the generator itself is about twice as fast; boulders outside the view are not drawn | 48 frames at High and 48 at Medium are bit-identical before and after (`tests/browser/same.mjs`); all 84 generator outputs still have the original's checksums; loading takes about 40 % less |
 | 11. In the water | Your own arms in first person, swimming a breaststroke; a hand-held scooter on `Shift`; the original's glide on `C` | Frames without the body are unchanged to the bit; 18 unit tests of the skeleton and the stroke; a browser test swims, rides the scooter and switches to the glide and back |
+| 15. Its own name | Hollowtide: title, menu, package, storage keys (settings saved under the old key are read once), test hook, docs | The old name appears only where the original is meant: the credit, the licence, the reference rig and the tests against it |
 
-**Parity gate: passed.** The rebuild is the original, from scratch: `dist/index.html` builds the same world (all
+**Parity gate: passed.** At that point Hollowtide was the original, from scratch: `dist/index.html` builds the same world (all
 84 generator outputs have the original's checksums), draws the same frames (at High and Medium at most 11 of
 921,600 pixels differ, by 1/255; three of four spot-checked frames are byte-identical PNG files), and swims the
 same way. What is left is the part that goes beyond the original: milestones 10 to 13.
@@ -57,17 +60,28 @@ you look.
 
 - **Meshes** (`src/body/meshes.ts`, `sculpt.ts`): each arm is a wetsuit sleeve and a glove, sculpted as distance
   functions (a few dozen rounded shapes melted together) and meshed with surface nets, like the whale tail. The
-  glove has a palm with the ball of the thumb, knuckles, jointed fingers, pads over the knuckles and a wrist
-  strap; the left forearm carries a dive computer with a lit display. How much of the surrounding light each
+  hand has a bone to each knuckle melted into a palm, fingers that are wider than thick with knuckles on the
+  back, creases on the palm side and a pad under the tip, moulded guards over the knuckles, pads along the
+  fingers and a wrist strap; the left forearm carries a dive computer. How much of the surrounding light each
   vertex's own shape blocks is baked in when it is sculpted, so the gaps between fingers are dark for free.
-- **Skeleton** (`src/body/skeleton.ts`): 19 bones an arm: upper arm, a forearm in two parts so that it can twist,
-  hand, three bones a finger and three for the thumb. Each vertex follows one or two of them, so elbows, wrists
-  and knuckles bend without a seam. An arm is posed from what its hand should do: where the wrist is, which way
-  the fingers point and the palm faces, how the fingers are held.
-- **Motion** (`src/body/rig.ts`): the stroke is eight key poses joined by a smooth closed curve; the hands follow
-  it with a little give, hang back from a turning view, and are never quite the same from stroke to stroke. The
-  view nods on the pull. The body is posed in view space and drawn first, in the nearest tenth of the depth
-  range, so a rock the swimmer is pressed against cannot cut through a hand.
+- **Skeleton** (`src/body/skeleton.ts`): 19 bones an arm: upper arm, forearm, hand, three bones a finger and
+  three for the thumb. Each vertex follows one or two of them, so elbows, wrists and knuckles bend without a
+  seam. An arm is posed from what its hand should do: where the wrist is, which way the fingers point and the
+  palm faces, how the fingers are held. The elbow always goes out and down, so the arms come into the picture
+  from its lower corners, where shoulders are.
+- **Surface** (`src/shaders/body.wgsl`): the arms have to stand next to rock that is textured at four scales, so
+  they use the same detail texture, taken along three axes at three scales for wear, grain and tooth, and real
+  relief worked out as a height and lit as a slope: folds where the suit bunches at the elbow and the cuff, the
+  seam of the forearm panel with its stitches, the ribs of the glove's knit, rubber studs on the palm, scored
+  pads, webbing. Tiny bubbles cling to the suit. The dive computer shows the real depth. Sun, shadow map,
+  caustics, ambient light and fog are the world's own.
+- **Motion** (`src/body/rig.ts`): the stroke is eight key poses joined by a smooth closed curve, lingering in
+  the glide and quick through the pull; the hands follow it with a little give, hang back from a turning view,
+  and are never quite the same from stroke to stroke. The view nods on the pull. A test follows every bone
+  through the stroke in thousandths and allows none to jump.
+- **Lens**: the body is posed in view space and drawn first, in the nearest tenth of the depth range, so a rock
+  the swimmer is pressed against cannot cut through a hand; and through a longer lens than the world (51° against
+  62°), which stops things at arm's length being stretched towards the edges of the picture.
 - It is sculpted in the mesh worker after the world's own meshes, and arrives when it is done: the first frame
   does not wait for it.
 - `node tests/browser/body-shots.mjs` saves contact sheets of the stroke and the other poses to
@@ -80,10 +94,11 @@ What already differs from the original, on an Apple M3 with 8 GB at High detail.
 side by side and lets them take turns, a few dozen frames each: a laptop slows by half as it warms up, so timings
 taken minutes apart cannot be compared.
 
-| | Original | Rebuild |
+| | Original | Hollowtide |
 |---|---|---|
 | Main thread held while loading | 3.0 s (longest task 1.7 s) | none: no task over 50 ms (see the note) |
 | Load time, both measured in one sitting on a warm machine | 6.1 s | 3.6 s |
+| Load time on a cool machine (separate sittings) | 3.4 s | 1.6 s |
 | Peak memory while loading, page / whole browser | 1.1 GB / 1.9 GB | 0.5 GB / 1.2 GB |
 | Loading bar | timed animation | real progress from the generator |
 | Shipped file | 97 kB | 176 kB: 147 kB for what the original does (its shaders keep readable names; renaming them at build time is on the list), the rest is the swimmer |
@@ -103,8 +118,8 @@ Where the loading time went (milestone 10), each step checked against the origin
 - `node tools/profile-generator.mjs --cpu` shows where the time goes now.
 
 The frame costs are still the original's. Both submitted exactly the same geometry (35,034,683 vertices and
-indices at the first viewpoint), and that geometry, not the pixel count, is what a frame costs on this GPU. The
-rebuild now leaves out the boulders that are outside the view (they were 5.7 million of those indices, drawn
+indices at the first viewpoint), and that geometry, not the pixel count, is what a frame costs on this GPU. Hollowtide
+now leaves out the boulders that are outside the view (they were 5.7 million of those indices, drawn
 wherever the camera looked), which is worth a few per cent. `node tests/browser/profile.mjs` times a frame with
 each part of the scene left out: no single part dominates (plants and glints about a third, rocks a sixth, the
 fixed passes a sixth), so the larger gains need coarser meshes in the distance, which changes pixels and is a
@@ -122,7 +137,7 @@ saves frames to `test-results/shots/`.
 Known issue, inherited from the original: at Low detail (no anti-aliasing), and now and then at Medium, the scene
 is not exactly repeatable from one render to the next on this Apple GPU. A few hundred isolated pixels on the
 plants change while the depth buffer stays identical. Two loads of the original differ by up to 722 pixels in a
-frame (`tests/browser/noise.mjs` measures it), and the rebuild behaves the same way, so the Low comparison allows
+frame (`tests/browser/noise.mjs` measures it), and Hollowtide behaves the same way, so the Low comparison allows
 0.2 % of pixels to differ. Ruled out so far: the blended draws, the fish, shadow sampling in vertex shaders, the
 sine hash, and the timing of the shadow bake. Finding the cause is on the list for milestone 11.
 
@@ -154,7 +169,7 @@ The browser tests that compare against the original need its fixtures: run `npm 
 
 ## The reference rig
 
-The original runs beside the rebuild as an oracle. It is never edited: `tools/reference/` reads a pristine clone,
+The original runs beside Hollowtide as an oracle. It is never edited: `tools/reference/` reads a pristine clone,
 pinned to one commit in `upstream.json`, and concatenates its sources with two hook files into a local page.
 
 ```bash

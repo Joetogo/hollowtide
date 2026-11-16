@@ -1,8 +1,8 @@
 {
-  "name": "abyssal-garden-rebuild",
+  "name": "hollowtide",
   "private": true,
   "version": "0.0.0",
-  "description": "A from-scratch rebuild of Noniv's Abyssal Garden, a procedural WebGPU underwater world",
+  "description": "Hollowtide: a procedural WebGPU underwater world to swim through, in one HTML file. Grown from Abyssal Garden by Noniv.",
   "license": "MIT",
   "type": "module",
   "scripts": {

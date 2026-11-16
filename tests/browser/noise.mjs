@@ -1,6 +1,6 @@
 // How much does the original vary between two loads of the same code? Compares two captures of it, frame by
 // frame, and saves a picture of where they differ. The answer is the floor below which a difference between the
-// rebuild and the original means nothing.
+// Hollowtide and the original means nothing.
 //   npm run ref:capture -- --level 2 --fly 0             (once)
 //   npm run ref:capture -- --level 2 --fly 0 --tag b     (a second, separate load)
 //   node tests/browser/noise.mjs 2
@@ -29,7 +29,7 @@ try {
     .sort()) {
     if (!existsSync(path.join(shotsDir(level + '-b'), file))) continue;
     const d = await chrome.page.evaluate(
-      ([a, b]) => window.__abyssal.harness.compareImages(a, b, true),
+      ([a, b]) => window.__hollowtide.harness.compareImages(a, b, true),
       [`/reference/L${level}/shots/${file}`, `/reference/L${level}-b/shots/${file}`],
     );
     if (d.differing) {

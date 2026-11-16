@@ -17,9 +17,9 @@ try {
   check(!error, `dist/index.html starts from file://${error ? ': ' + error : ''}`);
   if (report) check(true, `  device and renderer: ${report.adapter}, ${report.size.join('x')}`);
   await chrome.page.waitForTimeout(500);
-  const frames = await chrome.page.evaluate(() => window.__abyssal.frames);
+  const frames = await chrome.page.evaluate(() => window.__hollowtide.frames);
   check(frames > 5, `  frame loop is running (${frames} frames in the first half second)`);
-  check(await chrome.page.evaluate(() => !window.__abyssal.harness), '  ships without the test hooks');
+  check(await chrome.page.evaluate(() => !window.__hollowtide.harness), '  ships without the test hooks');
 
   // the harness build: the same code plus hooks
   ({ error, report } = await chrome.open(pathToFileURL(harness).href + '?selftest'));
@@ -31,14 +31,14 @@ try {
   );
   const frame = reference.frames[0];
   const shot = await chrome.page.evaluate(
-    ([pose, time]) => window.__abyssal.harness.capture(pose, time),
+    ([pose, time]) => window.__hollowtide.harness.capture(pose, time),
     [reference.poses[frame.pose], frame.time],
   );
   const same =
     shot.uniforms.length === frame.uniforms.length && shot.uniforms.every((v, i) => Object.is(v, frame.uniforms[i]));
   check(same, `  frame uniforms in the browser equal the original's for ${frame.id} (${shot.width}x${shot.height})`);
   check(shot.png.length > 1000, '  a frame can be captured as PNG');
-  const gpuErrors = await chrome.page.evaluate(() => window.__abyssal.harness.gpuErrors());
+  const gpuErrors = await chrome.page.evaluate(() => window.__hollowtide.harness.gpuErrors());
   check(
     gpuErrors.length === 0,
     `  no shader or validation errors${gpuErrors.length ? ': ' + gpuErrors.join('; ') : ''}`,

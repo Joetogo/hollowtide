@@ -1,5 +1,5 @@
 // Swimming against the original: the same scripted input, frame by frame, must move the camera along the same
-// path, through easing, turning, a capped time step and sliding along rock. The rebuild swims in the world it
+// path, through easing, turning, a capped time step and sliding along rock. Hollowtide swims in the world it
 // generated itself. Needs a reference capture: `npm run ref:capture`.
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -17,13 +17,13 @@ const chrome = await launch();
 try {
   const { error } = await chrome.open(host.origin + '/', { pause: true });
   check(!error, `starts and builds its world${error ? ': ' + error : ''}`);
-  const viewpoints = await chrome.page.evaluate(() => window.__abyssal.harness.viewpoints());
+  const viewpoints = await chrome.page.evaluate(() => window.__hollowtide.harness.viewpoints());
   const samePoses = JSON.stringify(viewpoints) === JSON.stringify(manifest.meta.poses);
   check(samePoses, "the six viewpoints stand on the generated seabed exactly where the original's do");
 
   const { script } = reference;
   const mine = await chrome.page.evaluate(
-    ([pose, steps]) => window.__abyssal.harness.trace(pose, steps),
+    ([pose, steps]) => window.__hollowtide.harness.trace(pose, steps),
     [viewpoints[script.pose], script.steps],
   );
   let worst = 0,

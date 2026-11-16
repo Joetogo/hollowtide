@@ -2,9 +2,11 @@
 import { MAX_PIXELS } from '../render/dynres';
 import type { Level } from './quality';
 
-const KEY = 'abyssal-rebuild';
+const KEY = 'hollowtide';
 /** Set while a world is being built. Still set on the next visit, it means that load took the tab down. */
-const LOADING_KEY = 'abyssal-rebuild-loading';
+const LOADING_KEY = 'hollowtide-loading';
+/** What the project's keys were before it had its name: read once, so that nothing remembered is lost. */
+const OLD_KEY = 'abyssal-rebuild';
 
 export interface Settings {
   level: Level;
@@ -58,7 +60,7 @@ export function loadSettings(): Settings {
   const memory = (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
   let stored: Stored = {};
   try {
-    stored = JSON.parse(read(KEY) ?? '{}') as Stored;
+    stored = JSON.parse(read(KEY) ?? read(OLD_KEY) ?? '{}') as Stored;
   } catch {
     // unreadable: start afresh
   }

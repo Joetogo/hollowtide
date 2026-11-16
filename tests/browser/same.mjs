@@ -21,7 +21,7 @@ async function frames(file, level) {
     const { error } = await chrome.open(`${host.origin}/?level=${level}`, { pause: true });
     if (error) throw new Error(error);
     return await chrome.page.evaluate(async () => {
-      const h = window.__abyssal.harness;
+      const h = window.__hollowtide.harness;
       const digest = async (png) => {
         // the PNG of a frame is its pixels and nothing else, so equal hashes are equal frames
         const bytes = new TextEncoder().encode(png);

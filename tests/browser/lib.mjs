@@ -36,7 +36,7 @@ export function need(file, hint) {
  * `memory` samples the browser's resident memory from outside while it runs (see `peak` on the result).
  */
 export async function launch({ dpr = 1, memory = false, args = [] } = {}) {
-  const profile = mkdtempSync(path.join(os.tmpdir(), 'abyssal-test-'));
+  const profile = mkdtempSync(path.join(os.tmpdir(), 'hollowtide-test-'));
   const peak = { rendererMB: 0, gpuMB: 0, totalMB: 0 };
   const sampler = memory
     ? setInterval(() => {
@@ -87,10 +87,10 @@ export async function launch({ dpr = 1, memory = false, args = [] } = {}) {
      */
     async open(url, { pause = false } = {}) {
       await page.goto(url);
-      await page.waitForFunction(() => window.__abyssal?.ready, null, { timeout: 60_000 });
+      await page.waitForFunction(() => window.__hollowtide?.ready, null, { timeout: 60_000 });
       return page.evaluate((pause) => {
-        window.__abyssal.paused = pause;
-        return { error: window.__abyssal.error, report: window.__abyssal.report };
+        window.__hollowtide.paused = pause;
+        return { error: window.__hollowtide.error, report: window.__hollowtide.report };
       }, pause);
     },
     async close() {

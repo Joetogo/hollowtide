@@ -9,7 +9,7 @@ need(page, 'run `npm run build:harness`');
 const out = path.join(root, 'test-results/shell');
 mkdirSync(out, { recursive: true });
 const shot = (chrome, name) => chrome.page.screenshot({ path: path.join(out, name + '.png') });
-const camera = (chrome) => chrome.page.evaluate(() => window.__abyssal.harness.camera());
+const camera = (chrome) => chrome.page.evaluate(() => window.__hollowtide.harness.camera());
 
 const host = await serve(page);
 const chrome = await launch();
@@ -101,7 +101,7 @@ try {
     'the button now says Resume',
   );
 
-  const gpuErrors = await chrome.page.evaluate(() => window.__abyssal.harness.gpuErrors());
+  const gpuErrors = await chrome.page.evaluate(() => window.__hollowtide.harness.gpuErrors());
   check(gpuErrors.length === 0, `no shader or validation errors${gpuErrors.length ? ': ' + gpuErrors.join('; ') : ''}`);
   check(chrome.errors.length === 0, `no console errors${chrome.errors.length ? ': ' + chrome.errors.join('; ') : ''}`);
 } finally {

@@ -1,7 +1,7 @@
 // ============================================================================
 // reference rig, part 1: slotted in after world.js and before main.js, inside upstream's one function scope
 // ============================================================================
-// Records what main.js is about to compute and throw away, so the rebuild can be checked against it:
+// Records what main.js is about to compute and throw away, so Hollowtide can be checked against it:
 //   - SHA-256 of the density field as it comes off the GPU, and again after speck removal
 //   - references to every generated buffer (terrain, instances, volume, ground map) for hashing and dumping
 //   - every single-sampled texture gets COPY_SRC so it can be read back

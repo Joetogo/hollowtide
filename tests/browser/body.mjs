@@ -15,7 +15,7 @@ try {
 
   // ---- drawn into a frame: only the lower part of the picture changes, and nothing is left behind
   const drawn = await chrome.page.evaluate(async () => {
-    const h = window.__abyssal.harness;
+    const h = window.__hollowtide.harness;
     const pose = h.viewpoints()[0];
     const shot = (state) => {
       h.poseBody(state);
@@ -66,7 +66,7 @@ try {
 
   // ---- what it costs: a frame with the body against one without, in turns
   const cost = await chrome.page.evaluate(async () => {
-    const h = window.__abyssal.harness;
+    const h = window.__hollowtide.harness;
     const pose = h.viewpoints()[0];
     const samples = [[], []];
     for (const side of [0, 1, 1, 0, 0, 1, 1, 0]) {
@@ -83,9 +83,9 @@ try {
   );
 
   // ---- live: strokes, the scooter, the classic glide
-  await chrome.page.evaluate(() => (window.__abyssal.paused = false));
+  await chrome.page.evaluate(() => (window.__hollowtide.paused = false));
   await chrome.page.waitForTimeout(2600); // the canvas fades in behind the menu
-  const parts = () => chrome.page.evaluate(() => window.__abyssal.harness.bodyParts());
+  const parts = () => chrome.page.evaluate(() => window.__hollowtide.harness.bodyParts());
   check((await parts()).length === 0, 'no body behind the menu');
   await chrome.page.click('#dive');
   await chrome.page.waitForTimeout(1000);
@@ -102,7 +102,7 @@ try {
     chrome.page.evaluate(
       (seconds) =>
         new Promise((resolve) => {
-          const h = window.__abyssal.harness;
+          const h = window.__hollowtide.harness;
           const out = [];
           let last = null;
           const end = performance.now() + seconds * 1000;
@@ -160,7 +160,7 @@ try {
   await chrome.page.waitForTimeout(900);
   check((await parts()).length === 4, 'C again: the arms are back');
 
-  const errors = await chrome.page.evaluate(() => window.__abyssal.harness.gpuErrors());
+  const errors = await chrome.page.evaluate(() => window.__hollowtide.harness.gpuErrors());
   check(errors.length === 0, `no shader or validation errors${errors.length ? ': ' + errors.join('; ') : ''}`);
   check(chrome.errors.length === 0, `no console errors${chrome.errors.length ? ': ' + chrome.errors.join('; ') : ''}`);
 } finally {

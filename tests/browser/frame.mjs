@@ -1,7 +1,7 @@
 // Whole frames against the original, light shafts included, at all three detail levels: six viewpoints at three
 // times each, and at High also 30 frames along the fly-through.
-//   node tests/browser/frame.mjs [levels, default 0,1,2]              the rebuild draws the original's dumped world
-//   node tests/browser/frame.mjs [levels] --generated                 the rebuild draws the world it generates itself
+//   node tests/browser/frame.mjs [levels, default 0,1,2]              Hollowtide draws the original's dumped world
+//   node tests/browser/frame.mjs [levels] --generated                 Hollowtide draws the world it generates itself
 // Needs, per level: `npm run ref:capture -- --level N` and `npm run ref:dump -- --level N`.
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -28,16 +28,16 @@ for (const level of levels) {
     });
     check(!error, `${NAMES[level]}, ${WORLD}: starts${error ? ': ' + error : ''}`);
     if (!generated)
-      await chrome.page.evaluate((base) => window.__abyssal.harness.loadReferenceWorld(base + 'fixtures/'), base);
+      await chrome.page.evaluate((base) => window.__hollowtide.harness.loadReferenceWorld(base + 'fixtures/'), base);
     // At Low (no anti-aliasing) the scene is not exactly repeatable on this GPU: a few hundred isolated pixels on
     // the plants can change from one render to the next, in the original (tests/browser/noise.mjs measures it)
-    // and in the rebuild alike. So a frame gets up to three renders there, and passes on a looser limit.
+    // and in Hollowtide alike. So a frame gets up to three renders there, and passes on a looser limit.
     const limit = level === 2 ? { over1: 2e-3, max: 255, tries: 3 } : { over1: 1e-4, max: 2, tries: level ? 3 : 1 };
     const compare = async (label, pose, time, file) => {
       let frame;
       for (let attempt = 0; attempt < limit.tries; attempt++) {
         const next = await chrome.page.evaluate(
-          ([pose, time, url]) => window.__abyssal.harness.compareFrame(pose, time, url),
+          ([pose, time, url]) => window.__hollowtide.harness.compareFrame(pose, time, url),
           [pose, time, `${base}shots/${file}`],
         );
         if (!frame || next.over1 < frame.over1) frame = next;
@@ -60,10 +60,10 @@ for (const level of levels) {
       const file = `fly${String(i).padStart(2, '0')}.png`;
       if (!existsSync(path.join(shotsDir(level), file))) continue;
       const seconds = ((i + 0.5) * 60) / flyFrames;
-      const pose = await chrome.page.evaluate((s) => window.__abyssal.harness.flyPose(s), seconds);
+      const pose = await chrome.page.evaluate((s) => window.__hollowtide.harness.flyPose(s), seconds);
       await compare(`fly-through at ${seconds} s`, pose, seconds, file);
     }
-    const gpuErrors = await chrome.page.evaluate(() => window.__abyssal.harness.gpuErrors());
+    const gpuErrors = await chrome.page.evaluate(() => window.__hollowtide.harness.gpuErrors());
     check(
       gpuErrors.length === 0,
       `${NAMES[level]}: no shader or validation errors${gpuErrors.length ? ': ' + gpuErrors.join('; ') : ''}`,

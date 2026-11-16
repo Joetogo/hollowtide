@@ -39,11 +39,11 @@ try {
   if (error) throw new Error(error);
   await chrome.page.evaluate(() => (document.body.className = 'playing'));
   await chrome.page.waitForTimeout(1000);
-  const viewpoints = await chrome.page.evaluate(() => window.__abyssal.harness.viewpoints());
+  const viewpoints = await chrome.page.evaluate(() => window.__hollowtide.harness.viewpoints());
 
   // what one frame submits, by pipeline: draw calls, instances, vertices or indices (summed over the viewpoints)
   const counts = await chrome.page.evaluate((viewpoints) => {
-    const h = window.__abyssal.harness;
+    const h = window.__hollowtide.harness;
     const P = GPURenderPassEncoder.prototype;
     const { setPipeline, draw, drawIndexed } = P;
     const current = new WeakMap();
@@ -85,7 +85,7 @@ try {
   const cost = (pose, pixels, skip) =>
     chrome.page.evaluate(
       async ([pose, n, pixels, skip]) => {
-        const h = window.__abyssal.harness;
+        const h = window.__hollowtide.harness;
         h.skipDraws(...skip);
         const r = await h.frameCost([pose], n, pixels);
         h.skipDraws();

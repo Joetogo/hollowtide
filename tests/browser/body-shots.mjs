@@ -44,7 +44,7 @@ try {
   const sheet = (states, columns) =>
     chrome.page.evaluate(
       async ([viewpoint, states, columns]) => {
-        const h = window.__abyssal.harness;
+        const h = window.__hollowtide.harness;
         const pose = h.viewpoints()[viewpoint];
         let canvas, context, w, hgt;
         for (const [i, state] of states.entries()) {
@@ -86,7 +86,7 @@ try {
       name,
       await chrome.page.evaluate(
         ([viewpoint, state]) => {
-          const h = window.__abyssal.harness;
+          const h = window.__hollowtide.harness;
           h.poseBody(state);
           const shot = h.capture(h.viewpoints()[viewpoint], 2);
           h.poseBody(null);
@@ -96,7 +96,7 @@ try {
       ),
     );
   }
-  const errors = await chrome.page.evaluate(() => window.__abyssal.harness.gpuErrors());
+  const errors = await chrome.page.evaluate(() => window.__hollowtide.harness.gpuErrors());
   if (errors.length) console.log('GPU errors:\n  ' + errors.join('\n  '));
   if (chrome.errors.length) console.log('console errors:\n  ' + chrome.errors.join('\n  '));
 } finally {

@@ -1,4 +1,6 @@
-# Rebuild Abyssal Garden from scratch, then go beyond it
+# Hollowtide: rebuild Abyssal Garden from scratch, then go beyond it
+
+(The plan as approved, when the project's working name was "the rebuild"; milestones 11 and 15 were added since.)
 
 ## Context
 
@@ -142,7 +144,7 @@ Key mechanisms:
 | 12 | **Speed-ups and fixes that do change pixels**, in one re-baseline | You approve the side-by-side review; new goldens |
 | 13 | **Features and UX** | Each setting applies as promised; goldens unchanged at defaults |
 | 14 | **New visuals and creatures** | The default mood is pixel-identical to milestone 12's goldens |
-| 15 | **Its own name** (added 2026-11-16). The project stops calling itself a rebuild: title, repo, README and storage keys take the name you choose; the credit to the original stays | Nothing but the credit line and the licence mentions the old name |
+| 15 | **Its own name** (added 2026-11-16; done the same day: you chose **Hollowtide**). Title, menu, package, storage keys, test hook and docs carry the name; the credit to the original stays | The old name appears only where the original is meant: the credit, the licence, the reference rig and the tests against it |
 
 ## Stage II detail
 

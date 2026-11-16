@@ -1,5 +1,5 @@
 // The opaque scene against the original: terrain, rocks, set pieces, sponges, corals, water surface, backdrop.
-// The rebuild draws the original's dumped world; the original's frames were captured with its leaves, animals,
+// Hollowtide draws the original's dumped world; the original's frames were captured with its leaves, animals,
 // particles and light shafts switched off. Needs the fixtures: `npm run ref:dump`.
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -16,17 +16,17 @@ const chrome = await launch();
 try {
   const { error } = await chrome.open(host.origin + '/?world=none', { pause: true });
   check(!error, `starts${error ? ': ' + error : ''}`);
-  await chrome.page.evaluate(() => window.__abyssal.harness.loadReferenceWorld('/fixtures/'));
-  // the original's frames for this test were captured with these switched off, so the rebuild leaves them out too
+  await chrome.page.evaluate(() => window.__hollowtide.harness.loadReferenceWorld('/fixtures/'));
+  // the original's frames for this test were captured with these switched off, so Hollowtide leaves them out too
   await chrome.page.evaluate(() =>
-    window.__abyssal.harness.skipDraws('mantas', 'fish', 'leaves', 'bubbles', 'glints', 'snow', 'shafts'),
+    window.__hollowtide.harness.skipDraws('mantas', 'fish', 'leaves', 'bubbles', 'glints', 'snow', 'shafts'),
   );
   for (const id of Object.keys(index.frames)) {
     const pose = index.meta.poses[+id[4] - 1];
     const time = +id.split('_t')[1];
     const { frame, scene } = await chrome.page.evaluate(
       async ([id, pose, time]) => {
-        const h = window.__abyssal.harness;
+        const h = window.__hollowtide.harness;
         const frame = await h.compareFrame(pose, time, `/fixtures/frame_${id}_opaque.png`);
         const scene = await h.compareTexture('scene', `/fixtures/hdr_${id}_opaqueScene.bin`);
         return { frame, scene };
@@ -41,7 +41,7 @@ try {
     );
     console.log(`       HDR scene: ${scene.differing} of ${scene.values} values differ, by up to ${scene.max}`);
   }
-  const gpuErrors = await chrome.page.evaluate(() => window.__abyssal.harness.gpuErrors());
+  const gpuErrors = await chrome.page.evaluate(() => window.__hollowtide.harness.gpuErrors());
   check(gpuErrors.length === 0, `no shader or validation errors${gpuErrors.length ? ': ' + gpuErrors.join('; ') : ''}`);
   check(chrome.errors.length === 0, `no console errors${chrome.errors.length ? ': ' + chrome.errors.join('; ') : ''}`);
 } finally {

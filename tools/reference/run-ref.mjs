@@ -1,4 +1,4 @@
-// Drives the reference page (see build-ref.mjs) in the installed Chrome and records what the rebuild is compared to.
+// Drives the reference page (see build-ref.mjs) in the installed Chrome and records what Hollowtide is compared to.
 //
 //   node tools/reference/run-ref.mjs capture [--level 0] [--times 2,11,47] [--fly 30]
 //       frozen frames at the six viewpoints (and along the fly path), plus the hash manifest
@@ -207,7 +207,7 @@ function diffManifests(a, b) {
 }
 
 // ---------------------------------------------------------------- dump
-// everything the rebuild's renderer does not draw until its leaves, animals, particles and shafts exist
+// everything Hollowtide's renderer does not draw until its leaves, animals, particles and shafts exist
 const OPAQUE_ONLY = [
   'leaf9',
   'leaf5',

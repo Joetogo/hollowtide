@@ -17,7 +17,7 @@ if (!existsSync(field)) {
   console.error(`${path.relative(root, field)} is missing: run \`npm run ref:dump -- --level ${level}\``);
   process.exit(2);
 }
-const dir = mkdtempSync(path.join(os.tmpdir(), 'abyssal-profile-'));
+const dir = mkdtempSync(path.join(os.tmpdir(), 'hollowtide-profile-'));
 try {
   const script = path.join(dir, 'generator.mjs');
   await build({

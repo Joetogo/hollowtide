@@ -25,7 +25,7 @@ export async function computeDensity(device: GPUDevice): Promise<Float32Array<Ar
     compute: { module, entryPoint: 'fill' },
   });
   const bytes = NX * NY * NZ * 4;
-  performance.mark('abyssal:density compiled');
+  performance.mark('hollowtide:density compiled');
 
   // DensityParams: size (vec4u), origin + voxel size (vec4f), counts (vec4u)
   const params = new ArrayBuffer(48);
@@ -64,7 +64,7 @@ export async function computeDensity(device: GPUDevice): Promise<Float32Array<Ar
   device.queue.submit([encoder.finish()]);
 
   await readback.mapAsync(GPUMapMode.READ);
-  performance.mark('abyssal:density computed');
+  performance.mark('hollowtide:density computed');
   // copied out in slices, with a turn for the page in between: 84 MB in one go would hold the main thread
   const mapped = new Uint8Array(readback.getMappedRange());
   const copy = new Uint8Array(bytes);

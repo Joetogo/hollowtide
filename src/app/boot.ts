@@ -33,7 +33,7 @@ export interface BootReport {
 declare global {
   interface Window {
     /** A handle for tests and harnesses; `ready` is set once start-up has finished or failed. */
-    __abyssal?: {
+    __hollowtide?: {
       ready?: boolean;
       error?: string;
       report?: BootReport;
@@ -124,7 +124,7 @@ async function workerRoundTrip(createWorker: () => Worker): Promise<NonNullable<
 }
 
 export async function bootMain(createWorker: () => Worker): Promise<void> {
-  const hook: NonNullable<Window['__abyssal']> = (window.__abyssal = { frames: 0 });
+  const hook: NonNullable<Window['__hollowtide']> = (window.__hollowtide = { frames: 0 });
   const canvas = document.getElementById('scene') as HTMLCanvasElement;
   const params = new URLSearchParams(location.search);
   const settings = loadSettings();
@@ -192,7 +192,7 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       gpuMs = ms;
       addGpuTime(dynres, ms);
     });
-    performance.mark('abyssal:renderer');
+    performance.mark('hollowtide:renderer');
     renderer.pixelBudget = dynres.pixels;
     renderer.detail = dynres.detail;
     renderer.resize();
@@ -217,7 +217,7 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
     } else if (making) {
       const made = await making;
       await renderer.setWorld(made.world);
-      performance.mark('abyssal:uploaded');
+      performance.mark('hollowtide:uploaded');
       // what the swimmer collides with follows a moment later: nothing on screen waits for it
       // and so do the swimmer's arms, which are not seen before the dive
       collisionReady = Promise.all([made.collision, made.body]).then(([field, body]) => {
@@ -267,7 +267,7 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
     menu.progress('Letting the light in…', 1);
     renderer.render(0);
     await gpu.queue.onSubmittedWorkDone();
-    performance.mark('abyssal:first frame');
+    performance.mark('hollowtide:first frame');
 
     // ---- the loop
     let last = 0;

@@ -1,4 +1,4 @@
-// A scripted swim, played into the original and into the rebuild: both must trace the same path.
+// A scripted swim, played into the original and into Hollowtide: both must trace the same path.
 // Each step is one frame: how long it took, which keys are down, and how far the mouse moved.
 // Starts at the first viewpoint and covers easing in, turning, sprinting into rock (collision and sliding),
 // vertical movement, backing off, an over-long frame (the time step is capped) and coasting to a stop.

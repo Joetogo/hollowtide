@@ -1,4 +1,4 @@
-// Saves frames from the rebuild to test-results/shots/, for looking at.
+// Saves frames from Hollowtide to test-results/shots/, for looking at.
 //   node tests/browser/shots.mjs [time in seconds, default 2]               drawing the world it generates itself
 //   node tests/browser/shots.mjs [time] --reference                         drawing the original's dumped world
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -19,13 +19,13 @@ const host = await serve(page, fixtures);
 const chrome = await launch();
 try {
   await chrome.open(host.origin + (reference ? '/?world=none' : '/'), { pause: true });
-  if (reference) await chrome.page.evaluate(() => window.__abyssal.harness.loadReferenceWorld('/fixtures/'));
+  if (reference) await chrome.page.evaluate(() => window.__hollowtide.harness.loadReferenceWorld('/fixtures/'));
   for (const [i, pose] of index.meta.poses.entries()) {
     const shot = await chrome.page.evaluate(
-      ([pose, time]) => window.__abyssal.harness.capture(pose, time),
+      ([pose, time]) => window.__hollowtide.harness.capture(pose, time),
       [pose, time],
     );
-    const file = path.join(out, `rebuild_pose${i + 1}_t${time}.png`);
+    const file = path.join(out, `hollowtide_pose${i + 1}_t${time}.png`);
     writeFileSync(file, Buffer.from(shot.png.slice(shot.png.indexOf(',') + 1), 'base64'));
     console.log(path.relative(root, file));
   }

@@ -1,6 +1,6 @@
 // The whole scene pass against the original: everything in the opaque test plus kelp, plants, glints, fish,
 // mantas, bubbles and drifting particles, at three times (plants sway and animals move). Only the light shafts
-// are off, on both sides. The rebuild draws the original's dumped world. Needs the fixtures: `npm run ref:dump`.
+// are off, on both sides. Hollowtide draws the original's dumped world. Needs the fixtures: `npm run ref:dump`.
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { check, finish, fixturesDir, launch, need, root, serve } from './lib.mjs';
@@ -17,13 +17,14 @@ const chrome = await launch();
 try {
   const { error } = await chrome.open(host.origin + '/?world=none', { pause: true });
   check(!error, `starts${error ? ': ' + error : ''}`);
-  await chrome.page.evaluate(() => window.__abyssal.harness.loadReferenceWorld('/fixtures/'));
-  await chrome.page.evaluate(() => window.__abyssal.harness.skipDraws('shafts')); // as in the original's frames here
+  await chrome.page.evaluate(() => window.__hollowtide.harness.loadReferenceWorld('/fixtures/'));
+  await chrome.page.evaluate(() => window.__hollowtide.harness.skipDraws('shafts')); // as in the original's frames here
   for (const [i, pose] of index.meta.poses.entries()) {
     for (const time of times) {
       const id = `pose${i + 1}_t${time}`;
       const frame = await chrome.page.evaluate(
-        ([id, pose, time]) => window.__abyssal.harness.compareFrame(pose, time, `/fixtures/frame_${id}_noShafts.png`),
+        ([id, pose, time]) =>
+          window.__hollowtide.harness.compareFrame(pose, time, `/fixtures/frame_${id}_noShafts.png`),
         [id, pose, time],
       );
       const percent = ((frame.differing / frame.pixels) * 100).toFixed(3);
@@ -34,7 +35,7 @@ try {
       );
     }
   }
-  const gpuErrors = await chrome.page.evaluate(() => window.__abyssal.harness.gpuErrors());
+  const gpuErrors = await chrome.page.evaluate(() => window.__hollowtide.harness.gpuErrors());
   check(gpuErrors.length === 0, `no shader or validation errors${gpuErrors.length ? ': ' + gpuErrors.join('; ') : ''}`);
   check(chrome.errors.length === 0, `no console errors${chrome.errors.length ? ': ' + chrome.errors.join('; ') : ''}`);
 } finally {
