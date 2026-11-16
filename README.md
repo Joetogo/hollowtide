@@ -52,9 +52,9 @@ touchscreen: hold to swim forward, slide to steer, a second finger for the scoot
 
 ### The swimmer
 
-Not in the original. Holding forward swims a breaststroke: the hands shoot forward, glide, turn outwards, press
-out past the edges of the view and come back under the chest, and the speed surges with each pull instead of
-holding steady (the same ground is covered). Moving sideways, backwards, up or down is done by sculling. `Shift`
+Not in the original. Holding forward swims a breaststroke: the hands glide stretched out ahead, turn outwards,
+press out past the edges of the view, come back under the shoulders and reach forward again from there, and the
+speed surges with each pull instead of holding steady (the same ground is covered). Moving sideways, backwards, up or down is done by sculling. `Shift`
 brings a scooter up from below, both hands on its handles, and it pulls at the original's fast speed wherever
 you look.
 

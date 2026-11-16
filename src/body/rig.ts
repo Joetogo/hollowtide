@@ -39,8 +39,9 @@ const ELBOW = [0.7, -0.72, 0] as const;
 
 // One breaststroke of the right arm, as key poses: when (0..1), where the wrist is, which way the fingers
 // point, which way the palm faces, how far the fingers curl, how far they spread (-1 pressed together), and the
-// thumb (swung under the palm, bent). The hands shoot forward from under the chin, glide, turn outwards and
-// press out and back past the edges of the view, sweep in under the chest, and come together again.
+// thumb (swung under the palm, bent). The hands glide stretched out ahead, turn outwards and
+// press out and back past the edges of the view, sweep in under the shoulders, and reach forward from
+// there at shoulder width, meeting only as the arms straighten (so they never come up the middle of the picture).
 // prettier-ignore
 const STROKE = [
   // when   wrist                     fingers point           palm faces              curl  spread thumb
@@ -49,9 +50,9 @@ const STROKE = [
   [0.33,    0.170, -0.150, -0.500,    0.30,  0.10, -0.95,     0.75, -0.62,  0.17,     0.04, -0.9,  0.20, 0.10], // catch
   [0.44,    0.300, -0.160, -0.420,    0.58,  0.08, -0.81,     0.70, -0.45,  0.55,     0.05, -0.9,  0.20, 0.10], // pressing out
   [0.55,    0.360, -0.300, -0.200,    0.30, -0.70, -0.64,     0.20, -0.50,  0.84,     0.08, -0.8,  0.25, 0.15], // pulling back and down
-  [0.66,    0.200, -0.380, -0.140,   -0.52, -0.38, -0.76,    -0.72,  0.22,  0.64,     0.30, -0.2,  0.35, 0.30], // sweeping in
-  [0.78,    0.060, -0.300, -0.220,   -0.10,  0.18, -0.98,    -0.90, -0.42,  0.00,     0.42,  0.1,  0.40, 0.35], // together under the chin
-  [0.90,    0.066, -0.200, -0.400,   -0.08,  0.24, -0.97,    -0.35, -0.90, -0.24,     0.20, -0.6,  0.20, 0.20], // shooting forward
+  [0.66,    0.250, -0.400, -0.120,   -0.30, -0.40, -0.86,    -0.50,  0.30,  0.80,     0.30, -0.2,  0.35, 0.30], // sweeping in, under the shoulders
+  [0.78,    0.200, -0.320, -0.200,   -0.10,  0.10, -0.99,    -0.30, -0.90, -0.20,     0.36,  0.0,  0.30, 0.30], // turning palm down there
+  [0.90,    0.130, -0.205, -0.410,   -0.12,  0.22, -0.97,    -0.10, -0.95, -0.25,     0.20, -0.5,  0.15, 0.15], // reaching forward, closing in
 ] as const;
 const CHANNELS = 13;
 

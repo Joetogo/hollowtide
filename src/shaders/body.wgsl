@@ -78,6 +78,13 @@ fn hash2(p: vec2f) -> f32 { var q = fract(p * vec2f(.1031, .1030)); q += dot(q, 
 
 // how far a point of the sleeve is from the seam of its forearm panel, metres along the surface (negative inside the panel)
 fn seamOf(p: vec3f) -> f32 { return (abs(atan2(p.x, p.z)) - mix(.95, .62, smoothRamp(ELBOW + .02, WRIST - .06, p.y))) * length(p.xz); }
+// the pad over the elbow: 1 on it, 0 off, soft-edged
+fn elbowPad(p: vec3f) -> f32 { return smoothRamp(1., .86, length(vec2f(atan2(p.x, p.z) / 1.15, (p.y - ELBOW) / .062))); }
+// three chevrons printed on the forearm panel, above the wrist: 1 on the print
+fn chevrons(p: vec3f) -> f32 {
+  let across = atan2(p.x, p.z) * length(p.xz); let along = p.y - (WRIST - .2) - abs(across) * .9;
+  return smoothRamp(.0034, .0022, abs(fract(along / .017) - .5) * .017) * step(0., along) * step(along, .051) * smoothRamp(.021, .018, abs(across));
+}
 // the rubber studs of a palm: 1 on a stud, 0 between
 fn studs(p: vec3f) -> f32 {
   let row = floor(p.y * 290.);
@@ -97,6 +104,12 @@ fn relief(p: vec3f, material: u32, fine: f32) -> f32 {
     h += .0008 * sin((p.y - (WRIST - .1)) * 310. + crook * 1.4) * exp(-pow((p.y - (WRIST - .1)) / .035, 2.));
     // long soft creases along the upper arm
     h += .0006 * sin(around * 7. + sin(p.y * 23.) * 1.2) * smoothRamp(ELBOW - .03, ELBOW - .12, p.y);
+    // the neoprene's embossed face: small diamonds
+    let girth = length(p.xz);
+    h += .00011 * (abs(fract(around * girth * 300.) - .5) + abs(fract(p.y * 300.) - .5)) * fine;
+    // the elbow pad: a tougher patch, cross-hatched
+    let pad = elbowPad(p);
+    h += pad * (.0005 + .00022 * (sin((p.y + around * girth) * 900.) * sin((p.y - around * girth) * 900.)) * fine);
     // the seam of the forearm panel: a groove, with stitches standing up on either side
     let seam = seamOf(p); let on = step(ELBOW, p.y);
     h -= .0008 * smoothRamp(.0019, .0, abs(seam)) * on;
@@ -159,6 +172,9 @@ fn bodyFragment(v: BodyVarying) -> @location(0) vec4f {
       albedo *= 1. - .65 * smoothRamp(.0017, .0003, abs(seam)) * step(ELBOW, p.y);
       albedo = mix(albedo, vec3f(.34, .40, .42), smoothRamp(.0012, .0004, abs(abs(seam) - .0034)) * step(.4, fract(p.y * 210.)) * step(ELBOW + .01, p.y) * .8 * fine);
       albedo = mix(albedo, vec3f(.78, .27, .03) * (.6 + .6 * mid.height), smoothRamp(.006, .0045, abs(p.y - (ELBOW - .075))) * .9);
+      albedo = mix(albedo, vec3f(.55, .78, .80) * (.6 + .5 * mid.height), chevrons(p) * .85 * mix(1., .5, wear));
+      let pad = elbowPad(p);
+      albedo = mix(albedo, vec3f(.055, .06, .068) * (.6 + .7 * mid.height), pad);
       gloss = mix(.42, .2, wear); bump = .75; sheen = .45; bubbly = 1.;
     }
     case FABRIC: {
