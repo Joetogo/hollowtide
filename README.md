@@ -28,11 +28,17 @@ Done so far:
 
 | 7. Generator, part 1 | In the worker: speck removal, collision bricks, terrain mesh, ground map, all 26 procedural meshes; on the GPU: the density field | Each output has the same SHA-256 as the original's, at all three detail levels (13 outputs, from 21 million voxels of density to the ship's planks) |
 
-**The renderer is complete**: drawing a dump of the original's world, it reproduces the original's frames. The
-rebuild's own world generator is half done: the terrain and the meshes come out identical to the original's; the
-scattering of plants, rocks and animals (milestone 8) is next, and until then the page still draws the dump. To see it: `npm run ref:dump`
-once, then `npm run dev` and open `http://127.0.0.1:5173/?world=reference` (add `&level=1` or `2` for Medium or
-Low), or `npm run shots` to save frames to `test-results/shots/`. There are no controls yet (milestone 9).
+| 8. Generator, part 2 | The 14 scatter systems (kelp, plants, glints, sponges, corals, rocks, set pieces, bubbles, fish, mantas, particles), the skylight volume, packing; the page now builds its own world | All 84 outputs have the same SHA-256 as the original's at all three levels; frames drawn from the generated world pass the same comparison as milestone 6 |
+
+**The scene is complete and self-contained.** `dist/index.html` builds the world in its worker (about 3.5 s, the
+page stays responsive) and draws it, and what it draws is the original's picture: same terrain, same 2.17 million
+leaves in the same places, same frames. `npm run dev`, or open `dist/index.html` after `npm run build`. There are
+no controls yet: the camera sits at the first viewpoint. Milestone 9 adds the menu, controls, collision, dynamic
+resolution and sound.
+
+For development the page can also draw a dump of the original's world instead of its own: `npm run ref:dump`
+once, then `http://127.0.0.1:5173/?world=reference` (add `&level=1` or `2` for Medium or Low). `npm run shots`
+saves frames to `test-results/shots/`.
 
 Known issue, inherited from the original: at Low detail (no anti-aliasing), and now and then at Medium, the scene
 is not exactly repeatable from one render to the next on this Apple GPU. A few hundred isolated pixels on the

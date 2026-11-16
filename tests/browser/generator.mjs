@@ -14,7 +14,7 @@ const NAMES = ['High', 'Medium', 'Low'];
 const host = await serve(page);
 const chrome = await launch();
 try {
-  const { error } = await chrome.open(host.origin + '/', { pause: true });
+  const { error } = await chrome.open(host.origin + '/?world=none', { pause: true });
   check(!error, `starts${error ? ': ' + error : ''}`);
   for (const level of levels) {
     need(path.join(fixturesDir(level), 'index.json'), `run \`npm run ref:dump -- --level ${level}\``);

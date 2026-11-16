@@ -14,7 +14,7 @@ const chrome = await launch();
 const describe = (d) =>
   d.differing ? `${d.differing} of ${d.values} values differ, by up to ${d.max}` : `all ${d.values} values equal`;
 try {
-  const { error } = await chrome.open(host.origin + '/', { pause: true });
+  const { error } = await chrome.open(host.origin + '/?world=none', { pause: true });
   check(!error, `starts${error ? ': ' + error : ''}`);
   const compare = (name, file) =>
     chrome.page.evaluate(

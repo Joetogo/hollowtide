@@ -15,7 +15,7 @@ const times = [2, 11, 47].filter((t) => existsSync(path.join(fixtures, `frame_po
 const host = await serve(page, fixtures);
 const chrome = await launch();
 try {
-  const { error } = await chrome.open(host.origin + '/', { pause: true });
+  const { error } = await chrome.open(host.origin + '/?world=none', { pause: true });
   check(!error, `starts${error ? ': ' + error : ''}`);
   await chrome.page.evaluate(() => window.__abyssal.harness.loadReferenceWorld('/fixtures/'));
   for (const [i, pose] of index.meta.poses.entries()) {

@@ -14,7 +14,7 @@ const index = JSON.parse(readFileSync(path.join(fixtures, 'index.json'), 'utf8')
 const host = await serve(page, fixtures);
 const chrome = await launch();
 try {
-  const { error } = await chrome.open(host.origin + '/', { pause: true });
+  const { error } = await chrome.open(host.origin + '/?world=none', { pause: true });
   check(!error, `starts${error ? ': ' + error : ''}`);
   await chrome.page.evaluate(() => window.__abyssal.harness.loadReferenceWorld('/fixtures/'));
   for (const id of Object.keys(index.frames)) {

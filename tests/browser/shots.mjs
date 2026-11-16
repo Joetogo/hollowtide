@@ -16,7 +16,7 @@ mkdirSync(out, { recursive: true });
 const host = await serve(page, fixtures);
 const chrome = await launch();
 try {
-  await chrome.open(host.origin + '/', { pause: true });
+  await chrome.open(host.origin + '/?world=none', { pause: true });
   await chrome.page.evaluate(() => window.__abyssal.harness.loadReferenceWorld('/fixtures/'));
   for (const [i, pose] of index.meta.poses.entries()) {
     const shot = await chrome.page.evaluate(

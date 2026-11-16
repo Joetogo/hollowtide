@@ -22,7 +22,7 @@ mkdirSync(out, { recursive: true });
 const host = await serve(page);
 const chrome = await launch();
 try {
-  await chrome.open(`${host.origin}/?level=${level}`, { pause: true });
+  await chrome.open(`${host.origin}/?level=${level}&world=none`, { pause: true });
   let worst = { differing: 0, over1: 0, max: 0 };
   for (const file of readdirSync(shotsDir(level))
     .filter((f) => f.endsWith('.png'))

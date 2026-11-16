@@ -1,14 +1,17 @@
 // Whole frames against the original, light shafts included, at all three detail levels: six viewpoints at three
-// times each, and at High also 30 frames along the fly-through. The rebuild draws the original's dumped world of
-// the same level. Needs, per level: `npm run ref:capture -- --level N` and `npm run ref:dump -- --level N`.
-//   node tests/browser/frame.mjs [levels, default 0,1,2]
+// times each, and at High also 30 frames along the fly-through.
+//   node tests/browser/frame.mjs [levels, default 0,1,2]              the rebuild draws the original's dumped world
+//   node tests/browser/frame.mjs [levels] --generated                 the rebuild draws the world it generates itself
+// Needs, per level: `npm run ref:capture -- --level N` and `npm run ref:dump -- --level N`.
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { check, finish, fixturesDir, launch, need, root, serve, shotsDir } from './lib.mjs';
 
 const page = path.join(root, 'dist/index.harness.html');
 need(page, 'run `npm run build:harness`');
-const levels = (process.argv[2] ?? '0,1,2').split(',').map(Number);
+const generated = process.argv.includes('--generated');
+const levels = (process.argv.slice(2).find((a) => !a.startsWith('--')) ?? '0,1,2').split(',').map(Number);
+const WORLD = generated ? 'its own world' : "the original's world";
 const NAMES = ['High', 'Medium', 'Low'];
 
 const host = await serve(page);
@@ -19,9 +22,13 @@ for (const level of levels) {
   const index = JSON.parse(readFileSync(path.join(fixturesDir(level), 'index.json'), 'utf8'));
   const chrome = await launch();
   try {
-    const { error } = await chrome.open(`${host.origin}/?level=${level}`, { pause: true });
-    check(!error, `${NAMES[level]}: starts${error ? ': ' + error : ''}`);
-    await chrome.page.evaluate((base) => window.__abyssal.harness.loadReferenceWorld(base + 'fixtures/'), base);
+    // with --generated the page builds its world as it starts, exactly as the shipped file does
+    const { error } = await chrome.open(`${host.origin}/?level=${level}${generated ? '' : '&world=none'}`, {
+      pause: true,
+    });
+    check(!error, `${NAMES[level]}, ${WORLD}: starts${error ? ': ' + error : ''}`);
+    if (!generated)
+      await chrome.page.evaluate((base) => window.__abyssal.harness.loadReferenceWorld(base + 'fixtures/'), base);
     // At Low (no anti-aliasing) the scene is not exactly repeatable on this GPU: a few hundred isolated pixels on
     // the plants can change from one render to the next, in the original (tests/browser/noise.mjs measures it)
     // and in the rebuild alike. So a frame gets up to three renders there, and passes on a looser limit.

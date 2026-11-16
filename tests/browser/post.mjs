@@ -15,7 +15,7 @@ const index = JSON.parse(readFileSync(path.join(fixtures, 'index.json'), 'utf8')
 const host = await serve(page, fixtures);
 const chrome = await launch();
 try {
-  const { error } = await chrome.open(host.origin + '/', { pause: true });
+  const { error } = await chrome.open(host.origin + '/?world=none', { pause: true });
   check(!error, `starts${error ? ': ' + error : ''}`);
   for (const id of Object.keys(index.frames)) {
     const pose = index.meta.poses[+id[4] - 1];

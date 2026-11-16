@@ -1,11 +1,10 @@
-// Main-thread start-up: device, renderer, frame loop.
-// World generation, the menu, controls and sound are added by later milestones; for now the camera sits at the
-// first viewpoint and the scene pass is empty, so the page shows only what the composite pass makes of nothing.
+// Main-thread start-up: device, renderer, frame loop, then the world from the generator.
+// The menu, controls and sound are added by a later milestone; for now the camera sits at the first viewpoint.
 import { lookAt } from '../camera/camera';
-import { quality } from '../config/quality';
+import { quality, type Level } from '../config/quality';
 import { createGpu, StartupError } from '../gpu/context';
 import { createRenderer } from '../render/renderer';
-import { VIEWPOINTS } from '../world/layout';
+import { generateWorld } from '../world/client';
 import { checksum, type FromWorker, type ToWorker } from '../world/protocol';
 import { createHarness, type Harness } from './harness';
 
@@ -33,8 +32,14 @@ declare global {
 }
 
 const TRANSFER_BYTES = 16 << 20;
-/** Until the generator exists there is no seabed to stand on; the original's is about here under viewpoint 1. */
-const PROVISIONAL_SEABED = -43;
+/** What the page says while each stage of world generation runs. */
+const LOADING = {
+  density: 'Sculpting the seabed…',
+  terrain: 'Carving canyons…',
+  meshes: 'Building set pieces…',
+  plants: 'Growing kelp…',
+  rocks: 'Scattering rocks and corals…',
+} as const;
 
 /**
  * Harness builds only: tells a listener on 127.0.0.1 how start-up went. Safari cannot be driven without a
@@ -107,27 +112,20 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
   try {
     const gpu = await createGpu(document.getElementById('c') as HTMLCanvasElement);
     // dev and harness builds take the detail level from ?level=0|1|2; the menu that sets it comes later
-    const asked = __DEV__ || __HARNESS__ ? Number(new URLSearchParams(location.search).get('level')) : 0;
-    const renderer = await createRenderer(gpu, quality(asked === 1 || asked === 2 ? asked : 0));
-    const view = VIEWPOINTS[0] as [number, number, number, number, number, number];
-    lookAt(renderer.camera, view[0], PROVISIONAL_SEABED + view[1], view[2], view[3], view[4], view[5]);
+    const params = new URLSearchParams(location.search);
+    const asked = __DEV__ || __HARNESS__ ? Number(params.get('level')) : 0;
+    const level: Level = asked === 1 || asked === 2 ? asked : 0;
+    const renderer = await createRenderer(gpu, quality(level));
 
     const info = gpu.adapter.info;
     hook.report = {
       adapter: [info.vendor, info.architecture, info.description].filter(Boolean).join(' '),
       size: [renderer.targets.width, renderer.targets.height],
     };
-    if (__DEV__ || __HARNESS__) {
-      hook.harness = createHarness(renderer, createWorker);
-      // ?world=reference: until the generator exists, the scene can be drawn from a dump of the original's world
-      if (new URLSearchParams(location.search).get('world') === 'reference') {
-        status.textContent = 'Loading the reference world…';
-        const [eye] = await hook.harness.loadReferenceWorld('/fixtures/');
-        lookAt(renderer.camera, eye![0]!, eye![1]!, eye![2]!, eye![3]!, eye![4]!, eye![5]!);
-      }
-    }
+    if (__DEV__ || __HARNESS__) hook.harness = createHarness(renderer, createWorker);
     if (__HARNESS__) hook.report.worker = await workerRoundTrip(createWorker);
 
+    // the page draws from the start (an empty sea until the world arrives), so it never freezes while loading
     let first = 0;
     const frame = (now: number) => {
       requestAnimationFrame(frame);
@@ -138,9 +136,28 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       hook.frames = (hook.frames ?? 0) + 1;
     };
     requestAnimationFrame(frame);
+
+    // Dev and harness builds can be told where the world comes from: ?world=reference draws a dump of the
+    // original's world (npm run ref:dump), ?world=none starts without one (tests bring their own).
+    const source = __DEV__ || __HARNESS__ ? params.get('world') : null;
+    let viewpoints: number[][] | null = null;
+    if (source === 'reference') {
+      status.textContent = 'Loading the reference world…';
+      viewpoints = await hook.harness!.loadReferenceWorld('/fixtures/');
+    } else if (source !== 'none') {
+      const { world } = await generateWorld(gpu.device, createWorker, level, {
+        onProgress: (stage) => (status.textContent = LOADING[stage]),
+      });
+      renderer.setWorld(world);
+      viewpoints = world.viewpoints;
+    }
+    if (viewpoints) {
+      const [x, y, z, tx, ty, tz] = viewpoints[0] as [number, number, number, number, number, number];
+      lookAt(renderer.camera, x, y, z, tx, ty, tz);
+    }
     status.textContent = renderer.world
-      ? 'Rebuild in progress: rock, seabed and set pieces, drawn from a dump of the original world.'
-      : 'Rebuild in progress: the world generator is not built yet, so there is nothing to see here.';
+      ? 'Rebuild in progress: the scene is complete; controls, menu and sound come next.'
+      : '';
   } catch (error) {
     hook.error = error instanceof Error ? (error.stack ?? error.message) : String(error);
     // a StartupError is written for the reader; anything else is unexpected and says so

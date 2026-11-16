@@ -1,6 +1,17 @@
 // Messages between the main thread and the world-generation worker.
 // Buffers always travel as transferables: ownership moves, nothing is copied.
 import type { Level } from '../config/quality';
+import type { CollisionField } from './collision';
+import type { WorldData } from './data';
+
+/** The generator's stages, in order, with the share of the time each takes (measured; they sum to 1). */
+export const STAGES = {
+  terrain: 0.25,
+  meshes: 0.2,
+  plants: 0.35,
+  rocks: 0.2,
+} as const;
+export type Stage = keyof typeof STAGES;
 
 export type ToWorker =
   /** a transfer test: the worker sends the buffer straight back */
@@ -14,7 +25,11 @@ export type ToWorker =
 export type FromWorker =
   | { type: 'ready' }
   | { type: 'echo'; buffer: ArrayBuffer; checksum: number }
+  /** which stage has started, and how far along the whole job is (0..1) */
+  | { type: 'progress'; stage: Stage; fraction: number }
   | { type: 'checksum'; name: string; length: number; sha256: string }
+  /** the finished world, and what the camera collides with */
+  | { type: 'world'; world: WorldData; collision: CollisionField }
   | { type: 'done' }
   | { type: 'error'; stage: string; message: string };
 
