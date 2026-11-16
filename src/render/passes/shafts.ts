@@ -29,14 +29,15 @@ export interface Shafts {
   encode(encoder: GPUCommandEncoder, none?: boolean): void;
 }
 
-export async function createShafts(gpu: Gpu, scene: Scene, quality: Quality): Promise<Shafts> {
+export async function createShafts(gpu: Gpu, scene: Scene, quality: Quality, coarse = false): Promise<Shafts> {
   const { device } = gpu;
   const Group = shaftsGroup(quality.samples > 1);
   const layout = Group.layout(device, GPUShaderStage.FRAGMENT);
   const blurLayout = ShaftsBlurGroup.layout(device, GPUShaderStage.FRAGMENT);
   const marchModule = shaderModule(device, 'shafts', [Group], shaftsSource);
   const blurModule = shaderModule(device, 'shafts blur', [ShaftsBlurGroup], blurSource);
-  const [march, blur] = await Promise.all([
+  // one pipeline for each size the shafts can be marched at: half the picture each way, and (if asked for) a third
+  const marchAt = (scale: number) =>
     device.createRenderPipelineAsync({
       label: 'shafts',
       layout: device.createPipelineLayout({ bindGroupLayouts: [layout] }),
@@ -45,9 +46,12 @@ export async function createShafts(gpu: Gpu, scene: Scene, quality: Quality): Pr
         module: marchModule,
         entryPoint: 'marchShafts',
         targets: [{ format: HDR }],
-        constants: { RAY_STEPS: quality.raySteps },
+        constants: { RAY_STEPS: quality.raySteps, SHAFT_SCALE: scale },
       },
-    }),
+    });
+  const [march, marchCoarse, blur] = await Promise.all([
+    marchAt(2),
+    coarse ? marchAt(3) : null,
     device.createRenderPipelineAsync({
       label: 'shafts blur',
       layout: device.createPipelineLayout({ bindGroupLayouts: [blurLayout] }),
@@ -58,6 +62,7 @@ export async function createShafts(gpu: Gpu, scene: Scene, quality: Quality): Pr
   const { repeatSampler, linearSampler, shadowSampler } = scene;
   let marchGroup: GPUBindGroup | null = null;
   let blurGroup: GPUBindGroup | null = null;
+  let scale = 2;
   let marchPass: GPURenderPassDescriptor;
   let blurPass: GPURenderPassDescriptor;
   const cleared = (view: GPUTextureView): GPURenderPassDescriptor => ({
@@ -65,6 +70,7 @@ export async function createShafts(gpu: Gpu, scene: Scene, quality: Quality): Pr
   });
   return {
     resize(targets) {
+      scale = targets.shaftScale;
       const raw = targets.shafts.createView();
       marchGroup = Group.bind(device, layout, {
         frame: { buffer: scene.frameBuffer },
@@ -86,7 +92,7 @@ export async function createShafts(gpu: Gpu, scene: Scene, quality: Quality): Pr
         return;
       }
       let pass = encoder.beginRenderPass(marchPass);
-      pass.setPipeline(march);
+      pass.setPipeline(scale === 3 && marchCoarse ? marchCoarse : march);
       pass.setBindGroup(0, marchGroup);
       pass.draw(3);
       pass.end();

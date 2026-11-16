@@ -8,11 +8,14 @@
 // the composite can keep shafts from bleeding across silhouettes.
 
 override RAY_STEPS: i32 = 34; // 12 on Low
+// The shafts are marched at one pixel in this many, each way: two as in the original, or three where there are
+// so many pixels that half of them each way is still a great many (render/targets.ts).
+override SHAFT_SCALE: i32 = 2;
 
 @fragment
 fn marchShafts(@builtin(position) position: vec4f) -> @location(0) vec4f {
-  let depth = textureLoad(depthTexture, vec2i(position.xy) * 2, 0);
-  let uv = position.xy * 2. * frame.invRes;
+  let depth = textureLoad(depthTexture, vec2i(position.xy) * SHAFT_SCALE, 0);
+  let uv = position.xy * f32(SHAFT_SCALE) * frame.invRes;
   let ndc = vec2f(uv.x * 2. - 1., 1. - uv.y * 2.);
   let ray = frame.fwd + frame.right * (ndc.x * frame.tanHalfX) + frame.up * (ndc.y * frame.tanHalfY);
   let rayLength = length(ray); let dir = ray / rayLength;

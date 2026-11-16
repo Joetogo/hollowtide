@@ -17,7 +17,7 @@ import { createShadowBake } from './passes/shadow';
 import { createShafts } from './passes/shafts';
 import { createWater } from './passes/water';
 import { createScene, type Scene } from './scene';
-import { createTargets, renderSize, type Targets } from './targets';
+import { COARSE_SHAFTS_ABOVE, createTargets, renderSize, type Targets } from './targets';
 import { uploadWorld, type WorldBuffers } from './world';
 import type { BodyMeshes } from '../body/meshes';
 import { createBodyParts, type BodyParts } from '../body/rig';
@@ -79,10 +79,10 @@ export async function createRenderer(
   const scene = createScene(gpu, quality);
   const [blit, post, shadow, sceneDraw, shafts, bodyDraw, jellies, turtles] = await Promise.all([
     createBlit(gpu, scene.linearSampler),
-    createPost(gpu, scene.frameBuffer, scene.linearSampler, quality.samples),
+    createPost(gpu, scene.frameBuffer, scene.linearSampler, quality.samples, tuning.coarseShafts),
     createShadowBake(gpu, scene, quality, tuning),
     createScenePass(gpu, scene, quality, tuning),
-    createShafts(gpu, scene, quality),
+    createShafts(gpu, scene, quality, tuning.coarseShafts),
     createBodyPass(gpu, scene, quality),
     createJellies(gpu, scene, quality),
     createTurtles(gpu, scene, quality),
@@ -140,7 +140,8 @@ export async function createRenderer(
       canvas.width = width;
       canvas.height = height;
       context.configure({ device, format: gpu.format, alphaMode: 'opaque' });
-      const targets = (renderer.targets = createTargets(gpu, width, height, quality.samples));
+      const shaftScale = tuning.coarseShafts && width * height > COARSE_SHAFTS_ABOVE ? 3 : 2;
+      const targets = (renderer.targets = createTargets(gpu, width, height, quality.samples, shaftScale));
       const sceneView = targets.scene.createView();
       scenePass = {
         colorAttachments: [

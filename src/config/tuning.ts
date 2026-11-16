@@ -24,6 +24,8 @@ export interface Tuning {
   readonly glintDistance: number;
   /** jellyfish drift in the open water (the original has none) */
   readonly jellies: boolean;
+  /** above 1920 x 1080 the light shafts are marched at a third of the picture's size each way, not half */
+  readonly coarseShafts: boolean;
   /** sea turtles swim their loops (the original has none) */
   readonly turtles: boolean;
   /** fish keep clear of the swimmer within this many metres, a school opening to let them through (0: they do not) */
@@ -40,6 +42,7 @@ export const FAITHFUL: Tuning = {
   smoothBend: false,
   cullSprites: false,
   glintDistance: 150,
+  coarseShafts: false,
   jellies: false,
   turtles: false,
   fishPart: 0,
@@ -55,6 +58,7 @@ export const TUNED: Tuning = {
   smoothBend: true,
   cullSprites: true,
   glintDistance: 96,
+  coarseShafts: true,
   jellies: true,
   turtles: true,
   fishPart: 3.6,

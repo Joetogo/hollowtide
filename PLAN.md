@@ -174,7 +174,12 @@ Key mechanisms:
 - Measured and dropped: distance-adaptive shadow filtering. Four taps of the shadow map in place of nine beyond
   20 m, blended over 4 m, was 2 % slower at 2560×1440 and 3.5 % slower at 1280×720 (twelve views, two pages in
   alternating turns): the branch costs more than the five taps it saves. And it changed up to 8 % of the pixels.
-- Not done: a cheaper water texture, the Low level's non-repeatable frames (inherited from the original).
+- Measured and dropped: a cheaper water texture. Leaving the water texture out altogether changes a frame at
+  2560×1440 by less than can be measured.
+- Done: above 1920×1080 the light shafts are marched at a third of the picture's size each way instead of half
+  (tuned preset; a pipeline for each size). 3 to 5 % off a frame at 2560×1440 in alternating turns over twelve
+  views; under 3 % of pixels differ by more than 1/255, at leaf edges.
+- Not done: the Low level's non-repeatable frames (inherited from the original).
 - Defect fixes: leaf curvature (series fallback near zero), fog integral, sine hash, the collision brick cap.
 
 **Milestone 13: features and UX**

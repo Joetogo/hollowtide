@@ -28,17 +28,27 @@ export async function createPost(
   frameBuffer: GPUBuffer,
   linearSampler: GPUSampler,
   samples: number,
+  coarse = false,
 ): Promise<Post> {
   const { device } = gpu;
   const Group: Group<ReturnType<typeof postGroup>['resources']> = postGroup(samples > 1);
   const layout = Group.layout(device, GPUShaderStage.FRAGMENT);
   const module = shaderModule(device, 'post', [Group], postSource);
-  const pipeline = await device.createRenderPipelineAsync({
-    label: 'composite',
-    layout: device.createPipelineLayout({ bindGroupLayouts: [layout] }),
-    vertex: { module, entryPoint: 'fullscreenVertex' },
-    fragment: { module, entryPoint: 'composite', targets: [{ format: gpu.format }] },
-  });
+  // one pipeline for each size the shafts come in (see passes/shafts.ts)
+  const compositeAt = (scale: number) =>
+    device.createRenderPipelineAsync({
+      label: 'composite',
+      layout: device.createPipelineLayout({ bindGroupLayouts: [layout] }),
+      vertex: { module, entryPoint: 'fullscreenVertex' },
+      fragment: {
+        module,
+        entryPoint: 'composite',
+        targets: [{ format: gpu.format }],
+        constants: { SHAFT_STEP: 1 / scale },
+      },
+    });
+  const [pipeline, pipelineCoarse] = await Promise.all([compositeAt(2), coarse ? compositeAt(3) : null]);
+  let scale = 2;
   let bindGroup: GPUBindGroup | null = null;
   const attachment: GPURenderPassColorAttachment = {
     view: undefined as unknown as GPUTextureView, // set every frame: the canvas hands out a new texture each time
@@ -49,6 +59,7 @@ export async function createPost(
   const pass: GPURenderPassDescriptor = { colorAttachments: [attachment] };
   return {
     resize(targets) {
+      scale = targets.shaftScale;
       bindGroup = Group.bind(device, layout, {
         frame: { buffer: frameBuffer },
         linearSampler,
@@ -62,7 +73,7 @@ export async function createPost(
       attachment.view = canvasView;
       pass.timestampWrites = timestamp;
       const p = encoder.beginRenderPass(pass);
-      p.setPipeline(pipeline);
+      p.setPipeline(scale === 3 && pipelineCoarse ? pipelineCoarse : pipeline);
       p.setBindGroup(0, bindGroup);
       p.draw(3);
       p.end();

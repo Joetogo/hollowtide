@@ -10,14 +10,17 @@ fn clamp01v(x: vec3f) -> vec3f { return clamp(x, vec3f(0.), vec3f(1.)); }
 // ACES filmic curve, Narkowicz's fit
 fn tonemap(x: vec3f) -> vec3f { return clamp01v((x * (2.51 * x + .03)) / (x * (2.43 * x + .59) + .14)); }
 
+override SHAFT_STEP: f32 = .5; // shaft texels per pixel, each way
+
 @fragment
 fn composite(@builtin(position) position: vec4f) -> @location(0) vec4f {
   let pixel = vec2i(position.xy);
   let uv = position.xy * frame.invRes;
   let viewDepth = frame.near / max(textureLoad(depthTexture, pixel, 0), 1e-6);
-  // The shafts are half resolution. Each of the four nearest texels is weighted by its bilinear weight and by how
-  // close its depth (stored in alpha) is to this pixel's, so shafts do not bleed across silhouettes.
-  let h = position.xy * .5 - .5; let base = floor(h); let f = h - base; let corner = vec2i(base);
+  // The shafts are half resolution (or a third: SHAFT_STEP is one over that). Each of the four nearest texels is
+  // weighted by its bilinear weight and by how close its depth (stored in alpha) is to this pixel's, so shafts
+  // do not bleed across silhouettes.
+  let h = position.xy * SHAFT_STEP - .5; let base = floor(h); let f = h - base; let corner = vec2i(base);
   let last = vec2i(textureDimensions(shaftsTexture)) - 1;
   var shafts = vec3f(0.); var weightSum = 0.;
   for (var k = 0; k < 4; k++) {

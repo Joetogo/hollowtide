@@ -14,15 +14,25 @@ export interface Targets {
   readonly depth: GPUTexture;
   /** The resolved HDR scene. */
   readonly scene: GPUTexture;
-  /** Half-resolution light shafts: as marched, and after the depth-aware blur. Alpha holds view depth. */
+  /** Light shafts, at one pixel in `shaftScale` each way: as marched, and after the depth-aware blur. Alpha holds view depth. */
   readonly shafts: GPUTexture;
   readonly shaftsBlurred: GPUTexture;
+  /** 2 (half resolution, as the original), or 3 */
+  readonly shaftScale: number;
   /** Bloom pyramid: level i is the scene at 1 / 2^(i+1) size. Level 0 ends up holding the finished bloom. */
   readonly bloom: readonly GPUTexture[];
   destroy(): void;
 }
 
-export function createTargets(gpu: Gpu, width: number, height: number, samples: number): Targets {
+/** Above this many pixels the shafts may be marched at a third of the size each way instead of half: 1920 x 1080. */
+export const COARSE_SHAFTS_ABOVE = 1920 * 1080;
+/** The size of the shafts' targets for a render size, at one pixel in `scale` each way. */
+export const shaftSize = (width: number, height: number, scale: number): [number, number] => [
+  Math.ceil(width / scale),
+  Math.ceil(height / scale),
+];
+
+export function createTargets(gpu: Gpu, width: number, height: number, samples: number, shaftScale = 2): Targets {
   const { device } = gpu;
   // harness builds also copy into and out of the targets, to feed them reference data and read results back
   const extra = __HARNESS__ ? GPUTextureUsage.COPY_SRC | GPUTextureUsage.COPY_DST : 0;
@@ -40,8 +50,9 @@ export function createTargets(gpu: Gpu, width: number, height: number, samples: 
     samples,
   );
   const scene = make('scene', width, height, HDR, sampled);
-  const shafts = make('shafts', width / 2, height / 2, HDR, sampled);
-  const shaftsBlurred = make('shafts blurred', width / 2, height / 2, HDR, sampled);
+  const [shaftsWidth, shaftsHeight] = shaftSize(width, height, shaftScale);
+  const shafts = make('shafts', shaftsWidth, shaftsHeight, HDR, sampled);
+  const shaftsBlurred = make('shafts blurred', shaftsWidth, shaftsHeight, HDR, sampled);
   const bloom: GPUTexture[] = [];
   for (let i = 0; i < BLOOM_LEVELS; i++) {
     bloom.push(make(`bloom ${i}`, Math.max(1, width >> (i + 1)), Math.max(1, height >> (i + 1)), HDR, sampled));
@@ -56,6 +67,7 @@ export function createTargets(gpu: Gpu, width: number, height: number, samples: 
     scene,
     shafts,
     shaftsBlurred,
+    shaftScale,
     bloom,
     destroy: () => all.forEach((t) => t?.destroy()),
   };

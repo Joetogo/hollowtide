@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_PIXELS } from '../../src/render/dynres';
-import { renderSize } from '../../src/render/targets';
+import { renderSize, COARSE_SHAFTS_ABOVE, shaftSize } from '../../src/render/targets';
 
 describe('renderSize', () => {
   it('renders at device pixels while they fit the budget', () => {
@@ -25,5 +25,39 @@ describe('renderSize', () => {
       expect([w % 2, h % 2]).toEqual([0, 0]);
       expect(Math.min(w, h)).toBeGreaterThanOrEqual(2);
     }
+  });
+});
+
+describe('the size of the light shafts', () => {
+  it('half the picture each way is exactly that, as it always was', () => {
+    for (const [width, height] of [
+      [1280, 720],
+      [2560, 1440],
+      [942, 530],
+      [2, 2],
+    ] as const)
+      expect(shaftSize(width, height, 2)).toEqual([width / 2, height / 2]);
+  });
+
+  it('a third each way covers the picture, and its last texel still has a pixel of the picture under it', () => {
+    for (const [width, height] of [
+      [2560, 1440],
+      [3840, 2160],
+      [2562, 1442],
+      [2048, 1152],
+    ] as const) {
+      const [w, h] = shaftSize(width, height, 3);
+      expect(w * 3).toBeGreaterThanOrEqual(width);
+      expect(h * 3).toBeGreaterThanOrEqual(height);
+      // the march reads the picture's depth at three times its own place
+      expect((w - 1) * 3).toBeLessThan(width);
+      expect((h - 1) * 3).toBeLessThan(height);
+    }
+    expect(shaftSize(2560, 1440, 3)).toEqual([854, 480]);
+  });
+
+  it('is only made coarser above 1920 x 1080', () => {
+    expect(COARSE_SHAFTS_ABOVE).toBe(1920 * 1080);
+    expect(1280 * 720).toBeLessThan(COARSE_SHAFTS_ABOVE); // where the frames are held to the original's
   });
 });

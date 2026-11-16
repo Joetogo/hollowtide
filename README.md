@@ -108,6 +108,12 @@ geometry, and the picture ended up at 942×530 and 40 % draw distance, blurred f
 
 On that laptop: 2560×1440 at an even thirty frames a second, where it was 942×530 at an uneven forty.
 
+With the pixels kept, what costs time at full size is worth another look. The light shafts were 13 % of a frame
+at 2560×1440, marched at half the picture's size each way. Above 1920×1080 they are now marched at a third
+(they are blurred afterwards in any case): 3 to 5 % off the frame, and a difference that shows only when the two
+pictures are subtracted. Two things that did not survive being measured are in `PLAN.md`: fewer shadow taps for
+distant rock (slower, not faster), and a cheaper water texture (it costs nothing as it is).
+
 **Photo mode** (`P`) stops the moment, clears the screen of everything but the world, and lets you still move
 to frame it; `Enter` draws it again at twice the screen's size each way (up to 4K) and saves a PNG.
 **The tour** (`T`) flies the camera along a scripted route through the wreck, the kelp forest and the grotto for a

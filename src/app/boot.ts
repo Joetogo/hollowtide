@@ -252,7 +252,9 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
     const dynres = createDynRes(settings.pixels, settings.detail, settings.mobile, settings.sharp ? SHARP : SMOOTH);
     let gpuMs = 0;
     // dev and harness builds can draw with the original's own distances: ?tuning=faithful
-    const tuning = (__DEV__ || __HARNESS__) && params.get('tuning') === 'faithful' ? FAITHFUL : TUNED;
+    let tuning = (__DEV__ || __HARNESS__) && params.get('tuning') === 'faithful' ? FAITHFUL : TUNED;
+    // (for measuring: ?coarseShafts=0 marches the shafts at half size whatever the size of the picture)
+    if (__HARNESS__ && params.get('coarseShafts') === '0') tuning = { ...tuning, coarseShafts: false };
     // the light the shaders are built for: what was chosen in the menu
     const mood = moodNamed(moodName);
     setShaderMood(mood);
