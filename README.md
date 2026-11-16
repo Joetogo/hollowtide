@@ -1,6 +1,8 @@
 # <img src="docs/icon.png" width="36" height="36" alt="" align="top"> Hollowtide
 
-**[Swim in it](https://richman-tan.github.io/hollowtide/)** (it needs WebGPU: a current Chrome, Edge or Safari)
+**[Swim in it](https://richman-tan.github.io/hollowtide/)** (it needs WebGPU: a current Chrome, Edge or Safari),
+or take the one file from the [latest release](https://github.com/Richman-Tan/hollowtide/releases/latest) and
+open it: it needs nothing else, not even a connection.
 
 [![The swimmer's arms stretched out towards a whale's tail standing among kelp](docs/hero.jpg)](https://richman-tan.github.io/hollowtide/)
 
