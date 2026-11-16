@@ -171,8 +171,10 @@ Key mechanisms:
   the lowest settings are far from sixty frames a second it settles for thirty, evenly paced, and says so.
 - Kept: the 2560×1440 cap. The targets are sixteen bytes a pixel four times over; a 5K screen at full size
   would want over a gigabyte for them, on machines that are the least likely to have it to spare.
-- Not done: distance-adaptive shadow filtering, a cheaper water texture, the Low level's non-repeatable frames
-  (inherited from the original).
+- Measured and dropped: distance-adaptive shadow filtering. Four taps of the shadow map in place of nine beyond
+  20 m, blended over 4 m, was 2 % slower at 2560×1440 and 3.5 % slower at 1280×720 (twelve views, two pages in
+  alternating turns): the branch costs more than the five taps it saves. And it changed up to 8 % of the pixels.
+- Not done: a cheaper water texture, the Low level's non-repeatable frames (inherited from the original).
 - Defect fixes: leaf curvature (series fallback near zero), fog integral, sine hash, the collision brick cap.
 
 **Milestone 13: features and UX**
