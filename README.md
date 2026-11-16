@@ -3,12 +3,12 @@
 A procedural underwater world for the browser, to swim through: kelp forests, light shafts, a wreck, mantas, and
 your own arms pulling you along. WebGPU, no engine, no asset files, one HTML file.
 
-Hollowtide grew from [Abyssal Garden](https://github.com/Noniv/abyssal-garden) by Noniv (Maksymilian Dendura). It
-began as a from-scratch rebuild of that scene in a typed, modular, tested codebase, and the world itself (its
-design, layout and shading) is still the original's: the original is kept as a reference and Hollowtide's world
-and frames are checked against it, to the checksum and to the pixel. What Hollowtide adds is on top: loading in
-half the time without freezing the page, a swimmer with a body, a scooter, and more to come. Both are
-MIT-licensed; see `LICENSE`. `PLAN.md` has the plan and the milestone list.
+The world itself (its design, layout and shading) is ported from
+[Abyssal Garden](https://github.com/Noniv/abyssal-garden) by Noniv (Maksymilian Dendura). Hollowtide began as a
+from-scratch rebuild of that scene in a typed, modular, tested codebase; the original is kept as a reference, and
+Hollowtide's world and frames are checked against it, to the checksum and to the pixel. What Hollowtide adds is
+on top: an opening, loading in half the time without freezing the page, a swimmer with a body, a scooter, and
+more to come. Both are MIT-licensed; see `LICENSE`. `PLAN.md` has the plan and the milestone list.
 
 ## Status
 
@@ -61,7 +61,7 @@ Not in the original, which shows a progress bar and then a menu.
 - **Black**, for a moment, when the diver has sunk out of sight.
 - **Home**: the world itself from a camera that drifts from the wreck in its shafts of light through the kelp
   forest and back, the title, and one thing to do: any of `W A S D` (or `Enter`, or a tap) dives. The detail
-  level and the credit sit small at the bottom.
+  level sits small at the bottom.
 - **Waking**: the swimmer is put on the seabed and their eyes open on it: a flutter, a longer look, then wide,
   while the picture swims into focus. The arms come up as the eyes pass half open.
 - `Esc` afterwards pauses on a panel over the blurred world (resume, detail level, the keys), and resuming has

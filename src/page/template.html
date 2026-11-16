@@ -54,7 +54,7 @@ h1 {
 .loading h1 { font-size: 2.6em; opacity: .85; }
 #loading { display: none; width: 22em; max-width: 100%; }
 .loading #loading { display: block; }
-.loading #actions, .loading #credit { display: none; }
+.loading #actions { display: none; }
 #depth { font: 200 3.6em/1.1 system-ui, sans-serif; font-variant-numeric: tabular-nums; letter-spacing: .04em; text-shadow: 0 .05em .4em #000c; }
 #track { height: 2px; margin: .9em 0 .8em; overflow: hidden; background: #e8fbff26; }
 #bar { display: block; height: 100%; background: #9ff6ff; transform: scaleX(0); transform-origin: 0; transition: transform .5s cubic-bezier(.3, .5, .5, 1); }
@@ -74,7 +74,6 @@ button:hover, a:hover { transform: translateY(-.12em); filter: brightness(1.15);
 button:active, a:active { transform: translateY(.1em); filter: brightness(.9); }
 :focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
 #actions { display: grid; justify-items: center; gap: min(1.2em, 3.5vmin); }
-svg { width: 1.5em; height: 1.5em; fill: currentColor; }
 #keys b, #dive b {
   min-width: 1.1em; padding: .2em .5em; border-radius: .35em; background: #e8fbff;
   box-shadow: inset 0 -.15em #0004; color: #03222d; text-align: center;
@@ -98,15 +97,12 @@ svg { width: 1.5em; height: 1.5em; fill: currentColor; }
 @media (pointer: coarse) { .home #dive i, .home #press { display: none; } .home #tap { display: inline; } }
 .home #keys, .home #touch-hint { display: none; }
 .home #detail { position: absolute; left: 1.4em; bottom: 1.3em; background: none; padding: 0; opacity: .75; }
-.home #credit { justify-content: flex-end; right: 1.4em; left: auto; bottom: 1.3em; opacity: .75; }
-.home #credit a { padding: .5em .9em; background: none; box-shadow: none; color: #e8fbff; font-weight: 500; }
 
 /* ---- paused: a panel over the blurred world */
 .menu #menu { background: radial-gradient(#03131c00 30%, #03131ccc); }
 .menu h1 { font-size: 3em; }
 .menu #actions { width: 27em; max-width: 100%; justify-items: stretch; }
 .menu #dive { padding: .9em; background: linear-gradient(#9ff6ff, #19c3d6); font-size: 1.3em; box-shadow: inset 0 -.2em #0003, 0 0 2em #19c3d6b3; }
-#credit { position: absolute; left: 0; right: 0; bottom: 1.5em; display: flex; justify-content: center; gap: 1em; font-size: .8em; }
 /* dark plates under the resume button: detail level, list of controls, touch hint */
 #detail, #keys, #touch-hint { padding: 1em 1.6em; border-radius: .7em; background: #03131cb3; }
 /* detail level: three buttons in a row, the current one lit */
@@ -135,6 +131,14 @@ svg { width: 1.5em; height: 1.5em; fill: currentColor; }
   position: absolute; top: 1em; left: 1.2em; margin: 0; font: .8em/1.6 ui-monospace, Consolas, monospace;
   white-space: pre-wrap; text-shadow: 0 1px 4px #000; pointer-events: none;
 }
+/* a line that comes up for a few seconds when a key has changed something that cannot otherwise be seen */
+#note {
+  position: absolute; left: 50%; bottom: 9vh; transform: translateX(-50%); padding: .6em 1.3em; border-radius: 2em;
+  background: #03131ccc; box-shadow: 0 0 0 1px #7ff3ff40; font-size: .85em; font-weight: 500; letter-spacing: .06em;
+  white-space: nowrap; opacity: 0; transition: opacity .5s; pointer-events: none;
+}
+#note.on { opacity: 1; }
+#note b { padding: .1em .45em; border-radius: .3em; background: #e8fbff; color: #03222d; font-weight: 800; }
 @media (prefers-reduced-motion: reduce) {
   .waking #scene, .home h1, .home #dive { animation: none; }
 }
@@ -169,12 +173,10 @@ svg { width: 1.5em; height: 1.5em; fill: currentColor; }
     </div>
     <p id=touch-hint>Hold to swim forward · slide to steer · second finger for the scooter</p>
   </div>
-  <p id=credit>
-    <a href=https://github.com/Noniv/abyssal-garden target=_blank rel=noopener><svg viewBox="0 0 16 16"><path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg>Grown from Abyssal Garden by Noniv</a>
-  </p>
 </div>
 <button id=open-menu aria-label=Menu>≡</button>
 <pre id=stats></pre>
+<p id=note aria-live=polite></p>
 <script>
 /*SCRIPT*/
 </script>

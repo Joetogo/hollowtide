@@ -2,7 +2,7 @@
   "name": "hollowtide",
   "private": true,
   "version": "0.0.0",
-  "description": "Hollowtide: a procedural WebGPU underwater world to swim through, in one HTML file. Grown from Abyssal Garden by Noniv.",
+  "description": "Hollowtide: a procedural WebGPU underwater world to swim through, in one HTML file.",
   "license": "MIT",
   "type": "module",
   "scripts": {

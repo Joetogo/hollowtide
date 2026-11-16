@@ -24,8 +24,8 @@ const PORT = 5173;
 const upstream = JSON.parse(readFileSync(path.join(root, 'tools/reference/upstream.json'), 'utf8'));
 const fixtures = path.join(root, '.cache/reference', upstream.sha.slice(0, 7), 'L0/fixtures');
 const NOTICE =
-  '<!-- Hollowtide. MIT License. Copyright (c) 2026 Richman Tan, and (c) 2026 Maksymilian Dendura for Abyssal Garden ' +
-  '(https://github.com/Noniv/abyssal-garden), which Hollowtide grew from and still shares its world with. -->';
+  '<!-- Hollowtide. MIT License. Copyright (c) 2026 Richman Tan. Portions copyright (c) 2026 Maksymilian Dendura ' +
+  '(Abyssal Garden, https://github.com/Noniv/abyssal-garden), MIT License. -->';
 
 const options = (prod) => ({
   absWorkingDir: root,

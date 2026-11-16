@@ -8,12 +8,12 @@
 forests, light shafts, a wreck, mantas) shipped as one 97 KB `index.html`: no engine, no assets, 2,320 lines of
 dense JavaScript and WGSL. It is MIT-licensed (© 2026 Maksymilian Dendura) and four days old.
 
-You chose to **rebuild it from scratch** in a new codebase, using the original only as a reference, and to improve
+The decision was to **rebuild it from scratch** in a new codebase, using the original only as a reference, and to improve
 it on all four fronts: architecture & tooling, loading & performance, new visuals & creatures, new features & UX.
-The look is what you liked, so the rebuilt scene has to match the original before anything is added.
+The look is the point, so the rebuilt scene has to match the original before anything is added.
 
-This is a multi-session build. Every milestone below ends with a runnable, committed build, so you can stop or
-redirect at any of them.
+This is a multi-session build. Every milestone below ends with a runnable, committed build, so the work can stop or
+change course at any of them.
 
 ## How the original works
 
@@ -87,7 +87,7 @@ in the vertex shaders; the CPU only culls cells. Resolution and draw distance sc
 ## Target architecture
 
 Stack: TypeScript (strict) with `@webgpu/types`; esbuild only, for bundling, the dev server and live reload;
-ESLint + Prettier; Vitest for unit tests; Playwright driving your installed Chrome (no browser download) for
+ESLint + Prettier; Vitest for unit tests; Playwright driving the installed Chrome (no browser download) for
 anything that needs a GPU.
 
 ```
@@ -129,7 +129,7 @@ Key mechanisms:
 
 | # | Scope | Exit test |
 |---|---|---|
-| 0 | **Reference rig.** Clone upstream; build `reference.html` with the capture hooks; dump fixtures (~350 MB, gitignored); record baselines on your M3 | Two separate loads give byte-identical images for the six viewpoints; checksum manifest and baseline table saved |
+| 0 | **Reference rig.** Clone upstream; build `reference.html` with the capture hooks; dump fixtures (~350 MB, gitignored); record baselines on an Apple M3 | Two separate loads give byte-identical images for the six viewpoints; checksum manifest and baseline table saved |
 | 1 | **Scaffold.** TS, single-file build, dev server, WGSL plugin, struct and bindings, worker stub, lint, unit tests, CI file, size report | The built file opens from `file://` in Chrome and Safari and round-trips a 16 MB transfer through the worker; struct offsets match an independent WGSL parser |
 | 2 | **Engine core.** Device, async pipeline cache, render targets, camera, bloom and composite, capture API | Frame uniform bytes equal the reference's at each viewpoint; the post chain on a dumped HDR frame matches the reference image |
 | 3 | **Bakes.** Rock detail texture, water texture, shadow map from dumped geometry | Texture dumps match; shadow depth within 1e-6 |
@@ -140,16 +140,16 @@ Key mechanisms:
 | 8 | **Generator, part 2.** Scatter systems 1–14 in order, skylight volume, packing | Instance checksums equal at all three levels; live data reproduces milestone 6's frames |
 | 9 | **Shell.** Loading UI, menu, mouse / keyboard / touch, collision, dynamic resolution, crash fallback, audio | A scripted-input camera trace equals the reference; no main-thread task over 50 ms during load; Safari smoke test. **Parity gate** |
 | 10 | **Speed-ups that must not change a pixel.** Cull boulders, chunked shadow bake, provably-equivalent generator speed-ups, tiered leaf ordering | Goldens and checksums unchanged; timings beat the baseline |
-| 11 | **In the water** (added 2026-11-16 at your request). Your own arms in first person, swimming in strokes; a hand-held jet scooter for fast travel | Goldens unchanged (the body is not drawn in captures); a scripted stroke test; frame cost within 0.3 ms |
-| 12 | **Speed-ups and fixes that do change pixels**, in one re-baseline | You approve the side-by-side review; new goldens |
+| 11 | **In the water** (added 2026-11-16). The swimmer's own arms in first person, swimming in strokes; a hand-held jet scooter for fast travel | Goldens unchanged (the body is not drawn in captures); a scripted stroke test; frame cost within 0.3 ms |
+| 12 | **Speed-ups and fixes that do change pixels**, in one re-baseline | the side-by-side review is approved; new goldens |
 | 13 | **Features and UX** | Each setting applies as promised; goldens unchanged at defaults |
 | 14 | **New visuals and creatures** | The default mood is pixel-identical to milestone 12's goldens |
-| 15 | **Its own name** (added 2026-11-16; done the same day: you chose **Hollowtide**). Title, menu, package, storage keys, test hook and docs carry the name; the credit to the original stays | The old name appears only where the original is meant: the credit, the licence, the reference rig and the tests against it |
+| 15 | **Its own name** (added 2026-11-16; done the same day: the name is **Hollowtide**). Title, menu, package, storage keys, test hook and docs carry the name; the credit to the original stays | The old name appears only where the original is meant: the credit, the licence, the reference rig and the tests against it |
 
 ## Stage II detail
 
 **Milestone 11: in the water** (built; the README's section "The swimmer" says how)
-- Your arms: a wetsuit sleeve and a gloved hand each, sculpted and skinned to a skeleton of 19 bones an arm
+- The arms: a wetsuit sleeve and a gloved hand each, sculpted and skinned to a skeleton of 19 bones an arm
   (a forearm that twists, a wrist, jointed fingers), lit like everything else, with a dive computer on the left
   wrist. Drawn by a small pipeline of their own, so the world's shaders are untouched.
 - Swimming in strokes: holding forward runs a breaststroke of eight key poses. Speed surges on the pull and
@@ -162,14 +162,14 @@ Key mechanisms:
 - Still to do here: bubbles off the hands and a wash behind the propeller, legs and fins when looking down, a
   beam for the scooter's lamp, a wider view at speed.
 
-**Milestone 12: performance and fixes** (measured on your M3 / 8 GB first; a change stays only if the numbers move)
+**Milestone 12: performance and fixes** (measured on an Apple M3 / 8 GB first; a change stays only if the numbers move)
 - Distance-adaptive shadow filtering; fewer shaft steps with a wider blur; cheaper or lower-rate water texture.
 - Dynamic resolution that no longer assumes pixel count is the bottleneck (to be measured on Apple GPUs).
 - Half-rate rendering behind the menu; no fixed 2560×1440 cap.
 - Defect fixes: leaf curvature (series fallback near zero), fog integral, sine hash, the collision brick cap.
 
 **Milestone 13: features and UX**
-- Done ahead of the rest, at your request (2026-11-16): the opening. A diver sinks while the world loads, the
+- Done ahead of the rest (2026-11-16): the opening. A diver sinks while the world loads, the
   picture goes black, the home view drifts through the world with "W A S D to dive", and the dive opens the
   swimmer's eyes on the seabed. See "The opening" in the README.
 - Settings panel in three tiers: instant (field of view, sensitivity, invert Y, volume, exposure), pipeline

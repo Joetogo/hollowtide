@@ -20,6 +20,7 @@ import { bindInput } from '../ui/input';
 import { createMenu } from '../ui/menu';
 import { createHarness, type Harness } from './harness';
 import { createBodyState, poseBody, stepBody } from '../body/rig';
+import { createNote } from '../ui/note';
 
 export interface BootReport {
   adapter: string;
@@ -49,6 +50,8 @@ declare global {
 
 const TRANSFER_BYTES = 16 << 20;
 /** What the loading bar says while each stage of world generation runs. */
+const CLASSIC_ON = 'Classic glide: no arms, steady speed. C brings the arms back';
+const CLASSIC_OFF = 'Swimming with arms. C switches to the classic glide';
 /** The home view: which stretch of the scripted flight it drifts along (seconds of it), and how fast. */
 const HOME_FROM = 8.5; // the wreck in its shafts of light...
 const HOME_SPAN = 27; // ...on through the kelp forest, and back
@@ -256,8 +259,11 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       goTo(0);
       Object.assign(swimmer, createSwimmer());
       body = createBodyState();
+      // (a reminder, once the eyes are open, for whoever chose the glide on an earlier visit)
+      if (settings.classic) setTimeout(() => note(CLASSIC_ON), 3000);
     };
     const hud = createHud(document.getElementById('stats')!);
+    const note = createNote(document.getElementById('note')!);
     sound = createSoundscape(camera, settings.muted);
     input = bindInput(canvas, intent, {
       onGesture: () => sound!.wake(),
@@ -269,9 +275,11 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
           sound!.setMuted(settings.muted);
           saveSettings(settings, fullPixels());
         } else if (code === 'KeyC') {
-          // the original's steady glide with no body in view, or strokes and the scooter
+          // the original's steady glide with no body in view, or strokes and the scooter. It is remembered, so
+          // it is said: arms that are simply gone on the next visit would look like a fault
           settings.classic = !settings.classic;
           saveSettings(settings, fullPixels());
+          note(settings.classic ? CLASSIC_ON : CLASSIC_OFF);
         } else if (code === 'Escape') menu.show(true);
         else if (code >= 'Digit1' && code <= 'Digit6') goTo(code.charCodeAt(5) - 49);
       },
