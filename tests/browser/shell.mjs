@@ -1,5 +1,6 @@
-// Drives the shipped page like a person: waits for the menu, dives, swims, opens the stats, jumps to a viewpoint,
-// returns to the menu. Saves screenshots to test-results/shell/ and checks that the camera answered.
+// Drives the shipped page like a person: watches the descent while it loads, waits for the home view, dives with
+// a key, has the eyes open, swims, opens the stats, jumps to a viewpoint, pauses. Saves screenshots to
+// test-results/shell/ and checks that the page and the camera answered.
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { check, finish, launch, need, root, serve } from './lib.mjs';
@@ -17,6 +18,22 @@ try {
   // every main-thread task over 50 ms while the page loads
   await chrome.page.addInitScript(() => {
     window.__longTasks = [];
+    // the depth the descent shows, every time it changes, and each state the page goes through
+    window.__depths = [];
+    window.__states = [];
+    addEventListener('DOMContentLoaded', () => {
+      const depth = document.getElementById('depth');
+      new MutationObserver(() => window.__depths.push(parseFloat(depth.textContent))).observe(depth, {
+        childList: true,
+        characterData: true,
+        subtree: true,
+      });
+      window.__states.push(document.body.className);
+      new MutationObserver(() => window.__states.push(document.body.className)).observe(document.body, {
+        attributes: true,
+        attributeFilter: ['class'],
+      });
+    });
     new PerformanceObserver((list) => {
       for (const entry of list.getEntries())
         window.__longTasks.push([Math.round(entry.startTime), Math.round(entry.duration)]);
@@ -49,14 +66,41 @@ try {
     !error,
     `starts and builds its world${error ? ': ' + error : ''} (${((Date.now() - started) / 1000).toFixed(1)} s, level ${report?.level})`,
   );
-  check(await chrome.page.evaluate(() => document.body.className === 'menu'), 'the menu is showing');
-  await chrome.page.waitForTimeout(2500); // the canvas fades in behind the menu
-  await shot(chrome, '1-menu');
+  // ---- the opening: the descent follows the loading down to where the swimmer wakes, then the home view
+  await chrome.page.waitForFunction(() => document.body.className === 'home', null, { timeout: 15_000 });
+  const depths = await chrome.page.evaluate(() => window.__depths);
+  const sinking = depths.every((d, i) => i === 0 || d >= depths[i - 1]);
+  check(
+    depths.length > 10 && sinking && depths.at(-1) === 41.4,
+    `while it loads, a diver sinks: the depth shown only ever grows, in ${depths.length} steps to ${depths.at(-1)} m`,
+  );
+  check(
+    (await chrome.page.evaluate(() => window.__states.join(' > '))) === 'loading > home',
+    'the home view comes up once the diver is out of sight',
+  );
+  await chrome.page.waitForTimeout(2200); // the black lifts
+  await shot(chrome, '1-home');
+  const drifting = await camera(chrome);
+  await chrome.page.waitForTimeout(600);
+  const drifted = await camera(chrome);
+  check(
+    Math.hypot(drifted.x - drifting.x, drifted.y - drifting.y, drifted.z - drifting.z) > 0.05,
+    'the home view drifts through the world',
+  );
 
+  // ---- any of W A S D dives: the swimmer is put at the first viewpoint and their eyes open
+  await chrome.page.keyboard.press('KeyD');
+  check(await chrome.page.evaluate(() => document.body.className === 'waking'), 'D on the home view begins the dive');
+  await chrome.page.waitForTimeout(900);
+  await shot(chrome, '1-eyes-opening');
+  await chrome.page.waitForFunction(() => document.body.className.startsWith('playing'), null, { timeout: 8000 });
+  check(true, 'the eyes open and the swimmer is in the water');
   const before = await camera(chrome);
-  await chrome.page.click('#dive');
-  await chrome.page.waitForTimeout(300);
-  check(await chrome.page.evaluate(() => document.body.className.startsWith('playing')), 'Dive in closes the menu');
+  const start = await chrome.page.evaluate(() => window.__hollowtide.harness.viewpoints()[0]);
+  check(
+    Math.hypot(before.x - start[0], before.y - start[1], before.z - start[2]) < 0.5,
+    'they wake at the first viewpoint',
+  );
   await chrome.page.keyboard.down('KeyW');
   await chrome.page.waitForTimeout(1500);
   await chrome.page.keyboard.up('KeyW');
@@ -95,10 +139,16 @@ try {
 
   await chrome.page.keyboard.press('Escape');
   await chrome.page.waitForTimeout(300);
-  check(await chrome.page.evaluate(() => document.body.className === 'menu'), 'Esc opens the menu again');
+  check(await chrome.page.evaluate(() => document.body.className === 'menu'), 'Esc pauses');
   check(
     await chrome.page.evaluate(() => document.getElementById('dive').textContent === 'Resume'),
     'the button now says Resume',
+  );
+  await chrome.page.click('#dive');
+  await chrome.page.waitForTimeout(300);
+  check(
+    await chrome.page.evaluate(() => document.body.className.startsWith('playing')),
+    'and resumes, with no second awakening',
   );
 
   const gpuErrors = await chrome.page.evaluate(() => window.__hollowtide.harness.gpuErrors());

@@ -5,6 +5,7 @@
 // runs: dynamic resolution, the swimmer, a frame, the stats line.
 import { createSoundscape } from '../audio/soundscape';
 import { lookAt, updateBasis } from '../camera/camera';
+import { flyPoint } from '../camera/path';
 import { createIntent, createSwimmer, stepSwimmer, type Drive } from '../camera/controls';
 import { loadSettings, markLoading, saveSettings } from '../config/settings';
 import { quality, type Level } from '../config/quality';
@@ -48,6 +49,10 @@ declare global {
 
 const TRANSFER_BYTES = 16 << 20;
 /** What the loading bar says while each stage of world generation runs. */
+/** The home view: which stretch of the scripted flight it drifts along (seconds of it), and how fast. */
+const HOME_FROM = 8.5; // the wreck in its shafts of light...
+const HOME_SPAN = 27; // ...on through the kelp forest, and back
+const HOME_SPEED = 0.3;
 /** How much wider the view gets on the scooter at full pull (as a share of the field of view's tangent). */
 const WIDE_AT_SPEED = 0.16;
 
@@ -136,6 +141,7 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
   // the page's controls exist before anything can go wrong, so a failure has somewhere to be shown
   const intent = createIntent();
   const menu = createMenu(level, canvas, {
+    onWake: () => wake?.(),
     onDive() {
       sound?.wake();
       // phones: go fullscreen and ask for landscape; where that is refused the page's CSS rotation still applies
@@ -158,6 +164,8 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
     },
   });
   let sound: ReturnType<typeof createSoundscape> | null = null;
+  /** Puts the swimmer where they wake (set once there is a world to wake in). */
+  let wake: (() => void) | null = null;
   let input: ReturnType<typeof bindInput> | null = null;
 
   try {
@@ -238,8 +246,17 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
     // ---- controls and sound
     const camera = renderer.camera;
     const swimmer = createSwimmer();
-    const body = createBodyState();
+    let body = createBodyState();
     const drive: Drive = { gain: 1, jet: false };
+    // the home view drifts along the scripted flight, slowly, there and back
+    const flight = new Float64Array(6);
+    let homeClock = 0;
+    wake = () => {
+      // still, at the first viewpoint, arms down
+      goTo(0);
+      Object.assign(swimmer, createSwimmer());
+      body = createBodyState();
+    };
     const hud = createHud(document.getElementById('stats')!);
     sound = createSoundscape(camera, settings.muted);
     input = bindInput(canvas, intent, {
@@ -290,7 +307,12 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       time += dt;
       // the swimmer's body: in view while in the water, unless the classic glide is chosen
       const [yawBefore, pitchBefore] = [camera.yaw, camera.pitch];
-      stepSwimmer(camera, swimmer, intent, collision, dt, settings.classic ? undefined : drive);
+      if (menu.home) {
+        homeClock += dt * HOME_SPEED;
+        const there = homeClock % (HOME_SPAN * 2);
+        flyPoint(HOME_FROM + (there < HOME_SPAN ? there : HOME_SPAN * 2 - there), flight);
+        lookAt(camera, flight[0]!, flight[1]!, flight[2]!, flight[3]!, flight[4]!, flight[5]!);
+      } else stepSwimmer(camera, swimmer, intent, collision, dt, settings.classic ? undefined : drive);
       const turned = dt > 0 ? 1 / dt : 0;
       stepBody(
         body,

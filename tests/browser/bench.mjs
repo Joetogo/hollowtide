@@ -108,6 +108,9 @@ try {
   const { error, report } = await mine.open(`${host.origin}/?level=${level}`, { pause: true });
   if (error) throw new Error(error);
   // out of the menu, like the original: the menu's blur over the canvas costs GPU time of its own
+  // (once the opening has played out: the home view would otherwise come up in the middle of the measurements)
+  await mine.page.waitForFunction(() => document.body.className === 'home', null, { timeout: 20_000 });
+  await mine.page.waitForTimeout(2000);
   const loading = await mine.page.evaluate(() => ((document.body.className = 'playing'), window.__load));
   // each long task with the loading message that was up when it began
   const placed = loading.tasks.map(([at, ms]) => ({

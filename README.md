@@ -46,9 +46,27 @@ same way. What is left is the part that goes beyond the original: milestones 10 
 npm run build && open dist/index.html     # or: npm run dev
 ```
 
-Controls: `W A S D` swim, `Q` / `E` down / up, `Shift` brings up the scooter and rides it, `1`–`6` viewpoints,
+Controls: any of `W A S D` dives from the home view; then `W A S D` swim, `Q` / `E` down / up, `Shift` brings up the scooter and rides it, `1`–`6` viewpoints,
 `Esc` menu, `M` mute, `H` stats, `C` switches between swimming with a body and the original's steady glide. On a
 touchscreen: hold to swim forward, slide to steer, a second finger for the scooter.
+
+### The opening
+
+Not in the original, which shows a progress bar and then a menu.
+
+- **The descent** (`src/ui/veil.ts`): while the world is being made, a diver sinks through the water: daylight
+  and its rays fade, specks stream past, a scale at the side counts the metres. How deep the diver has got is
+  how far the loading has got, down to the 41.4 m at which the swimmer will wake. It is 2D drawing on a canvas
+  of its own, a few milliseconds a frame; loading still never holds the page up.
+- **Black**, for a moment, when the diver has sunk out of sight.
+- **Home**: the world itself from a camera that drifts from the wreck in its shafts of light through the kelp
+  forest and back, the title, and one thing to do: any of `W A S D` (or `Enter`, or a tap) dives. The detail
+  level and the credit sit small at the bottom.
+- **Waking**: the swimmer is put on the seabed and their eyes open on it: a flutter, a longer look, then wide,
+  while the picture swims into focus. The arms come up as the eyes pass half open.
+- `Esc` afterwards pauses on a panel over the blurred world (resume, detail level, the keys), and resuming has
+  no second awakening. With reduced motion asked for, the descent stands still and counts, and the eyes simply
+  fade open.
 
 ### The swimmer
 

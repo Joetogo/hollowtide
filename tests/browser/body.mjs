@@ -84,11 +84,13 @@ try {
 
   // ---- live: strokes, the scooter, the classic glide
   await chrome.page.evaluate(() => (window.__hollowtide.paused = false));
-  await chrome.page.waitForTimeout(2600); // the canvas fades in behind the menu
+
   const parts = () => chrome.page.evaluate(() => window.__hollowtide.harness.bodyParts());
   check((await parts()).length === 0, 'no body behind the menu');
-  await chrome.page.click('#dive');
-  await chrome.page.waitForTimeout(1000);
+  await chrome.page.waitForFunction(() => document.body.className === 'home', null, { timeout: 15_000 });
+  await chrome.page.keyboard.press('KeyW');
+  await chrome.page.waitForFunction(() => document.body.className.startsWith('playing'), null, { timeout: 8000 });
+  await chrome.page.waitForTimeout(900);
   check(
     JSON.stringify(await parts()) ===
       JSON.stringify([PART.sleeveRight, PART.handRight, PART.sleeveLeft, PART.handLeft]),

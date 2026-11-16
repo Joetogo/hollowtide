@@ -37,6 +37,8 @@ const chrome = await launch({ dpr: 2 });
 try {
   const { error } = await chrome.open(`${host.origin}/?level=${level}`, { pause: true });
   if (error) throw new Error(error);
+  await chrome.page.waitForFunction(() => document.body.className === 'home', null, { timeout: 20_000 });
+  await chrome.page.waitForTimeout(2000); // the opening has played out
   await chrome.page.evaluate(() => (document.body.className = 'playing'));
   await chrome.page.waitForTimeout(1000);
   const viewpoints = await chrome.page.evaluate(() => window.__hollowtide.harness.viewpoints());
