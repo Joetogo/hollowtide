@@ -151,6 +151,8 @@ for (let i = 0; i < 2000; i++) {
   pullTime += pull(phase) / strokeRate(phase) / 2000;
 }
 const PULL_GAIN = ((1 - BASE_GAIN) * strokeTime) / pullTime;
+/** The pull of a stroke at a phase, 0..1 (see `pull`): for what else follows it, such as the water it churns. */
+export const strokePull = (phase: number): number => pull(phase);
 /** How hard a stroke pushes at a phase, as a multiple of the steady swimming speed; over the time of a stroke it averages 1. */
 export function strokeGain(phase: number): number {
   return BASE_GAIN + PULL_GAIN * pull(phase);

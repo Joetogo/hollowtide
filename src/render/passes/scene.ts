@@ -24,6 +24,7 @@ import {
   type InstanceBuffer,
   type WorldBuffers,
 } from '../world';
+import { BREATH_BUBBLES } from '../../body/breath';
 
 /** How far each thing is drawn, in metres from the camera to the nearest edge of its cell (see also Tuning). */
 const TERRAIN_DISTANCE = 240;
@@ -58,7 +59,7 @@ interface PipelineOptions {
 /**
  * Harness builds only: names of draws to leave out, to compare frames and frame costs with and without them:
  * 'terrain', 'solids', 'chunks', 'props', 'mantas', 'fish', 'leaves' (or one band of them: 'leaves near', 'leaves
- * mid', 'leaves far', 'leaves small'), 'bubbles', 'glints', 'snow', and what the renderer checks: 'shafts',
+ * mid', 'leaves far', 'leaves small'), 'bubbles', 'breath', 'glints', 'snow', and what the renderer checks: 'shafts',
  * 'water' (the water texture is not redrawn) and 'bloom'. Always empty in the shipped file.
  */
 export const skippedDraws = new Set<string>();
@@ -67,6 +68,8 @@ export const skipped = (name: string) => __HARNESS__ && skippedDraws.has(name);
 export interface ScenePass {
   /** Draws into a pass the renderer has begun. */
   encode(pass: GPURenderPassEncoder, world: WorldBuffers, view: CullView): void;
+  /** The swimmer's own bubbles (body/breath.ts: BREATH_BUBBLES of them, eight floats each), when they change. */
+  setOwnBubbles(data: Float32Array): void;
 }
 
 export async function createScenePass(gpu: Gpu, scene: Scene, quality: Quality, tuning: Tuning): Promise<ScenePass> {
@@ -114,46 +117,72 @@ export async function createScenePass(gpu: Gpu, scene: Scene, quality: Quality, 
       vertexConstants,
     });
 
-  const [terrain, solid, surface, backdrop, manta, fish, leafNear, leafMid, leafFar, leafSmall, bubbles, glints, snow] =
-    await Promise.all([
-      pipeline('terrain', solidModule, 'solidVertex', 'solidFragment', {
-        buffers: solidBuffers,
-        cullMode: 'back',
-        constants: shadowConstants,
-      }),
-      pipeline('solid', solidModule, 'solidVertex', 'solidFragment', {
-        buffers: solidBuffers,
-        vertexConstants: { ROCK_FADE: rockFade },
-        constants: shadowConstants,
-      }),
-      pipeline('surface', surfaceModule, 'surfaceVertex', 'surfaceFragment', { strip: true }),
-      pipeline('backdrop', surfaceModule, 'backdropVertex', 'backdropFragment', { strip: true }),
-      pipeline('manta', creaturesModule, 'mantaVertex', 'mantaFragment', {
-        buffers: creatureBuffers,
-        constants: { SHADOW_SIZE: scene.shadowSize },
-      }),
-      pipeline('fish', creaturesModule, 'fishVertex', 'fishFragment', {
-        buffers: creatureBuffers,
-        vertexConstants: { PART: tuning.fishPart },
-      }),
-      leaf('leaf near', { ROWS: 9, FAR: LEAF_FAR, SMOOTH_BEND }),
-      leaf('leaf mid', { ROWS: 5, FAR: LEAF_FAR, SMOOTH_BEND }),
-      leaf('leaf far', { ROWS: 3, FAR: LEAF_FAR, SMOOTH_BEND }),
-      leaf('leaf small', { ROWS: 3, FAR: SMALL_LEAF_DISTANCE, SMOOTH_BEND }),
-      pipeline('bubbles', spritesModule, 'bubbleVertex', 'bubbleFragment', { ...sprite, blend: PREMULTIPLIED }),
-      pipeline('glints', leafModule, 'glintVertex', 'glintFragment', {
-        ...sprite,
-        blend: ADDITIVE,
-        vertexConstants: { GLINT_FAR: tuning.glintDistance },
-      }),
-      pipeline('snow', spritesModule, 'snowVertex', 'snowFragment', {
-        buffers: [SNOW_INSTANCE_LAYOUT],
-        strip: true,
-        blend: ADDITIVE,
-      }),
-    ]);
+  const [
+    terrain,
+    solid,
+    surface,
+    backdrop,
+    manta,
+    fish,
+    leafNear,
+    leafMid,
+    leafFar,
+    leafSmall,
+    bubbles,
+    glints,
+    snow,
+    ownBubbles,
+  ] = await Promise.all([
+    pipeline('terrain', solidModule, 'solidVertex', 'solidFragment', {
+      buffers: solidBuffers,
+      cullMode: 'back',
+      constants: shadowConstants,
+    }),
+    pipeline('solid', solidModule, 'solidVertex', 'solidFragment', {
+      buffers: solidBuffers,
+      vertexConstants: { ROCK_FADE: rockFade },
+      constants: shadowConstants,
+    }),
+    pipeline('surface', surfaceModule, 'surfaceVertex', 'surfaceFragment', { strip: true }),
+    pipeline('backdrop', surfaceModule, 'backdropVertex', 'backdropFragment', { strip: true }),
+    pipeline('manta', creaturesModule, 'mantaVertex', 'mantaFragment', {
+      buffers: creatureBuffers,
+      constants: { SHADOW_SIZE: scene.shadowSize },
+    }),
+    pipeline('fish', creaturesModule, 'fishVertex', 'fishFragment', {
+      buffers: creatureBuffers,
+      vertexConstants: { PART: tuning.fishPart },
+    }),
+    leaf('leaf near', { ROWS: 9, FAR: LEAF_FAR, SMOOTH_BEND }),
+    leaf('leaf mid', { ROWS: 5, FAR: LEAF_FAR, SMOOTH_BEND }),
+    leaf('leaf far', { ROWS: 3, FAR: LEAF_FAR, SMOOTH_BEND }),
+    leaf('leaf small', { ROWS: 3, FAR: SMALL_LEAF_DISTANCE, SMOOTH_BEND }),
+    pipeline('bubbles', spritesModule, 'bubbleVertex', 'bubbleFragment', { ...sprite, blend: PREMULTIPLIED }),
+    pipeline('glints', leafModule, 'glintVertex', 'glintFragment', {
+      ...sprite,
+      blend: ADDITIVE,
+      vertexConstants: { GLINT_FAR: tuning.glintDistance },
+    }),
+    pipeline('snow', spritesModule, 'snowVertex', 'snowFragment', {
+      buffers: [SNOW_INSTANCE_LAYOUT],
+      strip: true,
+      blend: ADDITIVE,
+    }),
+    pipeline('own bubbles', spritesModule, 'bubbleVertex', 'bubbleFragment', {
+      ...sprite,
+      blend: PREMULTIPLIED,
+      vertexConstants: { OWN: 1 },
+      constants: { OWN: 1 },
+    }),
+  ]);
 
+  const ownBuffer = device.createBuffer({
+    label: 'own bubbles',
+    size: BREATH_BUBBLES * 32,
+    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+  });
   return {
+    setOwnBubbles: (data) => gpu.queue.writeBuffer(ownBuffer, 0, data),
     encode(pass, world, view) {
       const runs = view.runs;
       /** Draws the instances of one cell-sorted list of meshes that are in view and within the distance band. */
@@ -257,6 +286,11 @@ export async function createScenePass(gpu: Gpu, scene: Scene, quality: Quality, 
         pass.setPipeline(bubbles);
         pass.setVertexBuffer(0, world.bubbles.buffer);
         drawSprites(world.bubbles, 4, Infinity);
+      }
+      if (!skipped('breath')) {
+        pass.setPipeline(ownBubbles);
+        pass.setVertexBuffer(0, ownBuffer);
+        pass.draw(4, BREATH_BUBBLES);
       }
       if (!skipped('glints')) {
         pass.setPipeline(glints);

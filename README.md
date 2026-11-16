@@ -51,13 +51,13 @@ npm run build && open dist/index.html     # or: npm run dev
 
 Controls: any of `W A S D` dives from the home view; then `W A S D` swim, `Q` / `E` down / up, `Shift` brings up
 the scooter and rides it, the mouse or the arrow keys look around, `1`–`6` viewpoints, `P` photo mode (`Enter`
-saves a picture), `T` a guided tour, `L` a link to the view, `Esc` pauses, `M` mute, `H` stats, `C` switches
-between swimming with a body and the original's steady glide.
+saves a picture), `T` a guided tour, `F` the lamp, `L` a link to the view, `Esc` pauses, `M` mute, `H` stats,
+`C` switches between swimming with a body and the original's steady glide.
 
 - **Touchscreen:** hold to swim forward, slide to steer, a second finger for the scooter; a sound button and a
   menu button are in the corner.
 - **Gamepad:** left stick swims, right stick looks, the bumpers go down and up, the right trigger is the scooter,
-  `A` or `Start` dives, pauses and resumes.
+  `A` or `Start` dives, pauses and resumes, `Y` is the lamp.
 - **Where the mouse cannot be captured** (some embeds refuse it): hold the button down on the picture and drag.
 
 **A link to a view** (`L`) puts where you are and which way you look after the `#` of the address
@@ -115,6 +115,21 @@ view or in the pause panel; the page starts over in it.
   zero, and the shader compiler folds them away, so noon's frames are still the original's (the parity tests are
   unchanged). Another mood rewrites those three lines when the shaders are made.
 - The sun does not move: the caustics and the baked shadows are made for where it is.
+
+### A lamp
+
+`F` (or a gamepad's `Y`) switches on a lamp: a cone of warm light, 31 degrees either side of where you look,
+that lights the rock, the plants, the fish and turtles and whatever drifts through it. It is the scooter's
+headlamp while the scooter is out and a torch by the head otherwise, and by moonlight it starts switched on.
+
+- It is one small block of numbers every scene shader can read (`src/render/lamp.ts`, `lampLight` in
+  `src/shaders/common/scene.wgsl`): where it is, which way it points, how bright. Each shader adds it to what it
+  drew: rock that fluoresces answers with more than it is given, a fish flashes silver, a blade of kelp is lit
+  through from behind.
+- It fades with the square of the distance and with the water in between, which takes its red first: three times
+  the noon sun at three metres, a third of it at ten.
+- It is not at the eye. Light from exactly where one looks from shows no shape.
+- Off, the shaders skip it: the picture is what it was to the last bit (checked in the test).
 
 ### Jellyfish
 
@@ -192,13 +207,17 @@ you look.
 - **Lens**: the body is posed in view space and drawn first, in the nearest tenth of the depth range, so a rock
   the swimmer is pressed against cannot cut through a hand; and through a longer lens than the world (51° against
   62°), which stops things at arm's length being stretched towards the edges of the picture.
+- **Breath** (`src/body/breath.ts`): every five or six seconds, sooner when working, a run of some forty bubbles
+  leaves the regulator by the cheeks and rises past the mask, with the sound of it. Each is a bubble like the
+  world's own, a closed-form climb from where it was let go to the surface; hover and look up, and the trail is
+  there above you. Swim, and they are behind you before you see them. The hands churn up small ones of their
+  own on each pull, which sweep past the corners of the picture, and a few while they scull.
 - It is sculpted in the mesh worker after the world's own meshes, and arrives when it is done: the first frame
   does not wait for it.
 - `node tests/browser/body-shots.mjs` saves contact sheets of the stroke and the other poses to
   `test-results/shots/`.
 
-Not there yet: bubbles off the hands and a wash behind the propeller, legs and fins when you look down, a beam
-for the scooter's lamp.
+Not there yet: a wash behind the propeller, legs and fins when you look down.
 
 What already differs from the original, on an Apple M3 with 8 GB at High detail. `npm run bench` opens both
 side by side and lets them take turns, a few dozen frames each: a laptop slows by half as it warms up, so timings
@@ -211,7 +230,7 @@ taken minutes apart cannot be compared.
 | Load time on a cool machine (separate sittings) | 3.4 s | 1.6 s |
 | Peak memory while loading, page / whole browser | 1.1 GB / 1.9 GB | 0.5 GB / 1.2 GB |
 | Loading bar | timed animation | real progress from the generator |
-| Shipped file | 97 kB | 189 kB (73 kB gzipped), with the swimmer, the opening, jellyfish and turtles that the original does not have. Shaders keep their readable names; the code they share is in the file once and joined to each when the page starts (spliced into each, it was there eight times: 28 kB) |
+| Shipped file | 97 kB | 196 kB (76 kB gzipped), with the swimmer, the opening, the moods, the lamp, jellyfish and turtles that the original does not have. Shaders keep their readable names; the code they share is in the file once and joined to each when the page starts (spliced into each, it was there eight times: 28 kB) |
 | Frame at 2560×1440, six viewpoints | 45.7 / 35.4 / 26.9 / 38.5 / 35.9 / 35.7 ms | the same within 3 % |
 | Frame at 640×360, six viewpoints | 26.2 / 19.1 / 19.6 / 20.3 / 21.2 / 19.2 ms | the same within 3 % |
 | 60 s fly-through at 2560×1440, average | 37.8 ms | 37.1 ms |

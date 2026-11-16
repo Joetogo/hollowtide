@@ -142,5 +142,7 @@ fn solidFragment(v: SolidVarying, @builtin(front_facing) front: bool) -> @locati
   let H = normalize(V + L);
   c += sun * (.25 + caustic) * pow(clamp01(dot(N, H)), mix(10., 70., gloss)) * gloss * ndl * 1.8;
   c += (ambient(v.world, reflect(-V, N), near.g, zone) + sideGlow(v.world, reflect(-V, N), clamp01((far.r - .5) * 2.7), zone)) * ao * (.08 + gloss) * .6 * pow(1. - clamp01(dot(N, V)), 2.5);
+  // in the lamp what fluoresces answers with more than it is given
+  c += albedo * lampLight(v.world, N) * (1. + fluorescence);
   return hdrOutput(applyFog(c, v.world, zone));
 }

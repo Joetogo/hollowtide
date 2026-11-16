@@ -168,5 +168,6 @@ fn turtleFragment(v: TurtleVarying) -> @location(0) vec4f {
   c += sun * pow(clamp01(dot(n, normalize(V + L))), mix(110., 24., v.skin)) * mix(.3, .1, v.skin) * (.3 + caustic) * (1. + 4. * eye);
   // light thrown back up from the seabed onto its underside, and the sky caught at grazing angles
   c += albedo * sky * caustic * .45 * smoothRamp(.2, -.4, n.y) + sky * pow(1. - ndv, 3.) * .28;
+  c += albedo * lampLight(v.world, n) * 1.4;
   return hdrOutput(applyFog(c, v.world, zone));
 }

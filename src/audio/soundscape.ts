@@ -27,6 +27,8 @@ export interface Soundscape {
   setVolume(volume: number): void;
   /** How hard the scooter's motor is running, 0..1; call as often as it changes. */
   scooter(throttle: number): void;
+  /** The swimmer breathes out: a run of bubbles by the ears. */
+  exhale(): void;
 }
 
 export function createSoundscape(camera: Camera, startMuted: boolean): Soundscape {
@@ -35,6 +37,7 @@ export function createSoundscape(camera: Camera, startMuted: boolean): Soundscap
   let muted = startMuted;
   let throttle = 0;
   let volume = 1;
+  let exhaling = false;
   // its own random stream: the sound never disturbs anything else that draws random numbers
   const random = new Random();
   random.reseed(300);
@@ -123,6 +126,7 @@ export function createSoundscape(camera: Camera, startMuted: boolean): Soundscap
         const g = gain(0, pan);
         return { pan, gain: g, oscillator: wire(new OscillatorNode(ac, { type }), [g]) };
       });
+    const breath = pool(6, 0.05);
     const bubbles = pool(4, 0.12),
       chimes = pool(3, 1.2),
       whales = pool(2, 2, 'triangle');
@@ -177,6 +181,16 @@ export function createSoundscape(camera: Camera, startMuted: boolean): Soundscap
       // the surface is louder the nearer it is
       const shallow = clamp(1 + ly / 30, 0, 1);
       wash.gain.setTargetAtTime(0.25 + 0.55 * shallow * shallow, t, 0.5);
+      if (exhaling) {
+        // a breath out: a second and a half of quick rising blips, close by, thinning out towards the end
+        exhaling = false;
+        let tt = t;
+        for (let n = 0; n < 15; n++) {
+          const f = rr(240, 620);
+          play(breath, tt, f, f * rr(1.5, 2.1), 0.045 + 26 / f, rr(0.035, 0.07) * (1 - n / 22), 0.005);
+          tt += rr(0.045, 0.1) * (1 + n / 12);
+        }
+      }
       if (t > nextBubbles) {
         // a burst of one to six bubbles: short rising blips, smaller bubbles higher and shorter
         let tt = t;
@@ -221,6 +235,9 @@ export function createSoundscape(camera: Camera, startMuted: boolean): Soundscap
     setVolume(value) {
       volume = value;
       if (context && master) master.gain.setTargetAtTime(muted ? 0 : VOLUME * volume, context.currentTime, 0.08);
+    },
+    exhale() {
+      exhaling = true;
     },
     scooter(value) {
       throttle = value;

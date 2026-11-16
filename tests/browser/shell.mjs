@@ -194,6 +194,13 @@ try {
   await chrome.page.waitForTimeout(200);
   check(await chrome.page.evaluate(() => !document.body.classList.contains('photo')), 'P again leaves photo mode');
 
+  // ---- the swimmer breathes: within six seconds of any moment there has been a breath out
+  await chrome.page.waitForFunction(() => window.__hollowtide.ownBubbles() > 10, null, { timeout: 7000 });
+  check(
+    true,
+    `the swimmer breathes out: ${await chrome.page.evaluate(() => window.__hollowtide.ownBubbles())} of their own bubbles are rising`,
+  );
+
   // ---- other ways to look and swim: the arrow keys, a held drag, a gamepad
   const turned = async (act) => {
     const before = await camera(chrome);
@@ -270,6 +277,17 @@ try {
     await chrome.page.evaluate(() => document.getElementById('mute').getAttribute('aria-pressed') === 'false'),
     'and the M key and the button stay in step',
   );
+
+  // ---- the lamp
+  await chrome.page.keyboard.press('KeyF');
+  await chrome.page.waitForTimeout(200);
+  check(
+    await chrome.page.evaluate(() => document.getElementById('note').textContent === 'Lamp on'),
+    'F switches the lamp on, and says so',
+  );
+  await chrome.page.keyboard.press('KeyF');
+  await chrome.page.waitForTimeout(200);
+  check(await chrome.page.evaluate(() => document.getElementById('note').textContent === 'Lamp off'), 'and off again');
 
   // ---- a link to this view
   await chrome.page.keyboard.press('KeyL');

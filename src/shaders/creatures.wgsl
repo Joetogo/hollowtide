@@ -62,6 +62,9 @@ fn fishFragment(v: CreatureVarying) -> @location(0) vec4f {
   let sun = sunlight(v.world.y, zone) * v.light;
   var c = albedo * (sun * (.25 + .75 * clamp01(dot(n, L))) + ambient(v.world, n, around.g, zone) * 1.3);
   c += sun * pow(clamp01(dot(n, normalize(V + L))), 24.) * 1.6 + vec3f(.3, .6, .7) * pow(1. - clamp01(dot(n, V)), 3.) * .25 * around.g;
+  // in the lamp a fish flashes silver
+  let lit = lampLight(v.world, n);
+  c += lit * (albedo + pow(clamp01(dot(n, normalize(V + normalize(lamp.pos - v.world)))), 16.) * 1.2);
   return hdrOutput(applyFog(c, v.world, zone));
 }
 
@@ -119,5 +122,6 @@ fn mantaFragment(v: CreatureVarying) -> @location(0) vec4f {
   c += sun * pow(clamp01(dot(n, normalize(V + L))), 30.) * .5 * (.3 + caustic);
   let sky = ambient(v.world, vec3f(0., 1., 0.), around.g, zone);
   c += albedo * sky * caustic * .45 * (1. - top) + sky * pow(1. - ndv, 3.) * .35;
+  c += albedo * lampLight(v.world, n) * 1.5;
   return hdrOutput(applyFog(c, v.world, zone));
 }

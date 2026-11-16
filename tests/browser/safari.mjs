@@ -33,7 +33,7 @@ const attempt = (query) =>
     server.listen(0, '127.0.0.1', () => {
       // `open` drops the query string of a file URL, so a small launcher page carries it instead
       const listener = `http://127.0.0.1:${server.address().port}/`;
-      // (under a name of its own each time: asked to open an address it already has open, Safari may only show it)
+      // (under a name of its own each time, so that Safari cannot take it for a page it already has open)
       const launcher = path.join(root, `dist/safari-launch-${Date.now().toString(36)}.html`);
       writeFileSync(
         launcher,
@@ -49,9 +49,10 @@ const attempt = (query) =>
     }, 45_000);
   });
 /**
- * The same, tried once more if Safari says nothing at all the first time: straight after a long run of other
- * tests it sometimes does not get as far as loading the page (the same build then passes when asked again). A
- * start that gets somewhere and then stops is not retried: it names the stage it reached.
+ * The same, tried once more if Safari says nothing at all the first time. Straight after a long run of other
+ * tests its first launch often does not get as far as loading the page, and the second does; why is not known
+ * (a launcher page under a new name each time did not cure it). A start that gets somewhere and then stops is
+ * not retried: it names the stage it reached.
  */
 const report = (query = '') =>
   attempt(query).catch((error) => {

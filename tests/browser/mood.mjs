@@ -57,6 +57,60 @@ try {
       `${label}: no shader or validation errors${seen[name].errors[0] ? ': ' + seen[name].errors[0] : ''}`,
     );
   }
+  // ---- the lamp, by moonlight: a pool of light on the seabed three metres below, and nothing changed when off
+  const lamp = await chrome.page.evaluate(async () => {
+    const h = window.__hollowtide.harness;
+    const [x, y, z] = h.viewpoints()[0];
+    const pose = [x, y, z, x + 0.4, y - 3, z + 0.2];
+    const decode = async (url) => {
+      const bitmap = await createImageBitmap(await (await fetch(url)).blob());
+      const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+      const context = canvas.getContext('2d');
+      context.drawImage(bitmap, 0, 0);
+      return context.getImageData(0, 0, bitmap.width, bitmap.height);
+    };
+    const off = h.capture(pose, 3).png;
+    h.lamp(1);
+    const on = await decode(h.capture(pose, 3).png);
+    h.lamp(0);
+    const offAgain = h.capture(pose, 3).png;
+    const dark = await decode(off);
+    // mean brightness of a patch a tenth of the picture across, at a place given as fractions of it
+    const patch = (image, fx, fy) => {
+      const { width, height, data } = image;
+      const half = Math.floor(width / 20);
+      let sum = 0;
+      let n = 0;
+      for (let py = Math.floor(fy * height) - half; py < fy * height + half; py++)
+        for (let px = Math.floor(fx * width) - half; px < fx * width + half; px++) {
+          if (px < 0 || py < 0 || px >= width || py >= height) continue;
+          const i = (py * width + px) * 4;
+          sum += data[i] + data[i + 1] + data[i + 2];
+          n++;
+        }
+      return sum / n / 3;
+    };
+    return {
+      same: off === offAgain,
+      middle: [patch(dark, 0.5, 0.5), patch(on, 0.5, 0.5)],
+      corner: [patch(dark, 0.04, 0.06), patch(on, 0.04, 0.06)],
+      errors: h.gpuErrors(),
+    };
+  });
+  check(
+    lamp.middle[1] > lamp.middle[0] + 60,
+    `the lamp lights the seabed in front of it: the middle of the picture goes from ${lamp.middle[0].toFixed(0)} to ${lamp.middle[1].toFixed(0)}`,
+  );
+  check(
+    lamp.corner[1] < lamp.corner[0] + 12,
+    `and not what is outside its cone: a corner goes from ${lamp.corner[0].toFixed(0)} to ${lamp.corner[1].toFixed(0)}`,
+  );
+  check(lamp.same, 'switched off again, the picture is what it was to the last bit');
+  check(
+    lamp.errors.length === 0,
+    `no shader or validation errors with the lamp${lamp.errors[0] ? ': ' + lamp.errors[0] : ''}`,
+  );
+
   const [r0, g0, b0] = noon.mean;
   const [r1, g1, b1] = seen.dusk.mean;
   const [r2, g2, b2] = seen.moon.mean;

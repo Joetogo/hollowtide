@@ -50,6 +50,8 @@ export interface Renderer {
   readonly body: BodyParts;
   /** Gives the body its meshes. */
   setBody(meshes: BodyMeshes): void;
+  /** The swimmer's own bubbles, when they have changed (src/body/breath.ts). */
+  setOwnBubbles(data: Float32Array): void;
   /** Puts jellyfish in the water: eight floats each (src/world/jellies.ts). */
   setJellies(instances: Float32Array): void;
   /** The jellyfish that were put in, or none. */
@@ -105,6 +107,7 @@ export async function createRenderer(
     holdScene: false,
     body: createBodyParts(),
     setBody: (meshes) => bodyDraw.setMeshes(meshes),
+    setOwnBubbles: (data) => sceneDraw.setOwnBubbles(data),
     jellies: null,
     setJellies(instances) {
       renderer.jellies = instances;
@@ -169,6 +172,7 @@ export async function createRenderer(
       const { targets } = renderer;
       writeFrame(scene.frameData, renderer.camera, targets.width, targets.height, time, renderer.detail);
       if (renderer.exposure !== 1) scene.frameData[Frame.at.exposure] *= renderer.exposure;
+      queue.writeBuffer(scene.lampBuffer, 0, scene.lampData);
       queue.writeBuffer(scene.frameBuffer, 0, scene.frameData);
       const encoder = device.createCommandEncoder();
       const stamps = timer.begin();

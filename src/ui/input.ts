@@ -47,7 +47,7 @@ export function bindInput(canvas: HTMLCanvasElement, intent: Intent, actions: In
     turnDown: 0,
   };
   /** what a gamepad is asking for: sticks -1..1 */
-  const pad = { forward: 0, right: 0, up: 0, fast: false, turnX: 0, turnY: 0, button: false, on: false };
+  const pad = { forward: 0, right: 0, up: 0, fast: false, turnX: 0, turnY: 0, button: false, lamp: false, on: false };
   /** the left button is down on the picture: dragging looks around (for when the mouse cannot be captured) */
   let dragging = false;
   let touchId = -1; // the finger that steers
@@ -202,7 +202,7 @@ export function bindInput(canvas: HTMLCanvasElement, intent: Intent, actions: In
     if (!found) {
       if (!pad.on) return;
       pad.forward = pad.right = pad.up = pad.turnX = pad.turnY = 0;
-      pad.fast = pad.button = pad.on = false;
+      pad.fast = pad.button = pad.lamp = pad.on = false;
       apply();
       return;
     }
@@ -216,6 +216,9 @@ export function bindInput(canvas: HTMLCanvasElement, intent: Intent, actions: In
       actions.onPadButton();
     }
     pad.button = button;
+    // Y: the lamp
+    if (pressed(3) && !pad.lamp && !actions.menuOpen()) actions.onKey('KeyF');
+    pad.lamp = pressed(3);
     if (actions.menuOpen()) {
       pad.forward = pad.right = pad.up = pad.turnX = pad.turnY = 0;
       pad.fast = false;

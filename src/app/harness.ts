@@ -13,6 +13,7 @@ import { generateWorld } from '../world/client';
 import { rockDistance, type CollisionField } from '../world/collision';
 import { createBodyState, poseBody, poseHands, type BodyState } from '../body/rig';
 import { createArmTarget, type ArmTarget } from '../body/skeleton';
+import { aimLamp } from '../render/lamp';
 
 export interface FrameDiff {
   pixels: number;
@@ -76,6 +77,8 @@ export interface Harness {
   viewpoints(): number[][];
   /** The jellyfish in the water, eight floats each: home x, y, z, radius, then seed, drift, colour, beat. */
   jellies(): number[];
+  /** Switches the lamp on (1) or off (0) for the frames captured from now on. */
+  lamp(level: number): void;
   /** The turtles, eight floats each: the middle of the loop and its radius, then phase, speed, size, phase. */
   turtles(): number[];
   /** The first few hundred fish as generated, eight floats each (orbit, then motion): for finding a school. */
@@ -220,10 +223,13 @@ export function createHarness(
     renderer.resize();
   };
 
+  /** how far the lamp is switched on for the frames drawn here (0: off, as everywhere but in its own test) */
+  let lampLevel = 0;
   const setPose = (pose: number[]) => {
     fullSize();
     const [x, y, z, tx, ty, tz] = pose as [number, number, number, number, number, number];
     lookAt(renderer.camera, x, y, z, tx, ty, tz);
+    aimLamp(renderer.scene.lampData, renderer.camera, lampLevel, 0);
   };
 
   /** The canvas as RGBA bytes. Must run in the task that drew the frame: the canvas texture is gone after it. */
@@ -359,6 +365,9 @@ export function createHarness(
 
     jellies: () => Array.from(renderer.jellies ?? []),
     turtles: () => Array.from(renderer.turtles ?? []),
+    lamp(level) {
+      lampLevel = level;
+    },
 
     skipDraws(...names) {
       skippedDraws.clear();

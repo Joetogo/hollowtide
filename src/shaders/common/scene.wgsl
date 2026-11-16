@@ -52,6 +52,21 @@ fn ambient(p: vec3f, n: vec3f, sky: f32, zone: f32) -> vec3f {
   let up = n.y * .5 + .5;
   return (mix(vec3f(.22, .60, .80), vec3f(.34, .56, .82), zone) * exp(downwelling(zone) * min(p.y, 0.) * 1.2) * (.3 + .7 * sky) * (.24 + .76 * up * up) * 1.3 * (.55 + .45 * clamp01(-p.y / 30.)) + vec3f(.003, .010, .016)) * MOOD_SKY;
 }
+// ---- the swimmer's lamp (render/lamp.ts): a cone of warm light from `lamp.pos` along `lamp.dir`
+// how much of it reaches `p`, whichever way a surface there faces; nothing is worked out while it is off
+fn lampGlow(p: vec3f) -> vec3f {
+  if (lamp.power <= 0.) { return vec3f(0.); }
+  let to = p - lamp.pos; let d2 = dot(to, to); let d = sqrt(d2);
+  // bright in the middle, a soft wide rim; fading with the square of the distance and with the water in between
+  let across = smoothRamp(lamp.cone, 1., dot(to / d, lamp.dir));
+  return vec3f(1., .93, .78) * (lamp.power * across * (.3 + .7 * across) / (1. + .035 * d2)) * exp(-EXTINCTION * d);
+}
+// and what a surface at `p` facing `n` gets of it
+fn lampLight(p: vec3f, n: vec3f) -> vec3f {
+  if (lamp.power <= 0.) { return vec3f(0.); }
+  return lampGlow(p) * clamp01(dot(n, normalize(lamp.pos - p)) * .85 + .15);
+}
+
 // how much a point belongs to the grotto: the camera's zone, nudged by the ground map
 fn zoneAt(p: vec3f) -> f32 { return mix(frame.zoneBlend, textureSampleLevel(groundMap, clampSampler, p.xz / 384. + .5, 0.).b, .2); }
 // glow of open water seen sideways, on surfaces that face it

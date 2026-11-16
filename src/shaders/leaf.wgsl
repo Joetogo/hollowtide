@@ -140,6 +140,8 @@ fn leafFragment(v: LeafVarying, @builtin(front_facing) front: bool) -> @location
   let band = smoothRamp(.2, .0, abs(v.uv.y - (.35 + .45 * v.seeds.y))) * (1. - v.uv.x * v.uv.x);
   let lit = .35 + sun.g * 1.2 + MOOD_GLOW * .5;
   c += v.sparkle * v.look.x * (.1 + twinkle) * band * lit * .6;
+  // the lamp: on the blade, through it from behind, and the glowing kinds answering it
+  c += lampGlow(v.world) * (albedo * (.25 + .75 * abs(dot(n, normalize(lamp.pos - v.world)))) * (1. + 2. * v.look.w) + throughColor * v.look.y * .3);
   return hdrOutput(applyFog(c, v.world, zone));
 }
 

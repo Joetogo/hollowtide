@@ -19,7 +19,7 @@ import { createHud } from '../ui/hud';
 import { bindInput } from '../ui/input';
 import { createMenu } from '../ui/menu';
 import { createHarness, type Harness } from './harness';
-import { createBodyState, poseBody, stepBody } from '../body/rig';
+import { createBodyState, poseBody, stepBody, strokePull } from '../body/rig';
 import { createNote } from '../ui/note';
 import { FAITHFUL, TUNED } from '../config/tuning';
 import { placeJellies } from '../world/jellies';
@@ -27,6 +27,9 @@ import { placeTurtles } from '../life/turtle';
 import { viewFromHash, viewToHash } from '../camera/share';
 import { moodNamed } from '../config/mood';
 import { setShaderMood } from '../gpu/shader';
+import { aimLamp } from '../render/lamp';
+import { createBreath, stepBreath, stepWash } from '../body/breath';
+import { TAN_HALF_FOV } from '../render/frame';
 
 export interface BootReport {
   adapter: string;
@@ -50,6 +53,8 @@ declare global {
       frames?: number;
       /** set by a test to stop the loop drawing, so that only the frames it asks for exist */
       paused?: boolean;
+      /** harness builds: how many of the swimmer's own bubbles are in the water */
+      ownBubbles?: () => number;
     };
   }
 }
@@ -288,7 +293,15 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
     const camera = renderer.camera;
     const swimmer = createSwimmer();
     let body = createBodyState();
+    let breath = createBreath();
     const drive: Drive = { gain: 1, jet: false };
+    if (__HARNESS__) {
+      hook.ownBubbles = () => {
+        let n = 0;
+        for (let i = 3; i < breath.data.length; i += 8) if (breath.data[i]! > 0) n++;
+        return n;
+      };
+    }
     // the home view drifts along the scripted flight, slowly, there and back
     const flight = new Float64Array(6);
     let homeClock = 0;
@@ -301,6 +314,8 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       }
       Object.assign(swimmer, createSwimmer());
       body = createBodyState();
+      breath = createBreath();
+      breath.dirty = true;
       // (a reminder, once the eyes are open, for whoever chose the glide on an earlier visit)
       if (settings.classic) setTimeout(() => note(CLASSIC_ON), 3000);
     };
@@ -316,7 +331,10 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
         if (code === 'KeyH') hud.toggle();
         else if (code === 'KeyM') toggleMute();
         else if (code === 'KeyL') shareView();
-        else if (code === 'KeyC') {
+        else if (code === 'KeyF') {
+          lampOn = !lampOn;
+          note(lampOn ? 'Lamp on' : 'Lamp off');
+        } else if (code === 'KeyC') {
           // the original's steady glide with no body in view, or strokes and the scooter. It is remembered, so
           // it is said: arms that are simply gone on the next visit would look like a fault
           settings.classic = !settings.classic;
@@ -334,6 +352,10 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
         } else if (code >= 'Digit1' && code <= 'Digit6') goTo(code.charCodeAt(5) - 49);
       },
     });
+    // ---- the lamp: F switches it. By moonlight it starts switched on
+    let lampOn = mood.name === 'moon';
+    let lampLevel = 0;
+
     // ---- sound on and off: the M key, and a button for where there are no keys
     const muteButton = document.getElementById('mute')!;
     const showMuted = () => muteButton.setAttribute('aria-pressed', String(settings.muted));
@@ -491,6 +513,36 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       camera.pitch += body.nod;
       camera.wide = settings.fov * (1 + WIDE_AT_SPEED * body.rush); // and the scooter's pull widens the view
       updateBasis(camera);
+      // the lamp comes on and goes off over a moment, and follows the view
+      const lampGoal = lampOn && !menu.home ? 1 : 0;
+      lampLevel += Math.max(-dt * 4, Math.min(dt * 4, lampGoal - lampLevel));
+      aimLamp(renderer.scene.lampData, camera, lampLevel * lampLevel, settings.classic ? 0 : body.equip);
+      // the swimmer breathes: bubbles past the mask, faster when working
+      const breathing = !menu.open && !settings.classic && !photo && tour < 0;
+      stepBreath(breath, camera, time, photo ? 0 : dt, body.swim * (1 - body.equip), breathing, Math.random);
+      if (breathing) {
+        // and the hands churn the water on each pull
+        const free = 1 - body.equip;
+        stepWash(
+          breath,
+          camera,
+          time,
+          photo ? 0 : dt,
+          body.hands,
+          body.swim * strokePull(body.phase) * free,
+          body.scull * (1 - body.swim) * free,
+          TAN_HALF_FOV * camera.wide,
+          Math.random,
+        );
+      }
+      if (breath.dirty) {
+        renderer.setOwnBubbles(breath.data);
+        breath.dirty = false;
+      }
+      if (breath.began) {
+        breath.began = false;
+        sound!.exhale();
+      }
       if (shoot) {
         shoot = false;
         savePicture();

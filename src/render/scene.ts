@@ -1,9 +1,10 @@
-// What every scene shader binds: the frame block, three samplers and the five shared textures.
+// What every scene shader binds: the frame block, three samplers, the five shared textures and the lamp.
 import type { Quality } from '../config/quality';
 import { group } from '../gpu/bindings';
 import { DEPTH, HDR, type Gpu } from '../gpu/context';
 import { NX, NY, NZ } from '../world/grid';
 import { createFrameData, Frame } from './frame';
+import { createLampData, Lamp } from './lamp';
 
 export const SceneGroup = group(0, {
   frame: Frame,
@@ -15,6 +16,7 @@ export const SceneGroup = group(0, {
   detailTexture: 'texture_2d<f32>',
   volumeTexture: 'texture_3d<f32>',
   groundMap: 'texture_2d<f32>',
+  lamp: Lamp, // the swimmer's light (render/lamp.ts)
 });
 
 export const DETAIL_SIZE = 1024;
@@ -26,6 +28,9 @@ export interface Scene {
   /** The frame block of the main view, and the buffer it is uploaded to. */
   readonly frameData: Float32Array;
   readonly frameBuffer: GPUBuffer;
+  /** The lamp block (render/lamp.ts), uploaded with every frame. */
+  readonly lampData: Float32Array;
+  readonly lampBuffer: GPUBuffer;
   readonly linearSampler: GPUSampler;
   readonly repeatSampler: GPUSampler;
   readonly shadowSampler: GPUSampler;
@@ -111,6 +116,14 @@ export function createScene(gpu: Gpu, quality: Quality): Scene {
   const shadowFrameBuffer = uniform('shadow frame');
   queue.writeBuffer(shadowFrameBuffer, 0, shadowFrame);
 
+  const lampData = createLampData();
+  const lampBuffer = device.createBuffer({
+    label: 'lamp',
+    size: Lamp.size,
+    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+  });
+  queue.writeBuffer(lampBuffer, 0, lampData);
+
   const layout = SceneGroup.layout(device);
   const bind = (frame: GPUBuffer, shadow: GPUTexture) =>
     SceneGroup.bind(device, layout, {
@@ -123,6 +136,7 @@ export function createScene(gpu: Gpu, quality: Quality): Scene {
       detailTexture: detail.createView(),
       volumeTexture: volume.createView(),
       groundMap: groundMap.createView(),
+      lamp: { buffer: lampBuffer },
     });
 
   return {
@@ -130,6 +144,8 @@ export function createScene(gpu: Gpu, quality: Quality): Scene {
     pipelineLayout: device.createPipelineLayout({ bindGroupLayouts: [layout] }),
     frameData,
     frameBuffer,
+    lampData,
+    lampBuffer,
     linearSampler,
     repeatSampler,
     shadowSampler,
