@@ -169,6 +169,9 @@ Key mechanisms:
 - Defect fixes: leaf curvature (series fallback near zero), fog integral, sine hash, the collision brick cap.
 
 **Milestone 13: features and UX**
+- Done ahead of the rest, at your request (2026-11-16): the opening. A diver sinks while the world loads, the
+  picture goes black, the home view drifts through the world with "W A S D to dive", and the dive opens the
+  swimmer's eyes on the seabed. See "The opening" in the README.
 - Settings panel in three tiers: instant (field of view, sensitivity, invert Y, volume, exposure), pipeline
   rebuild in about a second (anti-aliasing, shaft quality), and data (detail level: lower instantly by drawing a
   prefix of each cell, raise by regenerating in the worker).
