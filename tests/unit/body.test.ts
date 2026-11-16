@@ -9,6 +9,7 @@ import {
   strokeGain,
   strokeRate,
   STROKE_SECONDS,
+  type BodyState,
 } from '../../src/body/rig';
 import { BODY_VERTEX_BYTES, capsule, sculpt } from '../../src/body/sculpt';
 import {
@@ -26,6 +27,13 @@ import {
   UPPER_ARM,
   WRIST,
   writeSkin,
+  LEG_LEFT,
+  LEG_RIGHT,
+  WAIST_BONE,
+  ANKLE,
+  KNEE,
+  LEG,
+  LEG_BIND,
 } from '../../src/body/skeleton';
 import { createCamera, lookAt } from '../../src/camera/camera';
 import { createIntent, createSwimmer, SPEED, stepSwimmer, type Drive } from '../../src/camera/controls';
@@ -63,6 +71,16 @@ function arm(change: (t: ReturnType<typeof createArmTarget>) => void, side: 1 | 
     ELBOW[2],
   );
   return { pose, target, first: side > 0 ? RIGHT : LEFT };
+}
+
+/** A point turned by a quaternion (x, y, z, w). */
+function turn(q: ArrayLike<number>, v: readonly number[]): [number, number, number] {
+  const [qx, qy, qz, qw] = [q[0]!, q[1]!, q[2]!, q[3]!];
+  const [vx, vy, vz] = [v[0]!, v[1]!, v[2]!];
+  const cx = qy * vz - qz * vy + qw * vx;
+  const cy = qz * vx - qx * vz + qw * vy;
+  const cz = qx * vy - qy * vx + qw * vz;
+  return [vx + 2 * (qy * cz - qz * cy), vy + 2 * (qz * cx - qx * cz), vz + 2 * (qx * cy - qy * cx)];
 }
 
 describe('the skeleton', () => {
@@ -356,20 +374,37 @@ describe('sculpting', () => {
 
   it('builds the body: every vertex tied to bones that exist, the creases between fingers shaded', () => {
     const body = buildBody();
-    expect(body.ranges.length).toBe(6);
+    expect(body.ranges.length).toBe(9);
     const view = new DataView(body.vertices.buffer);
     const materials = new Set<number>();
     for (const [part, range] of body.ranges.entries()) {
       expect(range.vertexCount).toBeGreaterThan(500);
       const left = part === PART.sleeveLeft || part === PART.handLeft;
       const gear = part === PART.scooter || part === PART.propeller;
+      // the legs and the waist have their own bones, after the gear's
+      const below: [number, number] | null =
+        part === PART.legRight
+          ? [LEG_RIGHT, LEG_LEFT]
+          : part === PART.legLeft
+            ? [LEG_LEFT, WAIST_BONE]
+            : part === PART.waist
+              ? [WAIST_BONE, BONES]
+              : null;
       let darkest = 127;
       for (let k = range.firstVertex; k < range.firstVertex + range.vertexCount; k++) {
         const o = k * BODY_VERTEX_BYTES;
         for (const bone of [view.getUint8(o + 16), view.getUint8(o + 17)]) {
           expect(bone).toBeLessThan(BONES);
-          // each arm's mesh is moved by that arm's bones only, the gear by its own
-          expect(gear ? bone >= SCOOTER_BONE : left ? bone >= LEFT && bone < SCOOTER_BONE : bone < LEFT).toBe(true);
+          // each arm's mesh is moved by that arm's bones only, the gear by its own, a leg by its own four
+          expect(
+            below
+              ? bone >= below[0] && bone < below[1]
+              : gear
+                ? bone >= SCOOTER_BONE && bone < LEG_RIGHT
+                : left
+                  ? bone >= LEFT && bone < SCOOTER_BONE
+                  : bone < LEFT,
+          ).toBe(true);
         }
         materials.add(view.getUint8(o + 19));
         darkest = Math.min(darkest, view.getInt8(o + 15));
@@ -378,6 +413,94 @@ describe('sculpting', () => {
     }
     expect([...materials].sort((a, b) => a - b)).toEqual(Object.values(MATERIAL));
   }, 60_000);
+
+  it('the legs are there for a swimmer who hangs upright and looks down, and not otherwise', () => {
+    const drawn = (state: Partial<BodyState>) => {
+      const parts = createBodyParts();
+      poseBody({ ...createBodyState(), shown: 1, ...state }, parts);
+      return [...parts.mesh.slice(0, parts.count)];
+    };
+    const legs = [PART.waist, PART.legRight, PART.legLeft];
+    // looking level, or up, or only a little down: they are below the picture
+    for (const pitch of [0.5, 0, -0.4, -0.7]) for (const part of legs) expect(drawn({ pitch })).not.toContain(part);
+    // looking well down
+    for (const pitch of [-0.9, -1.2, -1.55]) for (const part of legs) expect(drawn({ pitch })).toContain(part);
+    // swimming, the body lies along its way and the legs trail behind, wherever the swimmer looks
+    for (const pitch of [0, -0.9, -1.2]) {
+      for (const part of legs) expect(drawn({ pitch, lean: 1, swim: 1, phase: 0.2 })).not.toContain(part);
+    }
+    // and not while the body is still coming into the water
+    for (const part of legs) expect(drawn({ pitch: -1.2, shown: 0.5 })).not.toContain(part);
+  });
+
+  it('the body lies along its way while swimming or riding, and comes upright again at rest', () => {
+    const state = createBodyState();
+    const drive = { gain: 1, jet: false };
+    const intent = { forward: 0, right: 0, up: 0, fast: false, lookX: 0, lookY: 0, turnX: 0, turnY: 0 };
+    const run = (seconds: number) => {
+      for (let i = 0; i < seconds * 60; i++) stepBody(state, intent, true, 1 / 60, drive);
+    };
+    run(1);
+    expect(state.lean).toBe(0);
+    const kicked = state.kick;
+    run(0.5);
+    expect(state.kick).not.toBe(kicked); // the legs keep kicking slowly to stay upright
+    intent.forward = 1;
+    run(2);
+    expect(state.lean).toBe(1);
+    intent.forward = 0;
+    run(4);
+    expect(state.lean).toBe(0);
+    intent.fast = true;
+    run(2);
+    expect(state.lean).toBe(1);
+  });
+
+  it('a leg is one chain from the hip, in front of and below the eye of whoever looks down it', () => {
+    const parts = createBodyParts();
+    for (const kick of [0, 1, 2, 3, 4, 5, 6]) {
+      poseBody({ ...createBodyState(), shown: 1, pitch: -1.3, kick }, parts);
+      const skin = parts.skin;
+      for (const first of [LEG_RIGHT, LEG_LEFT]) {
+        // where each bone has taken the point at which it begins in the bind pose
+        const joint = (bone: number) => {
+          const q = skin.subarray((first + bone) * 4, (first + bone) * 4 + 4);
+          const t = skin.subarray((BONES + first + bone) * 4, (BONES + first + bone) * 4 + 3);
+          const [x, y, z] = turn(q, LEG_BIND[bone]!);
+          return [x + t[0]!, y + t[1]!, z + t[2]!] as const;
+        };
+        const [hip, knee, ankle, blade] = [joint(LEG.thigh), joint(LEG.shin), joint(LEG.foot), joint(LEG.blade)];
+        // the bones keep their lengths: nothing stretches as the leg kicks
+        expect(Math.hypot(knee[0] - hip[0], knee[1] - hip[1], knee[2] - hip[2])).toBeCloseTo(KNEE, 5);
+        expect(Math.hypot(ankle[0] - knee[0], ankle[1] - knee[1], ankle[2] - knee[2])).toBeCloseTo(ANKLE - KNEE, 5);
+        // in view space (x right, y up, z back): everything ahead of the eye, the knee nearer the middle of
+        // the picture than the hip, the right leg on the right
+        for (const point of [hip, knee, ankle, blade]) expect(point[2]).toBeLessThan(-0.3);
+        expect(Math.atan2(-knee[1], -knee[2])).toBeLessThan(Math.atan2(-hip[1], -hip[2]));
+        expect(Math.sign(knee[0])).toBe(first === LEG_RIGHT ? 1 : -1);
+      }
+    }
+  });
+
+  it('the kick moves the legs smoothly, one forward as the other goes back', () => {
+    const parts = createBodyParts();
+    const kneeAhead = (kick: number, first: number) => {
+      poseBody({ ...createBodyState(), shown: 1, pitch: -1.3, kick }, parts);
+      const q = parts.skin.subarray((first + LEG.shin) * 4, (first + LEG.shin) * 4 + 4);
+      const t = parts.skin.subarray((BONES + first + LEG.shin) * 4, (BONES + first + LEG.shin) * 4 + 3);
+      return -(turn(q, LEG_BIND[LEG.shin])[2] + t[2]!);
+    };
+    let [last, biggest] = [kneeAhead(0, LEG_RIGHT), 0];
+    let opposed = 0;
+    for (let i = 1; i <= 628; i++) {
+      const [right, left] = [kneeAhead(i / 100, LEG_RIGHT), kneeAhead(i / 100, LEG_LEFT)];
+      biggest = Math.max(biggest, Math.abs(right - last));
+      last = right;
+      if (Math.abs(right - left) > 0.02) opposed++;
+    }
+    expect(biggest).toBeLessThan(0.003); // metres for a hundredth of a radian of the kick's clock
+    expect(opposed).toBeGreaterThan(400);
+  });
 
   it('agrees with the shader about the skeleton', () => {
     const shader = readFileSync(new URL('../../src/shaders/body.wgsl', import.meta.url), 'utf8');

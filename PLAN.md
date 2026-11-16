@@ -199,6 +199,8 @@ Key mechanisms:
   shadows.
 - Bioluminescent jellyfish (lathe bell in the blended pass) and a sea turtle (built on the manta rig).
 - Fish schools that part around the camera, stateless. Compute-shader flocking is a stretch goal.
+- Done for the swimmer: breath and the water churned by the hands; legs, a weight belt and fins, seen when
+  hanging upright and looking down. Not done: a wash behind the scooter's propeller.
 - Done beyond the list: a lamp (`F`), the scooter's or a torch by the head: a cone of light added in every scene
   shader, on by default by moonlight.
 

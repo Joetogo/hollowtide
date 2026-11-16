@@ -207,6 +207,13 @@ you look.
 - **Lens**: the body is posed in view space and drawn first, in the nearest tenth of the depth range, so a rock
   the swimmer is pressed against cannot cut through a hand; and through a longer lens than the world (51° against
   62°), which stops things at arm's length being stretched towards the edges of the picture.
+- **Legs** (`src/body/legs.ts`): hang upright in the water and look down, and there they are: hips with a
+  weight belt, thighs held forward and knees bent the way a diver sits in the water, pads on the knees, boots,
+  and a pair of yellow fins kicking slowly to keep you there (faster when you go up, down or sideways). Swim,
+  and the body lies back along its way: the legs trail behind and are gone. Four bones a leg (thigh, shin,
+  foot, the far half of the blade, which bends), posed from the base of the neck in the frame the view is
+  pitched in. There is no chest: someone looking down their body looks over it, and one drawn where it is
+  would be most of the picture; and legs hanging straight down would be hidden under the hips.
 - **Breath** (`src/body/breath.ts`): every five or six seconds, sooner when working, a run of some forty bubbles
   leaves the regulator by the cheeks and rises past the mask, with the sound of it. Each is a bubble like the
   world's own, a closed-form climb from where it was let go to the surface; hover and look up, and the trail is
@@ -217,7 +224,8 @@ you look.
 - `node tests/browser/body-shots.mjs` saves contact sheets of the stroke and the other poses to
   `test-results/shots/`.
 
-Not there yet: a wash behind the propeller, legs and fins when you look down.
+Not there yet: a wash behind the propeller; the kick of a breaststroke (the legs are out of sight while
+swimming, so there is none).
 
 What already differs from the original, on an Apple M3 with 8 GB at High detail. `npm run bench` opens both
 side by side and lets them take turns, a few dozen frames each: a laptop slows by half as it warms up, so timings
@@ -230,7 +238,7 @@ taken minutes apart cannot be compared.
 | Load time on a cool machine (separate sittings) | 3.4 s | 1.6 s |
 | Peak memory while loading, page / whole browser | 1.1 GB / 1.9 GB | 0.5 GB / 1.2 GB |
 | Loading bar | timed animation | real progress from the generator |
-| Shipped file | 97 kB | 186 kB (75 kB gzipped), with the swimmer, the opening, the moods, the lamp, jellyfish and turtles that the original does not have. The shader code the shaders share is in the file once and joined to each when the page starts (spliced into each, it was there eight times: 28 kB), and the build gives the shaders' own names short ones (12 kB) |
+| Shipped file | 97 kB | 190 kB (76 kB gzipped), with the swimmer from hands to fins, the opening, the moods, the lamp, jellyfish and turtles that the original does not have. The shader code the shaders share is in the file once and joined to each when the page starts (spliced into each, it was there eight times: 28 kB), and the build gives the shaders' own names short ones (12 kB) |
 | Frame at 2560×1440, six viewpoints | 45.7 / 35.4 / 26.9 / 38.5 / 35.9 / 35.7 ms | the same within 3 % |
 | Frame at 640×360, six viewpoints | 26.2 / 19.1 / 19.6 / 20.3 / 21.2 / 19.2 ms | the same within 3 % |
 | 60 s fly-through at 2560×1440, average | 37.8 ms | 37.1 ms |

@@ -26,7 +26,29 @@ export const RIGHT = 0;
 export const LEFT = ARM_BONES;
 export const SCOOTER_BONE = ARM_BONES * 2;
 export const PROPELLER_BONE = ARM_BONES * 2 + 1;
-export const BONES = ARM_BONES * 2 + 2;
+/** A leg's bones, counted from its first: thigh (from the hip), shin, foot, and the far half of the fin's blade. */
+export const LEG = { thigh: 0, shin: 1, foot: 2, blade: 3 } as const;
+export const LEG_BONES = 4;
+export const LEG_RIGHT = ARM_BONES * 2 + 2;
+export const LEG_LEFT = LEG_RIGHT + LEG_BONES;
+export const WAIST_BONE = LEG_LEFT + LEG_BONES;
+export const BONES = WAIST_BONE + 1;
+
+/** A leg in its bind pose hangs from the hip at the origin along -y: metres down to the knee and the ankle. */
+export const KNEE = 0.43;
+export const ANKLE = 0.84;
+/** Where the toes are, which is where the fin's blade begins; how far it leans ahead of the leg's line (radians). */
+export const TOE = [0, -1.0, -0.03] as const;
+export const FIN_TILT = 0.2;
+/** How far along the blade from the toes it bends. */
+export const BLADE_JOINT = 0.3;
+/** Where each bone of a leg begins in the bind pose (both legs alike). */
+export const LEG_BIND = [
+  [0, 0, 0],
+  [0, -KNEE, 0],
+  [0, -ANKLE, 0],
+  [0, TOE[1] - BLADE_JOINT * Math.cos(FIN_TILT), TOE[2] - BLADE_JOINT * Math.sin(FIN_TILT)],
+] as const;
 
 /**
  * The four fingers of the right hand in the bind pose: where the knuckle is (from the wrist), which way the
@@ -417,6 +439,59 @@ export function poseRigid(
   setBone(pose, bone, x, y, z);
 }
 
+/** Sets the registers to a turn of `angle` about the x axis (positive swings what hangs down towards -z, ahead). */
+function aboutX(angle: number) {
+  rx = Math.sin(angle / 2);
+  ry = 0;
+  rz = 0;
+  rw = Math.cos(angle / 2);
+}
+
+/** Poses the waist: its top at a point, hanging at `lean` from straight down (radians about x). */
+export function poseWaist(pose: Pose, x: number, y: number, z: number, lean: number): void {
+  aboutX(lean);
+  setBone(pose, WAIST_BONE, x, y, z);
+}
+
+/**
+ * Poses a leg from its hip: the whole leg at `lean` from straight down and swung by `swing` at the hip, held
+ * `apart` from the other (radians, positive towards +x) and turned out by `splay` (about the leg's own length); the knee bent back by `knee`, the foot let fall by
+ * `ankle`, the fin's blade bent by `flex`.
+ */
+export function poseLeg(
+  pose: Pose,
+  first: number,
+  x: number,
+  y: number,
+  z: number,
+  lean: number,
+  swing: number,
+  apart: number,
+  splay: number,
+  knee: number,
+  ankle: number,
+  flex: number,
+): void {
+  aboutX(lean + swing);
+  setBone(pose, first + LEG.thigh, x, y, z);
+  // out to the side at the hip (about the way the leg faces), and turned out about its own length
+  bend(pose, first + LEG.thigh, first + LEG.thigh, 0, 0, 1, apart);
+  bend(pose, first + LEG.thigh, first + LEG.thigh, 0, 1, 0, splay);
+  bend(pose, first + LEG.shin, first + LEG.thigh, 1, 0, 0, -knee);
+  attach(pose, first + LEG.shin, first + LEG.thigh, 0, -KNEE, 0);
+  bend(pose, first + LEG.foot, first + LEG.shin, 1, 0, 0, ankle);
+  attach(pose, first + LEG.foot, first + LEG.shin, 0, KNEE - ANKLE, 0);
+  bend(pose, first + LEG.blade, first + LEG.foot, 1, 0, 0, flex);
+  attach(
+    pose,
+    first + LEG.blade,
+    first + LEG.foot,
+    LEG_BIND[3][0] - LEG_BIND[2][0],
+    LEG_BIND[3][1] - LEG_BIND[2][1],
+    LEG_BIND[3][2] - LEG_BIND[2][2],
+  );
+}
+
 /**
  * What the shader needs to move a vertex with a bone: per bone a quaternion q and an offset t, such that a
  * bind-pose point v goes to rotate(q, v) + t. Written as 4 floats each: all the q, then all the t.
@@ -427,10 +502,12 @@ export function writeSkin(pose: Pose, out: Float32Array): void {
   for (let b = 0; b < BONES; b++) {
     const arm = b < ARM_BONES * 2;
     const k = arm ? (b % ARM_BONES) * 3 : 0;
-    // where the bone begins in the bind pose (the left arm is the right arm's mirror image; gear begins at 0)
+    // where the bone begins in the bind pose (the left arm is the right arm's mirror image; gear and the waist
+    // begin at 0; a leg's bones down its length)
+    const legBone = b >= LEG_RIGHT && b < WAIST_BONE ? LEG_BIND[(b - LEG_RIGHT) % LEG_BONES]! : null;
     const bindX = arm ? BIND[k]! * (b < ARM_BONES ? 1 : -1) : 0;
-    const bindY = arm ? BIND[k + 1]! : 0;
-    const bindZ = arm ? BIND[k + 2]! : 0;
+    const bindY = arm ? BIND[k + 1]! : legBone ? legBone[1] : 0;
+    const bindZ = arm ? BIND[k + 2]! : legBone ? legBone[2] : 0;
     rotate(q[b * 4]!, q[b * 4 + 1]!, q[b * 4 + 2]!, q[b * 4 + 3]!, bindX, bindY, bindZ);
     out[b * 4] = q[b * 4]!;
     out[b * 4 + 1] = q[b * 4 + 1]!;

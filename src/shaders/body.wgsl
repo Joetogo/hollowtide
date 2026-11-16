@@ -8,14 +8,14 @@
 // a baked volume, so they get the same treatment: the same detail texture for grain and wear, real relief
 // (folds, seams, ribs, studs) worked out as a height and lit as a slope, the same sun, caustics, ambient and fog.
 
-const BONES = 40; // as in src/body/skeleton.ts (a test holds the two together)
+const BONES = 49; // as in src/body/skeleton.ts (a test holds the two together)
 // for every bone a rotation q and an offset t: a point v of the bind pose goes to rotate(q, v) + t
 struct Bones { q: array<vec4f, BONES>, t: array<vec4f, BONES> }
 @group(1) @binding(0) var<uniform> bones: Bones;
 
 // materials, as numbered in src/body/meshes.ts
 const NEOPRENE = 0; const FABRIC = 1; const RUBBER = 2; const ARMOUR = 3; const STRAP = 4; const COMPUTER = 5;
-const SCREEN = 6; const PAINT = 7; const TRIM = 8; const LAMP = 9; const BLADES = 10;
+const SCREEN = 6; const PAINT = 7; const TRIM = 8; const LAMP = 9; const BLADES = 10; const SUIT = 11;
 
 const ELBOW = .29; // along the bind pose's arm, metres from the shoulder (src/body/skeleton.ts)
 const WRIST = .55;
@@ -114,6 +114,11 @@ fn relief(p: vec3f, material: u32, fine: f32) -> f32 {
     let seam = seamOf(p); let on = step(ELBOW, p.y);
     h -= .0008 * smoothRamp(.0019, .0, abs(seam)) * on;
     h += .00035 * (smoothRamp(.0012, .0004, abs(abs(seam) - .0034)) * step(.4, fract(p.y * 210.))) * on * fine;
+  } else if (material == SUIT) {
+    // the legs: long soft creases down them (fading out on the hips), and the neoprene's embossed face
+    let girth = length(p.xz);
+    h += .0006 * sin(around * 7. + sin(p.y * 23.) * 1.2) * smoothRamp(.12, .095, girth) * smoothRamp(-.04, -.12, p.y);
+    h += .00011 * (abs(fract(around * girth * 300.) - .5) + abs(fract(p.y * 300.) - .5)) * fine;
   } else if (material == FABRIC) {
     // a knit: ribs across the hand
     h += .00013 * sin(p.y * 2400.) * fine;
@@ -175,6 +180,13 @@ fn bodyFragment(v: BodyVarying) -> @location(0) vec4f {
       albedo = mix(albedo, vec3f(.55, .78, .80) * (.6 + .5 * mid.height), chevrons(p) * .85 * mix(1., .5, wear));
       let pad = elbowPad(p);
       albedo = mix(albedo, vec3f(.055, .06, .068) * (.6 + .7 * mid.height), pad);
+      gloss = mix(.42, .2, wear); bump = .75; sheen = .45; bubbly = 1.;
+    }
+    case SUIT: {
+      // the wetsuit of the legs and the hips (which hang below y = 0): the same neoprene, the sleeve's teal in a
+      // stripe down each side
+      albedo = mix(vec3f(.040, .047, .060), vec3f(.09, .10, .115), wear * .55) * (.6 + .7 * mid.height);
+      albedo = mix(albedo, mix(vec3f(.012, .33, .37), vec3f(.05, .22, .25), wear * .6) * (.55 + .8 * mid.height), smoothRamp(.3, .24, abs(abs(around) - 1.5708)) * smoothRamp(.75, .45, abs(n0.y)));
       gloss = mix(.42, .2, wear); bump = .75; sheen = .45; bubbly = 1.;
     }
     case FABRIC: {

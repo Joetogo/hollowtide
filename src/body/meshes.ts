@@ -18,6 +18,10 @@ import {
   UPPER_ARM,
   WRIST,
 } from './skeleton';
+import { leg, waist } from './legs';
+import { MATERIAL } from './materials';
+import { LEG_LEFT, LEG_RIGHT, WAIST_BONE } from './skeleton';
+export { MATERIAL };
 
 /** The scooter's handles, from its origin: sideways (either way), forward, up. */
 export const HANDLE = [0.19, -0.1, 0.06] as const;
@@ -27,21 +31,16 @@ export const PROPELLER_AT = -0.19;
 export const GRIP = [0.088, 0.028] as const;
 
 /** Positions in `BodyMeshes.ranges`. */
-export const PART = { sleeveRight: 0, handRight: 1, sleeveLeft: 2, handLeft: 3, scooter: 4, propeller: 5 } as const;
-
-/** What a surface is made of: the numbers shaders/body.wgsl knows. */
-export const MATERIAL = {
-  neoprene: 0,
-  fabric: 1, // the back of the glove
-  rubber: 2, // its palm and fingertips
-  armour: 3, // the pads over the knuckles and fingers
-  strap: 4,
-  computer: 5,
-  screen: 6,
-  paint: 7,
-  trim: 8,
-  lamp: 9,
-  blades: 10,
+export const PART = {
+  sleeveRight: 0,
+  handRight: 1,
+  sleeveLeft: 2,
+  handLeft: 3,
+  scooter: 4,
+  propeller: 5,
+  legRight: 6,
+  legLeft: 7,
+  waist: 8,
 } as const;
 
 export interface BodyMeshes {
@@ -417,7 +416,17 @@ function propeller(): BuiltMesh {
 }
 
 export function buildBody(): BodyMeshes {
-  const meshes = [sleeve(1), hand(1), sleeve(-1), hand(-1), scooter(), propeller()];
+  const meshes = [
+    sleeve(1),
+    hand(1),
+    sleeve(-1),
+    hand(-1),
+    scooter(),
+    propeller(),
+    leg(LEG_RIGHT),
+    leg(LEG_LEFT),
+    waist(WAIST_BONE),
+  ];
   const ranges: MeshRange[] = [];
   let vertexCount = 0;
   let indexCount = 0;

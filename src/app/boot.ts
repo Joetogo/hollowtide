@@ -505,6 +505,7 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
         (camera.yaw - yawBefore) * turned,
         (camera.pitch - pitchBefore) * turned,
       );
+      body.pitch = camera.pitch;
       poseBody(body, renderer.body, dt);
       sound!.scooter(body.throttle);
       // the stroke moves the head a little: for the picture only, the swimmer's place and heading stay as they are

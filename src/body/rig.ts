@@ -6,6 +6,7 @@
 // and a grip on the scooter's handles. Everything is in view space: metres from the eye, x right, y up,
 // z back (forward is -z).
 import type { Drive, Intent } from '../camera/controls';
+import { PELVIS } from './legs';
 import { GRIP, HANDLE, PART, PROPELLER_AT } from './meshes';
 import {
   BONES,
@@ -19,6 +20,10 @@ import {
   SCOOTER_BONE,
   writeSkin,
   type ArmTarget,
+  LEG_LEFT,
+  LEG_RIGHT,
+  poseLeg,
+  poseWaist,
 } from './skeleton';
 
 /** Seconds for one breaststroke: glide, catch, pull, recover. */
@@ -97,6 +102,12 @@ export interface BodyState {
   hands: [ArmTarget, ArmTarget];
   /** false until the hands have been somewhere: the first frame puts them straight where they belong */
   settled: boolean;
+  /** the way the swimmer looks, radians above level: set by whoever has the camera, before the body is posed */
+  pitch: number;
+  /** 0 = hanging upright in the water, 1 = lying along the way they swim (the legs then trail behind) */
+  lean: number;
+  /** the clock of the legs' kick, radians */
+  kick: number;
 }
 
 export const createBodyState = (): BodyState => ({
@@ -119,6 +130,9 @@ export const createBodyState = (): BodyState => ({
   rush: 0,
   hands: [createArmTarget(), createArmTarget()],
   settled: false,
+  pitch: 0,
+  lean: 0,
+  kick: 0,
 });
 
 const approach = (value: number, target: number, step: number) =>
@@ -193,6 +207,10 @@ export function stepBody(
   } else state.glide += dt;
   const swimming = (wanted || under || state.glide < GLIDE_HOLD) && state.equip === 0;
   state.swim = approach(state.swim, swimming ? 1 : 0, dt / 0.4);
+  // swimming or riding, the body lies along its way; hanging still it comes upright, and the legs kick slowly
+  // to stay there, faster when the swimmer is going up, down or sideways
+  state.lean = approach(state.lean, swimming || state.equip > 0 ? 1 : 0, dt / 0.9);
+  state.kick = (state.kick + dt * (1.7 + 2.4 * state.scull)) % (Math.PI * 2);
 
   const held = state.equip > 0.9;
   drive.jet = held && intent.fast;
@@ -217,6 +235,23 @@ export function stepBody(
 
 // ---------------------------------------------------------------- posing
 
+/** Where the body turns when it goes from upright to lying along its way: the base of the neck, from the eye. */
+const NECK = [0, -0.13, 0.09] as const;
+/**
+ * The top of the waist from the neck, in the upright body; and how far each hip is from the middle. (It hangs
+ * well behind the eye: someone looking down their body leans over it, and sees their legs past their hips.)
+ */
+const WAIST_TOP = [0, -0.42, 0.11] as const;
+const HIP_APART = 0.094;
+/** Upright in the water: how far forward the thighs are held, and how far the knees are bent (radians). */
+const SIT = 0.8;
+const KNEES = 0.5;
+/** How far the body lies back when it swims, radians from upright. */
+const PRONE = 1.25;
+/** The legs are posed and drawn once the swimmer looks this far down their own body (radians): before that
+ * they are below the picture. */
+const LEGS_SEEN = 0.75;
+
 /** What to draw this frame: which meshes, and where every bone has taken its part of them. */
 export interface BodyParts {
   count: number;
@@ -226,7 +261,7 @@ export interface BodyParts {
 }
 export const createBodyParts = (): BodyParts => ({
   count: 0,
-  mesh: new Uint8Array(6),
+  mesh: new Uint8Array(9),
   skin: new Float32Array(BONES * 8),
 });
 
@@ -457,6 +492,51 @@ export function poseBody(state: BodyState, parts: BodyParts, dt = 0): void {
     );
     parts.mesh[parts.count++] = PART.scooter;
     parts.mesh[parts.count++] = PART.propeller;
+  }
+
+  // ---- the waist and the legs. The body turns at the base of the neck: upright it hangs straight down from
+  // there, swimming it lies back along the way it goes. Seen from the eye, which looks `pitch` above level, it
+  // hangs at `hang` from straight down the picture: only a swimmer who is upright and looks down sees it.
+  const hang = -state.pitch - PRONE * smooth(state.lean);
+  if (state.shown >= 1 && hang > LEGS_SEEN) {
+    const cp = Math.cos(state.pitch);
+    const sp = Math.sin(state.pitch);
+    const cb = Math.cos(hang);
+    const sb = Math.sin(hang);
+    const neckY = NECK[1] * cp + NECK[2] * sp;
+    const neckZ = -NECK[1] * sp + NECK[2] * cp;
+    // where a point of the upright body (given from the neck) is in view space
+    const atY = (y: number, z: number) => neckY + y * cb - z * sb;
+    const atZ = (y: number, z: number) => neckZ + y * sb + z * cb;
+    const upright = 1 - smooth(state.lean);
+    // the hips tip back a little, as they do when the knees come forward
+    poseWaist(pose, 0, atY(WAIST_TOP[1], WAIST_TOP[2]), atZ(WAIST_TOP[1], WAIST_TOP[2]), hang - 0.3 * upright);
+    const hipY = WAIST_TOP[1] - PELVIS * Math.cos(0.3 * upright) - 0.02;
+    const hipZ = WAIST_TOP[2] - PELVIS * Math.sin(0.3 * upright) * 0.5;
+    const work = 1 + 0.6 * state.scull;
+    for (const side of [1, -1] as const) {
+      // Upright, a swimmer sits in the water: thighs forward, knees bent, fins hanging below them (legs hanging
+      // straight down would be hidden under the hips of whoever looks down at them). On that, a slow flutter:
+      // the thigh swings, the knee gives on the way back, the fin trails behind the foot.
+      const beat = state.kick + (side > 0 ? 0 : Math.PI);
+      poseLeg(
+        pose,
+        side > 0 ? LEG_RIGHT : LEG_LEFT,
+        HIP_APART * side,
+        atY(hipY, hipZ),
+        atZ(hipY, hipZ),
+        hang,
+        SIT * upright + 0.17 * work * Math.sin(beat),
+        0.14 * side,
+        -0.16 * side,
+        KNEES * upright + 0.12 + 0.24 * work * (0.5 - 0.5 * Math.cos(beat - 0.9)),
+        0.42 * upright - 0.24 * work * Math.cos(beat),
+        -0.32 * work * Math.cos(beat - 0.6),
+      );
+    }
+    parts.mesh[parts.count++] = PART.waist;
+    parts.mesh[parts.count++] = PART.legRight;
+    parts.mesh[parts.count++] = PART.legLeft;
   }
   writeSkin(pose, parts.skin);
 }

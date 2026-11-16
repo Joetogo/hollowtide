@@ -64,6 +64,60 @@ try {
   check(drawn.clean, 'a frame drawn after the body is taken away is the same as one drawn before it, to the bit');
   check(drawn.hidden, 'a body that is not shown draws nothing');
 
+  // ---- the legs: there for a swimmer who hangs upright and looks down, and behind one who swims
+  const legs = await chrome.page.evaluate(async () => {
+    const h = window.__hollowtide.harness;
+    const [x, y, z] = h.viewpoints()[3];
+    // from two and a half metres above the fourth viewpoint, looking ahead and 75 degrees down
+    const pose = [x, y + 2.5, z, x + 0.155, y + 2.5 - 0.966, z + 0.207];
+    const decode = async (url) => {
+      const bitmap = await createImageBitmap(await (await fetch(url)).blob());
+      const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+      const context = canvas.getContext('2d');
+      context.drawImage(bitmap, 0, 0);
+      return context.getImageData(0, 0, bitmap.width, bitmap.height);
+    };
+    const shot = async (state) => {
+      h.poseBody(state);
+      const image = await decode(h.capture(pose, 3).png);
+      h.poseBody(null);
+      return image;
+    };
+    // the share of the lower middle of the picture, where legs would be, that differs between two pictures
+    const share = (a, b) => {
+      const { width, height } = a;
+      let [n, total] = [0, 0];
+      for (let py = Math.floor(height * 0.45); py < height; py++)
+        for (let px = Math.floor(width * 0.3); px < width * 0.7; px++) {
+          const i = (py * width + px) * 4;
+          total++;
+          if (
+            Math.abs(a.data[i] - b.data[i]) +
+              Math.abs(a.data[i + 1] - b.data[i + 1]) +
+              Math.abs(a.data[i + 2] - b.data[i + 2]) >
+            12
+          )
+            n++;
+        }
+      return n / total;
+    };
+    // The arms do not depend on which way the swimmer looks, the legs do: the same body told that it looks
+    // level has the same arms and no legs in the picture.
+    const upright = share(await shot({ pitch: -1.31, kick: 1 }), await shot({ pitch: 0, kick: 1 }));
+    const swimming = { lean: 1, swim: 1, phase: 0 };
+    const prone = share(await shot({ pitch: -1.31, ...swimming }), await shot({ pitch: 0, ...swimming }));
+    return { upright, prone, errors: h.gpuErrors() };
+  });
+  check(
+    legs.upright > 0.2,
+    `upright and looking down, the swimmer sees their legs: ${(legs.upright * 100).toFixed(0)} % of the lower middle of the picture`,
+  );
+  check(legs.prone === 0, `swimming, they trail behind out of sight (${(legs.prone * 100).toFixed(1)} % of it)`);
+  check(
+    legs.errors.length === 0,
+    `no shader or validation errors with the legs${legs.errors[0] ? ': ' + legs.errors[0] : ''}`,
+  );
+
   // ---- what it costs: a frame with the body against one without. A warm laptop slows down and speeds up from
   // one second to the next, so the two are timed in short turns side by side, and what counts is the difference
   // within each pair of turns, not between two pools of frames taken at different temperatures.
