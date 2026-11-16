@@ -21,13 +21,13 @@ export function ballInView(view: CullView, x: number, y: number, z: number, radi
   const dz = z - camera.z;
   const forward = dx * camera.fx + dy * camera.fy + dz * camera.fz;
   if (forward < -radius) return false;
-  const tanX = TAN_HALF_FOV * view.aspect;
+  const tanY = TAN_HALF_FOV * camera.wide;
+  const tanX = tanY * view.aspect;
   // how far outside a side plane the centre is, measured across the view: the plane is tilted, so the ball
   // reaches further across than its radius
   if (Math.abs(dx * camera.rx + dz * camera.rz) - forward * tanX > radius * Math.sqrt(1 + tanX * tanX)) return false;
   return (
-    Math.abs(dx * camera.ux + dy * camera.uy + dz * camera.uz) - forward * TAN_HALF_FOV <=
-    radius * Math.sqrt(1 + TAN_HALF_FOV * TAN_HALF_FOV)
+    Math.abs(dx * camera.ux + dy * camera.uy + dz * camera.uz) - forward * tanY <= radius * Math.sqrt(1 + tanY * tanY)
   );
 }
 

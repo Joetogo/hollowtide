@@ -13,6 +13,11 @@ export interface Settings {
   /** draw-distance scale it settled on last time */
   detail: number;
   muted: boolean;
+  /**
+   * Swim the original's way: gliding at a steady speed, with no body in view. Off by default, unless the
+   * system asks for reduced motion.
+   */
+  classic: boolean;
   /** a phone or tablet: touch is the main input */
   readonly mobile: boolean;
 }
@@ -22,7 +27,10 @@ interface Stored {
   pixels?: number;
   detail?: number;
   muted?: boolean;
+  classic?: boolean;
 }
+
+const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const read = (key: string): string | null => {
   try {
@@ -75,6 +83,7 @@ export function loadSettings(): Settings {
     pixels: pixels || (level > 1 ? 41e4 : mobile ? 1280 * 720 : MAX_PIXELS),
     detail: detail || 1,
     muted: !!stored.muted,
+    classic: stored.classic ?? reducedMotion(),
     mobile,
   };
 }
@@ -82,7 +91,12 @@ export function loadSettings(): Settings {
 export function saveSettings(settings: Settings, fullPixels: number): void {
   // at full resolution nothing is remembered for the pixel count, so a larger window later starts at its own full size
   const pixels = settings.pixels < fullPixels ? Math.floor(settings.pixels) : undefined;
-  write(KEY, JSON.stringify({ level: settings.level, pixels, detail: settings.detail, muted: settings.muted }));
+  // the swimming style is remembered only once it differs from what the system's motion setting implies
+  const classic = settings.classic === reducedMotion() ? undefined : settings.classic;
+  write(
+    KEY,
+    JSON.stringify({ level: settings.level, pixels, detail: settings.detail, muted: settings.muted, classic }),
+  );
 }
 
 /** Marks a load as started or finished (see LOADING_KEY). */

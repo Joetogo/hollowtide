@@ -19,6 +19,9 @@ import { createWater } from './passes/water';
 import { createScene, type Scene } from './scene';
 import { createTargets, renderSize, type Targets } from './targets';
 import { uploadWorld, type WorldBuffers } from './world';
+import type { BodyMeshes } from '../body/meshes';
+import { createBodyParts, type BodyParts } from '../body/rig';
+import { createBodyPass } from './passes/body';
 
 export interface Renderer {
   readonly gpu: Gpu;
@@ -35,6 +38,10 @@ export interface Renderer {
   targets: Targets;
   /** While set, the scene pass is skipped and whatever the scene target holds is composited (used by the harness). */
   holdScene: boolean;
+  /** The swimmer's body as it is to be drawn in the next frame: the app poses it, `count` 0 draws none. */
+  readonly body: BodyParts;
+  /** Gives the body its meshes. */
+  setBody(meshes: BodyMeshes): void;
   /** Uploads a world and bakes the shadow map for it. */
   setWorld(data: WorldData): Promise<void>;
   /** Matches the render size to the canvas. Returns true if the targets were rebuilt. */
@@ -51,12 +58,13 @@ export async function createRenderer(
 ): Promise<Renderer> {
   const { device, queue, canvas, context } = gpu;
   const scene = createScene(gpu, quality);
-  const [blit, post, shadow, sceneDraw, shafts] = await Promise.all([
+  const [blit, post, shadow, sceneDraw, shafts, bodyDraw] = await Promise.all([
     createBlit(gpu, scene.linearSampler),
     createPost(gpu, scene.frameBuffer, scene.linearSampler, quality.samples),
     createShadowBake(gpu, scene, quality),
     createScenePass(gpu, scene, quality),
     createShafts(gpu, scene, quality),
+    createBodyPass(gpu, scene, quality),
   ]);
   const [water] = await Promise.all([createWater(gpu, blit, scene.water), bakeDetail(gpu, blit, scene.detail)]);
   const bloom = createBloom(blit);
@@ -74,6 +82,8 @@ export async function createRenderer(
     pixelBudget: MAX_PIXELS,
     targets: undefined as unknown as Targets, // set by the resize() below
     holdScene: false,
+    body: createBodyParts(),
+    setBody: (meshes) => bodyDraw.setMeshes(meshes),
 
     async setWorld(data) {
       const next = await uploadWorld(gpu, scene, data);
@@ -135,6 +145,7 @@ export async function createRenderer(
         const pass = encoder.beginRenderPass(scenePass);
         if (renderer.world) {
           updateCullView(cullView, targets.width, targets.height, renderer.detail);
+          bodyDraw.encode(pass, renderer.body); // nearest first
           sceneDraw.encode(pass, renderer.world, cullView);
         }
         pass.end();

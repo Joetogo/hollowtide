@@ -32,6 +32,7 @@ Done so far:
 
 | 9. Shell | Loading bar, menu, keyboard / mouse / touch, collision, dynamic resolution, detail levels and crash fallback, stats line, sound | A scripted swim of 536 frames (easing, turning, sprinting into rock and sliding along it) traces the original's path bit for bit; no main-thread task over 50 ms while loading; starts and draws in Safari 27 from `file://` |
 | 10. Speed-ups that do not change a pixel | The world is built by two workers side by side and starts alongside shader compilation; the generator itself is about twice as fast; boulders outside the view are not drawn | 48 frames at High and 48 at Medium are bit-identical before and after (`tests/browser/same.mjs`); all 84 generator outputs still have the original's checksums; loading takes about 40 % less |
+| 11. In the water | Your own arms in first person, swimming a breaststroke; a hand-held scooter on `Shift`; the original's glide on `C` | Frames without the body are unchanged to the bit; 18 unit tests of the skeleton and the stroke; a browser test swims, rides the scooter and switches to the glide and back |
 
 **Parity gate: passed.** The rebuild is the original, from scratch: `dist/index.html` builds the same world (all
 84 generator outputs have the original's checksums), draws the same frames (at High and Medium at most 11 of
@@ -42,8 +43,38 @@ same way. What is left is the part that goes beyond the original: milestones 10 
 npm run build && open dist/index.html     # or: npm run dev
 ```
 
-Controls are the original's: `W A S D` swim, `Q` / `E` down / up, `Shift` faster, `1`–`6` viewpoints, `Esc` menu,
-`M` mute, `H` stats. On a touchscreen: hold to swim forward, slide to steer, a second finger to go faster.
+Controls: `W A S D` swim, `Q` / `E` down / up, `Shift` brings up the scooter and rides it, `1`–`6` viewpoints,
+`Esc` menu, `M` mute, `H` stats, `C` switches between swimming with a body and the original's steady glide. On a
+touchscreen: hold to swim forward, slide to steer, a second finger for the scooter.
+
+### The swimmer
+
+Not in the original. Holding forward swims a breaststroke: the hands shoot forward, glide, turn outwards, press
+out past the edges of the view and come back under the chest, and the speed surges with each pull instead of
+holding steady (the same ground is covered). Moving sideways, backwards, up or down is done by sculling. `Shift`
+brings a scooter up from below, both hands on its handles, and it pulls at the original's fast speed wherever
+you look.
+
+- **Meshes** (`src/body/meshes.ts`, `sculpt.ts`): each arm is a wetsuit sleeve and a glove, sculpted as distance
+  functions (a few dozen rounded shapes melted together) and meshed with surface nets, like the whale tail. The
+  glove has a palm with the ball of the thumb, knuckles, jointed fingers, pads over the knuckles and a wrist
+  strap; the left forearm carries a dive computer with a lit display. How much of the surrounding light each
+  vertex's own shape blocks is baked in when it is sculpted, so the gaps between fingers are dark for free.
+- **Skeleton** (`src/body/skeleton.ts`): 19 bones an arm: upper arm, a forearm in two parts so that it can twist,
+  hand, three bones a finger and three for the thumb. Each vertex follows one or two of them, so elbows, wrists
+  and knuckles bend without a seam. An arm is posed from what its hand should do: where the wrist is, which way
+  the fingers point and the palm faces, how the fingers are held.
+- **Motion** (`src/body/rig.ts`): the stroke is eight key poses joined by a smooth closed curve; the hands follow
+  it with a little give, hang back from a turning view, and are never quite the same from stroke to stroke. The
+  view nods on the pull. The body is posed in view space and drawn first, in the nearest tenth of the depth
+  range, so a rock the swimmer is pressed against cannot cut through a hand.
+- It is sculpted in the mesh worker after the world's own meshes, and arrives when it is done: the first frame
+  does not wait for it.
+- `node tests/browser/body-shots.mjs` saves contact sheets of the stroke and the other poses to
+  `test-results/shots/`.
+
+Not there yet: bubbles off the hands and a wash behind the propeller, legs and fins when you look down, a beam
+for the scooter's lamp.
 
 What already differs from the original, on an Apple M3 with 8 GB at High detail. `npm run bench` opens both
 side by side and lets them take turns, a few dozen frames each: a laptop slows by half as it warms up, so timings
@@ -55,7 +86,7 @@ taken minutes apart cannot be compared.
 | Load time, both measured in one sitting on a warm machine | 6.1 s | 3.6 s |
 | Peak memory while loading, page / whole browser | 1.1 GB / 1.9 GB | 0.5 GB / 1.2 GB |
 | Loading bar | timed animation | real progress from the generator |
-| Shipped file | 97 kB | 147 kB (its shaders keep readable names; renaming them at build time is on the list) |
+| Shipped file | 97 kB | 176 kB: 147 kB for what the original does (its shaders keep readable names; renaming them at build time is on the list), the rest is the swimmer |
 | Frame at 2560×1440, six viewpoints | 45.7 / 35.4 / 26.9 / 38.5 / 35.9 / 35.7 ms | the same within 3 % |
 | Frame at 640×360, six viewpoints | 26.2 / 19.1 / 19.6 / 20.3 / 21.2 / 19.2 ms | the same within 3 % |
 | 60 s fly-through at 2560×1440, average | 37.8 ms | 37.1 ms |

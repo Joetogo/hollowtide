@@ -146,18 +146,19 @@ Key mechanisms:
 
 ## Stage II detail
 
-**Milestone 11: in the water**
-- Your arms: two arms in a wetsuit with gloved hands, seen in first person and lit like everything else (sun,
-  caustics, shadow). Each is three rigid parts (upper arm, forearm, hand) placed every frame from the stroke
-  cycle and drawn through the existing set-piece pipeline from one small instance buffer: no new pipeline.
-- Swimming in strokes: holding forward runs a breaststroke cycle of reach, pull and glide. Speed surges on the
-  pull and fades through the glide instead of easing to a constant, and the view dips and rolls a little with
-  each pull. Strafing and turning scull with one hand; at rest the hands drift.
-- Jet propulsion: a hand-held scooter (two grips, a shrouded propeller). Holding the fast key brings it up:
-  steady fast travel, both hands on the grips, a stream of bubbles behind and a hum in the soundscape.
-- The original's glide stays as a setting ("classic"), which reduced motion also selects. The scripted swim test
-  keeps checking classic against the original; strokes get their own test (distance per stroke, speed bounds,
-  no passing through rock).
+**Milestone 11: in the water** (built; the README's section "The swimmer" says how)
+- Your arms: a wetsuit sleeve and a gloved hand each, sculpted and skinned to a skeleton of 19 bones an arm
+  (a forearm that twists, a wrist, jointed fingers), lit like everything else, with a dive computer on the left
+  wrist. Drawn by a small pipeline of their own, so the world's shaders are untouched.
+- Swimming in strokes: holding forward runs a breaststroke of eight key poses. Speed surges on the pull and
+  fades through the glide instead of easing to a constant, and the view nods with each pull. Moving any other
+  way is done by sculling.
+- Jet propulsion: a hand-held scooter (two grips, a ringed propeller, a lamp). Holding the fast key brings it
+  up: steady fast travel, both hands on the grips, a hum in the soundscape.
+- The original's glide stays as a setting (`C`), which reduced motion selects by default. The scripted swim
+  test keeps checking it against the original; the body has tests of its own.
+- Still to do here: bubbles off the hands and a wash behind the propeller, legs and fins when looking down, a
+  beam for the scooter's lamp, a wider view at speed.
 
 **Milestone 12: performance and fixes** (measured on your M3 / 8 GB first; a change stays only if the numbers move)
 - Distance-adaptive shadow filtering; fewer shaft steps with a wider blur; cheaper or lower-rate water texture.

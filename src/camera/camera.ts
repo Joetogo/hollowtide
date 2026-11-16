@@ -9,6 +9,8 @@ export interface Camera {
   yaw: number;
   /** radians, positive looks up */
   pitch: number;
+  /** how wide the view is, as a multiple of the usual field of view's tangent: 1, but for a moment at speed */
+  wide: number;
   // unit basis, filled by updateBasis(): forward, right (y is always 0) and up
   fx: number;
   fy: number;
@@ -21,7 +23,22 @@ export interface Camera {
 }
 
 export function createCamera(): Camera {
-  const camera = { x: 0, y: 0, z: 0, yaw: 0, pitch: 0, fx: 0, fy: 0, fz: -1, rx: 1, rz: 0, ux: 0, uy: 1, uz: 0 };
+  const camera = {
+    x: 0,
+    y: 0,
+    z: 0,
+    yaw: 0,
+    pitch: 0,
+    wide: 1,
+    fx: 0,
+    fy: 0,
+    fz: -1,
+    rx: 1,
+    rz: 0,
+    ux: 0,
+    uy: 1,
+    uz: 0,
+  };
   updateBasis(camera);
   return camera;
 }

@@ -1,4 +1,5 @@
 // The main thread's side of world generation: the density field on the GPU, then everything else in two workers.
+import type { BodyMeshes } from '../body/meshes';
 import type { Level } from '../config/quality';
 import type { CollisionField } from './collision';
 import type { WorldData } from './data';
@@ -7,6 +8,11 @@ import { STAGES, type FromWorker, type Grown, type SetPieces, type Stage, type T
 
 export interface Generated {
   world: WorldData;
+  /**
+   * The swimmer's arms and gear: not part of the world, and not in the first frame, so they are sculpted after
+   * the world's own meshes and arrive when they are done.
+   */
+  body: Promise<BodyMeshes>;
   /**
    * What the camera collides with. Nothing draws it, so the generator works it out after it has handed the
    * world over, and it arrives a moment later (about a tenth of a second).
@@ -24,7 +30,7 @@ export interface GenerateOptions {
   checksums?: Record<string, { length: number; sha256: string }>;
 }
 
-type Results = Extract<FromWorker, { type: 'setPieces' | 'world' | 'collision' }>;
+type Results = Extract<FromWorker, { type: 'setPieces' | 'body' | 'world' | 'collision' }>;
 
 /**
  * Runs one job in a worker of its own. `start` is called when the worker is up and sends it its job; each
@@ -50,6 +56,7 @@ function run(
           if (checksums) checksums[data.name] = { length: data.length, sha256: data.sha256 };
           break;
         case 'setPieces':
+        case 'body':
         case 'world':
         case 'collision':
           // the marks named abyssal:… are how the benchmark sees where loading time goes
@@ -91,6 +98,7 @@ export async function generateWorld(
   const pieces = deferred<SetPieces>();
   const grown = deferred<Grown>();
   const collision = deferred<CollisionField>();
+  const body = deferred<BodyMeshes>();
 
   // both workers start at once: one builds the meshes straight away, the other waits for the density field
   const workers = [createWorker(), createWorker()] as const;
@@ -105,6 +113,7 @@ export async function generateWorld(
   });
   const onResult = (result: Results) => {
     if (result.type === 'setPieces') pieces.resolve(result);
+    else if (result.type === 'body') body.resolve(result.body);
     else if (result.type === 'world') grown.resolve(result.world);
     else collision.resolve(result.collision);
   };
@@ -124,12 +133,12 @@ export async function generateWorld(
     .then(() => new Error('the world generator finished without a result'))
     .catch((error: unknown) => error)
     .then((error) => {
-      for (const result of [pieces, grown, collision]) result.reject(error); // no effect on those already settled
+      for (const result of [pieces, grown, collision, body]) result.reject(error); // no effect on those already settled
       for (const worker of workers) worker.terminate();
     });
 
   const [{ meshes, groundMap }, rest] = await Promise.all([pieces.promise, grown.promise]);
-  return { world: { ...rest, meshes, groundMap }, collision: collision.promise };
+  return { world: { ...rest, meshes, groundMap }, body: body.promise, collision: collision.promise };
 }
 
 export { STAGES };

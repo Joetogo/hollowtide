@@ -4,8 +4,8 @@
 // the generator worker while the loading bar reports on it, a first frame, and the menu. From then on the loop
 // runs: dynamic resolution, the swimmer, a frame, the stats line.
 import { createSoundscape } from '../audio/soundscape';
-import { lookAt } from '../camera/camera';
-import { createIntent, createSwimmer, stepSwimmer } from '../camera/controls';
+import { lookAt, updateBasis } from '../camera/camera';
+import { createIntent, createSwimmer, stepSwimmer, type Drive } from '../camera/controls';
 import { loadSettings, markLoading, saveSettings } from '../config/settings';
 import { quality, type Level } from '../config/quality';
 import { createGpu, StartupError } from '../gpu/context';
@@ -18,6 +18,7 @@ import { createHud } from '../ui/hud';
 import { bindInput } from '../ui/input';
 import { createMenu } from '../ui/menu';
 import { createHarness, type Harness } from './harness';
+import { createBodyState, poseBody, stepBody } from '../body/rig';
 
 export interface BootReport {
   adapter: string;
@@ -47,6 +48,9 @@ declare global {
 
 const TRANSFER_BYTES = 16 << 20;
 /** What the loading bar says while each stage of world generation runs. */
+/** How much wider the view gets on the scooter at full pull (as a share of the field of view's tangent). */
+const WIDE_AT_SPEED = 0.16;
+
 const LOADING = {
   density: 'Sculpting the seabed…',
   terrain: 'Carving canyons…',
@@ -215,9 +219,11 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       await renderer.setWorld(made.world);
       performance.mark('abyssal:uploaded');
       // what the swimmer collides with follows a moment later: nothing on screen waits for it
-      collisionReady = made.collision.then((field) => {
+      // and so do the swimmer's arms, which are not seen before the dive
+      collisionReady = Promise.all([made.collision, made.body]).then(([field, body]) => {
         collision = field;
         if (harness) harness.collision = field;
+        renderer.setBody(body);
       });
       if (harness) harness.generatedViewpoints = made.world.viewpoints;
       viewpoints = made.world.viewpoints;
@@ -232,6 +238,8 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
     // ---- controls and sound
     const camera = renderer.camera;
     const swimmer = createSwimmer();
+    const body = createBodyState();
+    const drive: Drive = { gain: 1, jet: false };
     const hud = createHud(document.getElementById('stats')!);
     sound = createSoundscape(camera, settings.muted);
     input = bindInput(canvas, intent, {
@@ -242,6 +250,10 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
         else if (code === 'KeyM') {
           settings.muted = !settings.muted;
           sound!.setMuted(settings.muted);
+          saveSettings(settings, fullPixels());
+        } else if (code === 'KeyC') {
+          // the original's steady glide with no body in view, or strokes and the scooter
+          settings.classic = !settings.classic;
           saveSettings(settings, fullPixels());
         } else if (code === 'Escape') menu.show(true);
         else if (code >= 'Digit1' && code <= 'Digit6') goTo(code.charCodeAt(5) - 49);
@@ -276,8 +288,32 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       renderer.detail = dynres.detail;
       if (renderer.resize()) settle(dynres);
       time += dt;
-      stepSwimmer(camera, swimmer, intent, collision, dt);
+      // the swimmer's body: in view while in the water, unless the classic glide is chosen
+      const [yawBefore, pitchBefore] = [camera.yaw, camera.pitch];
+      stepSwimmer(camera, swimmer, intent, collision, dt, settings.classic ? undefined : drive);
+      const turned = dt > 0 ? 1 / dt : 0;
+      stepBody(
+        body,
+        intent,
+        !menu.open && !settings.classic,
+        dt,
+        drive,
+        (camera.yaw - yawBefore) * turned,
+        (camera.pitch - pitchBefore) * turned,
+      );
+      poseBody(body, renderer.body, dt);
+      sound!.scooter(body.throttle);
+      // the stroke moves the head a little: for the picture only, the swimmer's place and heading stay as they are
+      const [y, pitch] = [camera.y, camera.pitch];
+      camera.y += body.heave;
+      camera.pitch += body.nod;
+      camera.wide = 1 + WIDE_AT_SPEED * body.rush; // and the scooter's pull widens the view
+      updateBasis(camera);
       renderer.render(time);
+      camera.y = y;
+      camera.pitch = pitch;
+      camera.wide = 1;
+      updateBasis(camera);
       hud.frame(frameMs, gpuMs, renderer.targets.width, renderer.targets.height, deviceWidth());
       hook.frames = (hook.frames ?? 0) + 1;
     };

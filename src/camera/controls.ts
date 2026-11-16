@@ -3,6 +3,14 @@
 import { moveWithCollision, type Body, type CollisionField } from '../world/collision';
 import { updateBasis, type Camera } from './camera';
 
+/** What the swimmer's body does to the motion (see src/body/rig.ts). */
+export interface Drive {
+  /** multiplies the forward swimming speed: the surge of a pull, the lull of a recovery */
+  gain: number;
+  /** the scooter is pulling: full speed ahead */
+  jet: boolean;
+}
+
 /** What the swimmer is asking for this frame. */
 export interface Intent {
   /** -1..1: backwards / forwards along the view direction */
@@ -58,6 +66,7 @@ const body: Body = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0 };
 /**
  * Advances the camera by dt seconds. The view follows the mouse through two smoothing stages, the velocity eases
  * towards what is asked for, and the move is made against the rock (if a collision field is given).
+ * Without `drive` this is the original's steady glide, to the bit; with one, the swimmer's body sets the pace.
  */
 export function stepSwimmer(
   camera: Camera,
@@ -65,6 +74,7 @@ export function stepSwimmer(
   intent: Intent,
   collision: CollisionField | null,
   dt: number,
+  drive?: Drive,
 ): void {
   swimmer.look1X += intent.turnX * 1.5 * dt;
   swimmer.look1Y += intent.turnY * dt;
@@ -89,9 +99,10 @@ export function stepSwimmer(
   pitch = pitch < -MAX_PITCH ? -MAX_PITCH : pitch > MAX_PITCH ? MAX_PITCH : pitch;
 
   // the velocity eases towards the wanted one: forward along the view, sideways level, up straight up
-  const speed = intent.fast ? FAST_SPEED : SPEED,
+  // (with a body, the stroke shapes the forward speed and the scooter, once it is up, pulls straight ahead)
+  const speed = (drive ? drive.jet : intent.fast) ? FAST_SPEED : SPEED,
     k = 1 - Math.exp(-dt * 4.5);
-  const mf = intent.forward,
+  const mf = drive ? (drive.jet ? 1 : intent.forward * drive.gain) : intent.forward,
     mr = intent.right,
     mu = intent.up;
   const cp = Math.cos(pitch),

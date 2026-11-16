@@ -57,8 +57,10 @@ export function writeFrame(
 ): void {
   const { x: cx, y: cy, z: cz, fx, fy, fz, rx, rz, ux, uy, uz } = camera;
   const aspect = width / height;
-  const sx = 1 / (TAN_HALF_FOV * aspect);
-  const sy = 1 / TAN_HALF_FOV;
+  // (camera.wide is 1 except while the view is widened; times 1 changes no bit)
+  const tan = TAN_HALF_FOV * camera.wide;
+  const sx = 1 / (tan * aspect);
+  const sy = 1 / tan;
   // view-projection, column-major: clip.xy = scaled right/up, clip.z = NEAR, clip.w = distance along forward
   const m = at.viewProj;
   data[m + 0] = rx * sx;
@@ -85,11 +87,11 @@ export function writeFrame(
   data[at.right] = rx;
   data[at.right + 1] = 0;
   data[at.right + 2] = rz;
-  data[at.tanHalfX] = TAN_HALF_FOV * aspect;
+  data[at.tanHalfX] = tan * aspect;
   data[at.up] = ux;
   data[at.up + 1] = uy;
   data[at.up + 2] = uz;
-  data[at.tanHalfY] = TAN_HALF_FOV;
+  data[at.tanHalfY] = tan;
   data[at.fwd] = fx;
   data[at.fwd + 1] = fy;
   data[at.fwd + 2] = fz;

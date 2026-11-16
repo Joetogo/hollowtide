@@ -2,8 +2,8 @@
 //
 // One fixed graph, built on the first click, key or touch (browsers do not let a page make sound before that) and
 // driven by a timer ten times a second, not by the frame loop. Layers: a low rumble, the wash of the surface, the
-// rush of water past the swimmer (which follows their speed), a slow drone, and now and then bubbles, chimes and
-// distant whale calls.
+// rush of water past the swimmer (which follows their speed, so it surges with every stroke), a slow drone, the
+// scooter's motor, and now and then bubbles, chimes and distant whale calls.
 import type { Camera } from '../camera/camera';
 import { Random } from '../math/random';
 import { clamp } from '../math/scalar';
@@ -23,12 +23,15 @@ export interface Soundscape {
   /** Call on every click, key and touch: builds the graph the first time, and resumes it when the browser allows. */
   wake(): void;
   setMuted(muted: boolean): void;
+  /** How hard the scooter's motor is running, 0..1; call as often as it changes. */
+  scooter(throttle: number): void;
 }
 
 export function createSoundscape(camera: Camera, startMuted: boolean): Soundscape {
   let context: AudioContext | null = null;
   let master: GainNode | null = null;
   let muted = startMuted;
+  let throttle = 0;
   // its own random stream: the sound never disturbs anything else that draws random numbers
   const random = new Random();
   random.reseed(300);
@@ -104,6 +107,12 @@ export function createSoundscape(camera: Camera, startMuted: boolean): Soundscap
       wire(new OscillatorNode(ac, { frequency: f }), [g]);
       wire(new OscillatorNode(ac, { frequency: f + rr(0.03, 0.11) }), [g]);
     });
+    // the scooter's motor: a buzz and its octave, muffled the way everything is under water, wavering a little
+    const motor = gain(0, out, gain(0.25, wet));
+    const motorFilter = filter('lowpass', 380, 1.4, motor);
+    const motorLow = wire(new OscillatorNode(ac, { type: 'sawtooth', frequency: 50 }), [gain(0.5, motorFilter)]);
+    const motorHigh = wire(new OscillatorNode(ac, { type: 'square', frequency: 100 }), [gain(0.16, motorFilter)]);
+    lfo(9.5, 2.2, motorLow.frequency);
     // pooled voices: oscillator -> envelope -> pan -> dry + reverb
     const pool = (count: number, send: number, type: OscillatorType = 'sine'): Voice[] =>
       Array.from({ length: count }, () => {
@@ -157,6 +166,11 @@ export function createSoundscape(camera: Camera, startMuted: boolean): Soundscap
       lz = camera.z;
       rush.gain.setTargetAtTime(0.5 * Math.pow(Math.min(speed / 26, 1), 1.2), t, 0.3);
       rushFilter.frequency.setTargetAtTime(220 + speed * 14, t, 0.3);
+      // the motor winds up and down with the throttle
+      motor.gain.setTargetAtTime(0.17 * throttle, t, 0.12);
+      motorLow.frequency.setTargetAtTime(50 + 34 * throttle, t, 0.18);
+      motorHigh.frequency.setTargetAtTime((50 + 34 * throttle) * 2.01, t, 0.18);
+      motorFilter.frequency.setTargetAtTime(300 + 260 * throttle, t, 0.2);
       // the surface is louder the nearer it is
       const shallow = clamp(1 + ly / 30, 0, 1);
       wash.gain.setTargetAtTime(0.25 + 0.55 * shallow * shallow, t, 0.5);
@@ -200,6 +214,9 @@ export function createSoundscape(camera: Camera, startMuted: boolean): Soundscap
         setInterval(build(context), 100);
       }
       if (context.state === 'suspended' && !document.hidden) void context.resume();
+    },
+    scooter(value) {
+      throttle = value;
     },
     setMuted(value) {
       muted = value;

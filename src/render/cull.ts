@@ -55,7 +55,8 @@ export function visibleRuns(
   const { start, lo, hi } = cells;
   const { runs, rowOrder } = view;
   const scale = fixedDistance ? 1 : view.detail * view.detail;
-  const tanX = TAN_HALF_FOV * view.aspect;
+  const tanY = TAN_HALF_FOV * view.camera.wide;
+  const tanX = tanY * view.aspect;
   const half = CELL_SIZE * 0.5;
   const reach = half + margin;
   const min2 = minDistance * minDistance * scale;
@@ -87,7 +88,7 @@ export function visibleRuns(
             if (forward >= 0 && Math.abs(px * rx + pz * rz) - reach * (Math.abs(rx) + Math.abs(rz)) <= forward * tanX) {
               visible =
                 Math.abs(px * ux + py * uy + pz * uz) - reach * (Math.abs(ux) + Math.abs(uz)) - reachY * Math.abs(uy) <=
-                forward * TAN_HALF_FOV;
+                forward * tanY;
             }
           }
         }

@@ -11,6 +11,7 @@ import type { Renderer } from '../render/renderer';
 import type { CellTable, MeshRange, WorldData } from '../world/data';
 import { generateWorld } from '../world/client';
 import { rockDistance, type CollisionField } from '../world/collision';
+import { createBodyState, poseBody, type BodyState } from '../body/rig';
 
 export interface FrameDiff {
   pixels: number;
@@ -54,6 +55,13 @@ export interface Harness {
     seconds?: number[],
     batch?: number,
   ): Promise<{ cpuMs: number[]; totalMs: number[]; size: number[] }>;
+  /**
+   * Puts the swimmer's body in view for the frames that follow, in the given state (see BodyState; what is left
+   * out is at rest, fully shown). With null, the body is taken out again, which is how every test starts.
+   */
+  poseBody(state: Partial<BodyState> | null): void;
+  /** The meshes of the body parts that the next frame will draw (PART in src/body/meshes.ts); empty when none. */
+  bodyParts(): number[];
   /** Draws a frame from where the camera is and sums it up: the mean colour (0..255) and the share of dark pixels. */
   frameStats(time: number): { mean: number[]; dark: number };
   /** The six viewpoints of the world being drawn: eye xyz, target xyz. */
@@ -300,6 +308,13 @@ export function createHarness(
       return { cpuMs, totalMs, size: [renderer.targets.width, renderer.targets.height] };
     },
 
+    poseBody(state) {
+      renderer.body.count = 0;
+      if (state) poseBody({ ...createBodyState(), shown: 1, ...state }, renderer.body);
+    },
+
+    bodyParts: () => [...renderer.body.mesh.slice(0, renderer.body.count)],
+
     frameStats(time) {
       renderer.render(time);
       const pixels = readCanvas();
@@ -403,13 +418,13 @@ export function createHarness(
     async generate(level) {
       const checksums: Record<string, Made> = {};
       const made = await generateWorld(device, createWorker, level, { checksums });
-      await made.collision; // its checksums come last
+      await Promise.all([made.collision, made.body]); // the collision field's checksums come last
       return checksums;
     },
 
     async useGeneratedWorld(level) {
-      const { world, collision } = await generateWorld(device, createWorker, level);
-      await collision; // not used here, but the generator should be finished before the next one starts
+      const { world, collision, body } = await generateWorld(device, createWorker, level);
+      await Promise.all([collision, body]); // not used here, but the generator should be finished before the next one starts
       await renderer.setWorld(world);
       viewpoints = world.viewpoints;
       return world.viewpoints;

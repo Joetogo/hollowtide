@@ -2,6 +2,7 @@
 // Two of them run side by side. One takes the density field: specks, collision, terrain, then the scattering of
 // plants, rocks, sponges, corals, animals and particles with the skylight volume. The other builds the meshes and
 // the ground map, which need nothing from the first. Nothing here touches the GPU or the page.
+import { buildBody } from '../body/meshes';
 import { clearancePoints } from '../camera/path';
 import type { Level } from '../config/quality';
 import { Random } from '../math/random';
@@ -54,6 +55,9 @@ async function buildSetPieces(scope: WorkerScope, level: Level, checksums: boole
   const groundMap = buildGroundMap();
   await made('groundMap', groundMap);
   scope.postMessage({ type: 'setPieces', meshes, groundMap }, buffersOf([meshes, groundMap]));
+  // last, because the swimmer's body is not seen until the swimmer dives in
+  const body = buildBody();
+  scope.postMessage({ type: 'body', body }, buffersOf(body));
   scope.postMessage({ type: 'done' }, []);
 }
 
