@@ -388,7 +388,9 @@ export function poseArm(
   const bendX = -ty / tl;
   const bendY = tx / tl;
   const thumb = first + BONE.thumb;
-  bend(pose, thumb, hand, 0, 1, 0, -target.thumbUnder * 0.95 * side);
+  // (and laid in against the first finger when the fingers are pressed together)
+  bend(pose, thumb, hand, 0, 0, 1, Math.min(target.spread, 0) * 0.62 * side);
+  bend(pose, thumb, thumb, 0, 1, 0, -target.thumbUnder * 0.95 * side);
   bend(pose, thumb, thumb, bendX, bendY, 0, target.thumbBend * 0.45);
   attach(pose, thumb, hand, THUMB.root[0] * side, THUMB.root[1], THUMB.root[2]);
   bend(pose, thumb + 1, thumb, bendX, bendY, 0, target.thumbBend * 0.75);

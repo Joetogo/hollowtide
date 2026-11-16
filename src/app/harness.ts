@@ -11,7 +11,8 @@ import type { Renderer } from '../render/renderer';
 import type { CellTable, MeshRange, WorldData } from '../world/data';
 import { generateWorld } from '../world/client';
 import { rockDistance, type CollisionField } from '../world/collision';
-import { createBodyState, poseBody, type BodyState } from '../body/rig';
+import { createBodyState, poseBody, poseHands, type BodyState } from '../body/rig';
+import { createArmTarget, type ArmTarget } from '../body/skeleton';
 
 export interface FrameDiff {
   pixels: number;
@@ -60,6 +61,11 @@ export interface Harness {
    * out is at rest, fully shown). With null, the body is taken out again, which is how every test starts.
    */
   poseBody(state: Partial<BodyState> | null): void;
+  /**
+   * Holds the hands where they are told for the frames that follow (see ArmTarget; what is left out is a flat
+   * open hand): for looking at them closely.
+   */
+  poseHands(right: Partial<ArmTarget>, left: Partial<ArmTarget>): void;
   /** The meshes of the body parts that the next frame will draw (PART in src/body/meshes.ts); empty when none. */
   bodyParts(): number[];
   /** Draws a frame from where the camera is and sums it up: the mean colour (0..255) and the share of dark pixels. */
@@ -311,6 +317,10 @@ export function createHarness(
     poseBody(state) {
       renderer.body.count = 0;
       if (state) poseBody({ ...createBodyState(), shown: 1, ...state }, renderer.body);
+    },
+
+    poseHands(right, left) {
+      poseHands(renderer.body, { ...createArmTarget(), ...right }, { ...createArmTarget(), ...left });
     },
 
     bodyParts: () => [...renderer.body.mesh.slice(0, renderer.body.count)],

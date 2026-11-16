@@ -28,8 +28,14 @@ const CATCH = 0.22;
 /** Seconds the arms stay stretched out after the last stroke before they come down. */
 const GLIDE_HOLD = 0.8;
 
-/** The right shoulder; the left is its mirror image. Below and just behind the eyes. */
-const SHOULDER = [0.18, -0.27, 0.03] as const;
+/**
+ * The right shoulder; the left is its mirror image. Out to the side and a little below the eyes: what matters
+ * is that the arms always come into the picture from its lower corners, where shoulders are, and never up the
+ * middle as if from the chest.
+ */
+const SHOULDER = [0.25, -0.17, -0.03] as const;
+/** Which way the right elbow goes: out to the side and down. Never inwards, whatever the hands do. */
+const ELBOW = [0.7, -0.72, 0] as const;
 
 // One breaststroke of the right arm, as key poses: when (0..1), where the wrist is, which way the fingers
 // point, which way the palm faces, how far the fingers curl, how far they spread (-1 pressed together), and the
@@ -38,19 +44,19 @@ const SHOULDER = [0.18, -0.27, 0.03] as const;
 // prettier-ignore
 const STROKE = [
   // when   wrist                     fingers point           palm faces              curl  spread thumb
-  [0.00,    0.085, -0.165, -0.430,    0.03,  0.26, -0.96,     0.08, -0.96, -0.26,     0.10, -0.6,  0.25, 0.15], // glide
-  [0.22,    0.090, -0.170, -0.425,    0.06,  0.24, -0.97,     0.30, -0.92, -0.20,     0.08, -0.7,  0.25, 0.15], // palms begin to turn out
-  [0.33,    0.200, -0.165, -0.410,    0.32,  0.22, -0.92,     0.75, -0.62,  0.15,     0.04, -0.9,  0.20, 0.10], // catch
-  [0.44,    0.330, -0.165, -0.360,    0.60,  0.20, -0.78,     0.70, -0.45,  0.55,     0.05, -0.9,  0.20, 0.10], // pressing out
-  [0.55,    0.400, -0.300, -0.170,    0.30, -0.70, -0.64,     0.20, -0.50,  0.84,     0.08, -0.8,  0.25, 0.15], // pulling back and down
-  [0.66,    0.210, -0.400, -0.120,   -0.52, -0.38, -0.76,    -0.72,  0.22,  0.64,     0.30, -0.2,  0.35, 0.30], // sweeping in
-  [0.78,    0.070, -0.330, -0.200,   -0.10,  0.18, -0.98,    -0.90, -0.42,  0.00,     0.42,  0.1,  0.40, 0.35], // together under the chin
-  [0.90,    0.080, -0.215, -0.370,    0.00,  0.20, -0.98,    -0.35, -0.92, -0.20,     0.20, -0.3,  0.30, 0.20], // shooting forward
+  [0.00,    0.066, -0.150, -0.530,   -0.08,  0.30, -0.95,     0.02, -0.95, -0.31,     0.10, -0.9,  0.10, 0.10], // glide: arms all but straight
+  [0.22,    0.070, -0.152, -0.525,   -0.04,  0.26, -0.96,     0.28, -0.92, -0.27,     0.08, -0.9,  0.10, 0.10], // palms begin to turn out
+  [0.33,    0.170, -0.150, -0.500,    0.30,  0.10, -0.95,     0.75, -0.62,  0.17,     0.04, -0.9,  0.20, 0.10], // catch
+  [0.44,    0.300, -0.160, -0.420,    0.58,  0.08, -0.81,     0.70, -0.45,  0.55,     0.05, -0.9,  0.20, 0.10], // pressing out
+  [0.55,    0.360, -0.300, -0.200,    0.30, -0.70, -0.64,     0.20, -0.50,  0.84,     0.08, -0.8,  0.25, 0.15], // pulling back and down
+  [0.66,    0.200, -0.380, -0.140,   -0.52, -0.38, -0.76,    -0.72,  0.22,  0.64,     0.30, -0.2,  0.35, 0.30], // sweeping in
+  [0.78,    0.060, -0.300, -0.220,   -0.10,  0.18, -0.98,    -0.90, -0.42,  0.00,     0.42,  0.1,  0.40, 0.35], // together under the chin
+  [0.90,    0.066, -0.200, -0.400,   -0.08,  0.24, -0.97,    -0.35, -0.90, -0.24,     0.20, -0.6,  0.20, 0.20], // shooting forward
 ] as const;
 const CHANNELS = 13;
 
 /** Where the scooter is held: its origin, in front of the chest. */
-const SCOOTER = [0, -0.3, -0.64] as const;
+const SCOOTER = [0, -0.27, -0.72] as const;
 /** It is held nose down by this much (radians), so that the swimmer looks along its back. */
 const SCOOTER_TILT = 0.3;
 
@@ -276,9 +282,9 @@ function strokeAt(phase: number, out: ArmTarget): void {
  */
 function restAt(t: number, work: number, out: ArmTarget): void {
   const reach = 1 + 1.2 * work;
-  out.wrist[0] = 0.25 + 0.02 * work + 0.045 * reach * Math.sin(t);
-  out.wrist[1] = -0.235 + 0.03 * work + 0.014 * reach * Math.sin(t * 2 + 0.4);
-  out.wrist[2] = -0.4 + 0.022 * reach * Math.cos(t);
+  out.wrist[0] = 0.21 + 0.02 * work + 0.04 * reach * Math.sin(t);
+  out.wrist[1] = -0.2 + 0.025 * work + 0.012 * reach * Math.sin(t * 2 + 0.4);
+  out.wrist[2] = -0.43 + 0.022 * reach * Math.cos(t);
   out.fingers[0] = 0.2 + 0.16 * reach * Math.cos(t);
   out.fingers[1] = 0.16;
   out.fingers[2] = -0.96;
@@ -303,6 +309,35 @@ function blend(out: ArmTarget, a: ArmTarget, b: ArmTarget, w: number): void {
   out.spread = a.spread + (b.spread - a.spread) * w;
   out.thumbUnder = a.thumbUnder + (b.thumbUnder - a.thumbUnder) * w;
   out.thumbBend = a.thumbBend + (b.thumbBend - a.thumbBend) * w;
+}
+
+/**
+ * Poses both arms straight from what their hands are told, with nothing else in play: for holding a hand up to
+ * look at it. Targets are in view space, each for its own arm (no mirroring).
+ */
+export function poseHands(parts: BodyParts, right: ArmTarget, left: ArmTarget): void {
+  parts.count = 0;
+  for (const side of [1, -1] as const) {
+    const first = side > 0 ? RIGHT : LEFT;
+    const target = side > 0 ? right : left;
+    poseArm(
+      pose,
+      first,
+      side,
+      target,
+      SHOULDER[0] * side,
+      SHOULDER[1],
+      SHOULDER[2],
+      ELBOW[0] * side,
+      ELBOW[1],
+      ELBOW[2],
+    );
+  }
+  parts.mesh[parts.count++] = PART.sleeveRight;
+  parts.mesh[parts.count++] = PART.handRight;
+  parts.mesh[parts.count++] = PART.sleeveLeft;
+  parts.mesh[parts.count++] = PART.handLeft;
+  writeSkin(pose, parts.skin);
 }
 
 /**
@@ -350,7 +385,7 @@ export function poseBody(state: BodyState, parts: BodyParts, dt = 0): void {
       strokeAt(state.phase + (side > 0 ? 0 : -0.012), stroke);
       restAt(state.scullClock + (side > 0 ? 0 : 1.4), state.scull, rest);
       // (how wide the hands go differs a little from stroke to stroke)
-      stroke.wrist[0] = 0.085 + (stroke.wrist[0] - 0.085) * state.width;
+      stroke.wrist[0] = 0.066 + (stroke.wrist[0] - 0.066) * state.width;
       blend(wanted, rest, stroke, smooth(state.swim));
     } else {
       // on the scooter's handle: fingers forward along its back, palm down on the bar, hand closed round it
@@ -379,10 +414,8 @@ export function poseBody(state: BodyState, parts: BodyParts, dt = 0): void {
     wanted.palm[0] *= side;
     blend(hand, hand, wanted, swimming ? follow : 1); // a hand on a handle goes exactly where the handle goes
 
-    // hands near the middle tuck the elbows in, so the forearms run side by side; hands out wide push them
-    // out, and on the pull the elbow stays high
-    const wide = clamp((Math.abs(hand.wrist[0]) - 0.15) / 0.09, -1, 1);
-    const high = smooth((-0.3 - (hand.wrist[1] + drop)) / 0.1) * Math.max(wide, 0);
+    // the elbow goes out to the side and down, and stays high through the pull
+    const high = smooth((-0.26 - (hand.wrist[1] + drop)) / 0.1) * clamp((Math.abs(hand.wrist[0]) - 0.15) / 0.09, 0, 1);
     poseArm(
       pose,
       side > 0 ? RIGHT : LEFT,
@@ -391,9 +424,9 @@ export function poseBody(state: BodyState, parts: BodyParts, dt = 0): void {
       SHOULDER[0] * side,
       SHOULDER[1] - drop,
       SHOULDER[2],
-      0.75 * wide * side,
-      -0.55 + 0.75 * high,
-      0.36,
+      ELBOW[0] * side,
+      ELBOW[1] + 0.75 * high,
+      ELBOW[2],
     );
   }
   parts.mesh[parts.count++] = PART.sleeveRight;

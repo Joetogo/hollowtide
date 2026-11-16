@@ -115,61 +115,117 @@ function sleeve(side: 1 | -1): BuiltMesh {
 interface Digit {
   root: readonly number[];
   direction: readonly number[];
+  /** the way the back of the digit faces (away from the palm), square to its direction */
+  back: readonly number[];
+  /** across the digit: direction x back */
+  across: readonly number[];
   bones: readonly number[];
   radius: readonly number[];
   /** the first of its three bones, counted from the arm's first */
   bone: number;
   thumb: boolean;
 }
+function digitOf(
+  root: readonly number[],
+  direction: readonly number[],
+  bones: readonly number[],
+  radius: readonly number[],
+  bone: number,
+  thumb: boolean,
+): Digit {
+  // the back of the hand is +z; a digit's own back is that, made square to the way it points
+  const dot = direction[2]!;
+  const b = [-direction[0]! * dot, -direction[1]! * dot, 1 - direction[2]! * dot];
+  const bl = Math.hypot(b[0]!, b[1]!, b[2]!);
+  const back = [b[0]! / bl, b[1]! / bl, b[2]! / bl];
+  const across = [
+    direction[1]! * back[2]! - direction[2]! * back[1]!,
+    direction[2]! * back[0]! - direction[0]! * back[2]!,
+    direction[0]! * back[1]! - direction[1]! * back[0]!,
+  ];
+  return { root, direction, back, across, bones, radius, bone, thumb };
+}
 const DIGITS: Digit[] = [
-  ...FINGERS.map((f, i) => ({
-    root: [f.knuckle[0], WRIST + f.knuckle[1], f.knuckle[2]],
-    direction: fingerDirection(i),
-    bones: f.bones,
-    radius: f.radius,
-    bone: BONE.finger + i * 3,
-    thumb: false,
-  })),
-  {
-    root: [THUMB.root[0], WRIST + THUMB.root[1], THUMB.root[2]],
-    direction: THUMB_DIRECTION,
-    bones: THUMB.bones,
-    radius: THUMB.radius,
-    bone: BONE.thumb,
-    thumb: true,
-  },
-];
-/** A point `along` a digit from its root. */
-const at = (d: Digit, along: number) => [
-  d.root[0]! + d.direction[0]! * along,
-  d.root[1]! + d.direction[1]! * along,
-  d.root[2]! + d.direction[2]! * along,
+  ...FINGERS.map((f, i) =>
+    digitOf(
+      [f.knuckle[0], WRIST + f.knuckle[1], f.knuckle[2]],
+      fingerDirection(i),
+      f.bones,
+      f.radius,
+      BONE.finger + i * 3,
+      false,
+    ),
+  ),
+  digitOf(
+    [THUMB.root[0], WRIST + THUMB.root[1], THUMB.root[2]],
+    THUMB_DIRECTION,
+    THUMB.bones,
+    THUMB.radius,
+    BONE.thumb,
+    true,
+  ),
 ];
 const lengthOf = (d: Digit) => d.bones[0]! + d.bones[1]! + d.bones[2]!;
+const bell = (x: number, width: number) => Math.exp(-(x * x) / (width * width));
 
-function digit(x: number, y: number, z: number, d: Digit): number {
-  const total = lengthOf(d);
-  const [r0, r1] = [d.radius[0]!, d.radius[1]!];
+/** Where a point is on a digit: along it from its root, across it, and out through its back. */
+const where = [0, 0, 0];
+function locate(x: number, y: number, z: number, d: Digit): void {
+  const dx = x - d.root[0]!;
+  const dy = y - d.root[1]!;
+  const dz = z - d.root[2]!;
+  where[0] = dx * d.direction[0]! + dy * d.direction[1]! + dz * d.direction[2]!;
+  where[1] = dx * d.across[0]! + dy * d.across[1]! + dz * d.across[2]!;
+  where[2] = dx * d.back[0]! + dy * d.back[1]! + dz * d.back[2]!;
+}
+/** Whether a place on a digit (see locate) is on one of the pads along its back: one on each of the first two bones. */
+function onPad(d: Digit, along: number, across: number, back: number): boolean {
+  if (d.thumb || back < 0 || Math.abs(across) > d.radius[0]! * 0.52) return false;
   const j1 = d.bones[0]!;
   const j2 = j1 + d.bones[1]!;
-  const r = (along: number) => mix(r0, r1, along / total);
-  // three bones, each a touch fuller in the middle than at its joints, and a rounded tip
-  let s = capsule(x, y, z, at(d, 0), at(d, j1), r(0), r(j1) * 0.985);
-  s = melt(s, capsule(x, y, z, at(d, j1), at(d, j2), r(j1), r(j2) * 0.98), 0.004);
-  return melt(s, capsule(x, y, z, at(d, j2), at(d, total - r1 * 0.6), r(j2), r1), 0.004);
+  return (along > j1 * 0.24 && along < j1 * 0.8) || (along > j1 + (j2 - j1) * 0.22 && along < j1 + (j2 - j1) * 0.8);
 }
 
-/** The pads on the back of the glove: a plate over the knuckles and a bar along each finger's first bone. */
-function armour(x: number, y: number, z: number): number {
-  let d = roundBox(x, y, z, [-0.001, WRIST + 0.071, 0.0162], [0.0295, 0.0105, 0.0016], 0.0042);
-  for (let f = 0; f < 4; f++) {
-    const finger = DIGITS[f]!;
-    const lift = finger.radius[0]! - 0.0008;
-    const a = at(finger, finger.bones[0]! * 0.3);
-    const b = at(finger, finger.bones[0]! * 0.82);
-    d = Math.min(d, capsule(x, y, z, [a[0]!, a[1]!, a[2]! + lift], [b[0]!, b[1]!, b[2]! + lift], 0.0044));
+/**
+ * A digit: a rounded rod that tapers to its tip, a little wider than it is thick, swelling at its two joints
+ * on the back and creased across them on the palm side, with a soft pad under the tip and raised pads along
+ * the back of a finger's first two bones.
+ */
+function digit(x: number, y: number, z: number, d: Digit): number {
+  locate(x, y, z, d);
+  const along = where[0]!;
+  const across = where[1]!;
+  const back = where[2]!;
+  const total = lengthOf(d);
+  const [r0, r1] = [d.radius[0]!, d.radius[1]!];
+  // far from it: its distance to a rod around the whole digit will do (and costs a fraction of the rest)
+  const end = total - r1 * 0.7;
+  const h = along < 0 ? 0 : along > end ? end : along;
+  const off = Math.hypot(along - h, across, back / 0.9);
+  if (off > r0 + 0.012) return off - r0 - 0.002;
+  const j1 = d.bones[0]!;
+  const j2 = j1 + d.bones[1]!;
+  let r = mix(r0, r1, h / total);
+  const joints = bell(h - j1, 0.0045) + bell(h - j2, 0.004);
+  if (back > 0) {
+    r += 0.0007 * joints; // knuckles
+    if (onPad(d, h, across, back)) r += 0.0011 * smoothstep(r0 * 0.52, r0 * 0.3, Math.abs(across));
+  } else {
+    r -= 0.0007 * (bell(h - j1, 0.0013) + bell(h - j2, 0.0012) + bell(h - 0.004, 0.0015)); // creases
+    r += 0.0006 * bell(h - (total - d.bones[2]! * 0.45), 0.007); // the pad of the fingertip
   }
-  return d;
+  return off - r;
+}
+
+/** The moulded guards over the four knuckles. */
+function guards(x: number, y: number, z: number): number {
+  let d = 1e9;
+  for (let f = 0; f < 4; f++) {
+    const k = DIGITS[f]!.root;
+    d = Math.min(d, roundBox(x, y, z, [k[0]!, k[1]! - 0.0045, k[2]! + 0.0128], [0.0068, 0.0078, 0.0016], 0.0034));
+  }
+  // and the plate behind them on the back of the hand
+  return Math.min(d, roundBox(x, y, z, [-0.001, WRIST + 0.058, 0.0142], [0.024, 0.0105, 0.0012], 0.0035));
 }
 /** The strap round the wrist, with its tab on the back. */
 function strap(x: number, y: number, z: number): number {
@@ -184,25 +240,28 @@ function hand(side: 1 | -1): BuiltMesh {
     // the gauntlet over the end of the sleeve, flaring a little at its edge
     let d = capsule(x, y, z / 0.84, [0, WRIST - 0.066, 0], [0, WRIST - 0.002, 0], 0.0372, 0.0318);
     d = melt(d, band(x, y, z / 0.84, WRIST - 0.066, 0.0362, 0.002, 0.0026), 0.004);
-    // the palm, with the ball of the thumb and the heel of the hand
-    d = melt(d, roundBox(x, y, z, [-0.001, WRIST + 0.047, 0], [0.0335, 0.04, 0.0078], 0.0125), 0.016);
-    d = melt(
-      d,
-      capsule(x, y, z, [-0.019, WRIST + 0.014, -0.0105], [-0.034, WRIST + 0.047, -0.0125], 0.0165, 0.0138),
-      0.012,
-    );
-    d = melt(d, capsule(x, y, z, [0.027, WRIST + 0.016, -0.0065], [0.0305, WRIST + 0.06, -0.0045], 0.0132), 0.012);
-    // knuckles: a little proud of the back of the hand
-    for (let f = 0; f < 4; f++) {
-      const k = DIGITS[f]!.root;
-      const knuckle = capsule(x, y, z, [k[0]!, k[1]! - 0.004, k[2]! + 0.0045], [k[0]!, k[1]!, k[2]! + 0.0045], 0.0112);
-      d = melt(d, knuckle, 0.008);
+    if (y > WRIST - 0.03) {
+      // the palm: a bone to each knuckle, fanning out from the wrist and melted into one slab, so the back of
+      // the hand keeps a hint of them; then the ball of the thumb and the heel of the hand on the palm side
+      let palm = 1e9;
+      for (let f = 0; f < 4; f++) {
+        const k = DIGITS[f]!.root;
+        const from = [k[0]! * 0.52, WRIST + 0.006, 0];
+        palm = melt(palm, capsule(x, y, z / 0.9, from, [k[0]!, k[1]! - 0.003, k[2]!], 0.0122, 0.0112), 0.011);
+      }
+      d = melt(d, palm, 0.014);
+      d = melt(
+        d,
+        capsule(x, y, z, [-0.019, WRIST + 0.014, -0.0095], [-0.034, WRIST + 0.047, -0.0115], 0.016, 0.0135),
+        0.012,
+      );
+      d = melt(d, capsule(x, y, z, [0.027, WRIST + 0.016, -0.006], [0.0305, WRIST + 0.058, -0.004], 0.0128), 0.012);
+      // the digits: each melts into the palm; neighbours are webbed together only at their roots
+      let digits = 1e9;
+      for (const each of DIGITS) digits = melt(digits, digit(x, y, z, each), each.thumb ? 0.006 : 0.0026);
+      d = melt(d, digits, 0.0075);
+      d = melt(d, guards(x, y, z), 0.002);
     }
-    // the digits: each melts into the palm, but not into its neighbour
-    let digits = 1e9;
-    for (const each of DIGITS) digits = Math.min(digits, digit(x, y, z, each));
-    d = melt(d, digits, 0.0085);
-    d = melt(d, armour(x, y, z), 0.0022);
     return melt(d, strap(x, y, z), 0.002);
   };
   return sculpt({
@@ -212,26 +271,23 @@ function hand(side: 1 | -1): BuiltMesh {
       // ---- which bones: the digit this point belongs to, if any
       let best: Digit | null = null;
       let bestAlong = 0;
+      let bestAcross = 0;
+      let bestBack = 0;
       let bestGap = 1e9;
       for (const each of DIGITS) {
-        const dx = x - each.root[0]!;
-        const dy = y - each.root[1]!;
-        const dz = z - each.root[2]!;
-        const along = dx * each.direction[0]! + dy * each.direction[1]! + dz * each.direction[2]!;
-        if (along < -0.012) continue;
-        const gap =
-          Math.hypot(
-            dx - each.direction[0]! * along,
-            dy - each.direction[1]! * along,
-            dz - each.direction[2]! * along,
-          ) - each.radius[0]!;
+        locate(x, y, z, each);
+        if (where[0]! < -0.012) continue;
+        const gap = Math.hypot(where[1]!, where[2]!) - each.radius[0]!;
         if (gap < 0.0065 && gap < bestGap) {
           best = each;
-          bestAlong = along;
+          bestAlong = where[0]!;
+          bestAcross = where[1]!;
+          bestBack = where[2]!;
           bestGap = gap;
         }
       }
       let palmSide = z < -0.003;
+      let pad = false;
       if (best) {
         const j1 = best.bones[0]!;
         const j2 = j1 + best.bones[1]!;
@@ -250,10 +306,9 @@ function hand(side: 1 | -1): BuiltMesh {
           out[1] = bone + 2;
           out[2] = 1 - smoothstep(j2 - 0.0075, j2 + 0.0075, bestAlong);
         }
-        // a digit's palm side is the side its curl takes it to (for the thumb, that is partly sideways); its
-        // tip is capped all round
-        const towardsPalm = best.thumb ? (z - best.root[2]!) * 0.6 - (x - best.root[0]!) * 0.5 : z - best.root[2]!;
-        palmSide = towardsPalm < -0.0015 || bestAlong > lengthOf(best) - best.bones[2]! * 0.62;
+        // a digit's palm side is the side away from its back; its tip is capped all round
+        palmSide = bestBack < -0.0012 || bestAlong > lengthOf(best) - best.bones[2]! * 0.62;
+        pad = onPad(best, bestAlong, bestAcross, bestBack);
       } else {
         out[0] = first + BONE.twist;
         out[1] = first + BONE.hand;
@@ -263,15 +318,16 @@ function hand(side: 1 | -1): BuiltMesh {
       out[3] =
         strap(x, y, z) < 0.0014
           ? MATERIAL.strap
-          : armour(x, y, z) < 0.0013
+          : pad || guards(x, y, z) < 0.0012
             ? MATERIAL.armour
             : palmSide && y > WRIST - 0.004
               ? MATERIAL.rubber
               : MATERIAL.fabric;
     },
-    min: [-0.088, WRIST - 0.076, -0.05],
-    max: [0.066, WRIST + 0.2, 0.04],
-    voxel: 0.0023,
+    // (the thumb's side of the box is the wider one: it changes sides with the hand)
+    min: [side > 0 ? -0.118 : -0.066, WRIST - 0.076, -0.052],
+    max: [side > 0 ? 0.066 : 0.118, WRIST + 0.212, 0.04],
+    voxel: 0.0019,
   });
 }
 
