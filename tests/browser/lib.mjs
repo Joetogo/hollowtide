@@ -83,9 +83,12 @@ export async function launch({ dpr = 1, memory = false, args = [] } = {}) {
     peak,
     /**
      * Opens a URL and waits until the app has finished starting (or failed to). With `pause`, the app's own
-     * frame loop then stops drawing, so the only frames are the ones the test asks for.
+     * frame loop then stops drawing, so the only frames are the ones the test asks for. The page draws with
+     * the original's distances (`tuning: 'faithful'`) unless told to use the ones that ship (`'tuned'`).
      */
-    async open(url, { pause = false } = {}) {
+    async open(url, { pause = false, tuning = 'faithful' } = {}) {
+      // (the original's own draw distances, unless a test is about the tuned ones that ship)
+      if (/^https?:/.test(url) && !/[?&]tuning=/.test(url)) url += (url.includes('?') ? '&' : '?') + 'tuning=' + tuning;
       await page.goto(url);
       await page.waitForFunction(() => window.__hollowtide?.ready, null, { timeout: 60_000 });
       return page.evaluate((pause) => {

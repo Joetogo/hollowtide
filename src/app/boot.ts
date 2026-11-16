@@ -21,6 +21,7 @@ import { createMenu } from '../ui/menu';
 import { createHarness, type Harness } from './harness';
 import { createBodyState, poseBody, stepBody } from '../body/rig';
 import { createNote } from '../ui/note';
+import { FAITHFUL, TUNED } from '../config/tuning';
 
 export interface BootReport {
   adapter: string;
@@ -199,7 +200,9 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
     } else menu.progress('Compiling shaders…', 0.05);
     const dynres = createDynRes(settings.pixels, settings.detail, settings.mobile);
     let gpuMs = 0;
-    const renderer = await createRenderer(gpu, quality(level), (ms) => {
+    // dev and harness builds can draw with the original's own distances: ?tuning=faithful
+    const tuning = (__DEV__ || __HARNESS__) && params.get('tuning') === 'faithful' ? FAITHFUL : TUNED;
+    const renderer = await createRenderer(gpu, quality(level), tuning, (ms) => {
       gpuMs = ms;
       addGpuTime(dynres, ms);
     });
@@ -297,14 +300,18 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
     // ---- the loop
     let last = 0;
     let time = 0;
+    let skip = false;
     const frame = (now: number) => {
       requestAnimationFrame(frame);
+      // behind the pause panel the world is a blur: every second frame is enough, and a laptop runs cooler for it
+      if (menu.paused && (skip = !skip)) return;
       const frameMs = now - last;
       last = now;
       if (hook.paused) return;
       const dt = Math.min(frameMs / 1000, 0.1);
       // dynamic resolution: when a measuring period ends it may change the pixel budget or the draw distance
-      if (addFrame(dynres, frameMs, menu.open, fullPixels())) {
+      // (not while paused, when frames are skipped on purpose)
+      if (!menu.paused && addFrame(dynres, frameMs, menu.open, fullPixels())) {
         settings.pixels = dynres.pixels;
         settings.detail = dynres.detail;
         saveSettings(settings, fullPixels());

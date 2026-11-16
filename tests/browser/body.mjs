@@ -10,7 +10,7 @@ const PART = { sleeveRight: 0, handRight: 1, sleeveLeft: 2, handLeft: 3, scooter
 const host = await serve(page);
 const chrome = await launch();
 try {
-  const { error } = await chrome.open(host.origin + '/', { pause: true });
+  const { error } = await chrome.open(host.origin + '/', { pause: true, tuning: 'tuned' });
   check(!error, `starts${error ? ': ' + error : ''}`);
 
   // ---- drawn into a frame: only the lower part of the picture changes, and nothing is left behind

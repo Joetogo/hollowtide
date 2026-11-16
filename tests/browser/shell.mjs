@@ -40,7 +40,7 @@ try {
     }).observe({ type: 'longtask', buffered: true });
   });
   const started = Date.now();
-  const { error, report } = await chrome.open(host.origin + '/');
+  const { error, report } = await chrome.open(host.origin + '/', { tuning: 'tuned' });
   const longTasks = await chrome.page.evaluate(() => window.__longTasks);
   const blocked = longTasks.reduce((sum, [, ms]) => sum + ms, 0);
   const longest = Math.max(0, ...longTasks.map(([, ms]) => ms));

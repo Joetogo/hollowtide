@@ -38,7 +38,7 @@ const FULL = {
 const host = await serve(page);
 const chrome = await launch();
 try {
-  const { error } = await chrome.open(host.origin + '/', { pause: true });
+  const { error } = await chrome.open(host.origin + '/', { pause: true, tuning: 'tuned' });
   if (error) throw new Error(error);
   /** Draws each state and tiles the frames, `columns` to a row, at a third of their size. */
   const sheet = (states, columns) =>

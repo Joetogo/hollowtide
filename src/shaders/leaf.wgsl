@@ -5,6 +5,7 @@
 
 override ROWS: f32 = 7.; // vertex pairs along the blade: 9 up close, 5 mid-range, 3 far away and in the shadow bake
 override FAR: f32 = 150.; // distance at which the blade has faded out, in metres
+override SMOOTH_BEND: bool = false; // see where the blade's arc is worked out
 
 struct LeafInstance {
   @location(0) base: vec4f, // root position, length
@@ -75,9 +76,15 @@ fn leafVertex(@builtin(vertex_index) index: u32, leaf: LeafInstance) -> LeafVary
   let k = (leaf.kind.w - .3) * 2.0 + sin(t * (.8 + s1) * flutter + s2 * 40. + rootHeight * .25) * .10 * flutter;
   let ripplePhase = v * (3. + 5. * s2) + s1 * 30. + t * 1.1;
   let ripple = sin(ripplePhase) * .12 * wave;
-  let kq = k * 1.7; let ka = select(kq, .06, abs(kq) < .06);
+  // The arc's formulas divide by the curvature, so near zero the original swaps in a small positive one: a
+  // blade whose curl breathes through zero flicks from -0.06 to +0.06 each time, a twitch of some centimetres
+  // at its tip. With SMOOTH_BEND the curvature is used as it is, and near zero the two quotients are taken from
+  // their series instead, which pass through zero without a step.
+  let kq = k * 1.7; let straight = abs(kq) < .06; let ka = select(kq, select(.06, kq, SMOOTH_BEND), straight);
   let sK = sin(ka * v); let cK = cos(ka * v);
-  let spine = leaf.base.xyz + len * (along * (sK / ka) + bendDir * ((1. - cK) / ka + ripple * v));
+  let x = kq * v; let series = SMOOTH_BEND && straight;
+  let alongK = select(sK / ka, v * (1. - x * x / 6.), series); let bendK = select((1. - cK) / ka, x * v * .5 * (1. - x * x / 12.), series);
+  let spine = leaf.base.xyz + len * (along * alongK + bendDir * (bendK + ripple * v));
   let slope = sK + ripple + cos(ripplePhase) * .10 * wave * v * (3. + 5. * s2);
   let N = normalize(bendDir * cK - along * slope); let T = normalize(along * cK + bendDir * slope);
   // twist about the spine
@@ -136,6 +143,7 @@ fn leafFragment(v: LeafVarying, @builtin(front_facing) front: bool) -> @location
 }
 
 // ---- glints: the gold and green specks drifting among the kelp, as additive camera-facing quads
+override GLINT_FAR: f32 = 150.; // they have faded out by here (at 150 the fade starts where they are dropped anyway)
 struct GlintVarying { @builtin(position) clip: vec4f, @location(0) uv: vec2f, @location(1) @interpolate(flat) color: vec3f }
 
 // place: position, height above the plant's root (so it sways with the plant). spark: seed, colour key, size.
@@ -155,7 +163,7 @@ fn glintVertex(@builtin(vertex_index) index: u32, @location(0) place: vec4f, @lo
   let zone = zoneAt(p);
   let lit = .3 + 1.8 * shadow1(p) * sunlight(p.y, zone).g;
   let e = spark.z / size;
-  o.color = sparklePalette(spark.y) * (.12 + twinkle * 1.7) * lit * e * e * exp(-EXTINCTION.g * d) * smoothRamp(.4, 1.5, d) * 17.;
+  o.color = sparklePalette(spark.y) * (.12 + twinkle * 1.7) * lit * e * e * exp(-EXTINCTION.g * d) * smoothRamp(.4, 1.5, d) * 17. * smoothRamp(GLINT_FAR, GLINT_FAR * .8, d);
   return o;
 }
 

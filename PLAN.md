@@ -163,6 +163,9 @@ Key mechanisms:
   beam for the scooter's lamp, a wider view at speed.
 
 **Milestone 12: performance and fixes** (measured on an Apple M3 / 8 GB first; a change stays only if the numbers move)
+- Done so far: the tuned set of draw distances (`src/config/tuning.ts`), sprites culled by cell, the kelp blades'
+  smooth bend, half rate behind the pause panel. Measured and dropped: the fog integral's divide by zero (it
+  can only bite within a millionth of one viewing angle) and fewer shaft steps (worth under 1 %).
 - Distance-adaptive shadow filtering; fewer shaft steps with a wider blur; cheaper or lower-rate water texture.
 - Dynamic resolution that no longer assumes pixel count is the bottleneck (to be measured on Apple GPUs).
 - Half-rate rendering behind the menu; no fixed 2560×1440 cap.

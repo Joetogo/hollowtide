@@ -2,6 +2,7 @@
 // rocks, set pieces, sponges, corals, animals, plants, the water surface, the backdrop), then what blends on top
 // (bubbles, glints, drifting particles).
 import type { Quality } from '../../config/quality';
+import type { Tuning } from '../../config/tuning';
 import { DEPTH, HDR, type Gpu } from '../../gpu/context';
 import { shaderModule } from '../../gpu/shader';
 import creaturesSource from '../../shaders/creatures.wgsl';
@@ -20,10 +21,11 @@ import {
   SOLID_INSTANCE_LAYOUT,
   SPRITE_INSTANCE_LAYOUT,
   type CellBuffer,
+  type InstanceBuffer,
   type WorldBuffers,
 } from '../world';
 
-/** How far each thing is drawn, in metres from the camera to the nearest edge of its cell. */
+/** How far each thing is drawn, in metres from the camera to the nearest edge of its cell (see also Tuning). */
 const TERRAIN_DISTANCE = 240;
 const SMALL_CHUNK_DISTANCE = 96;
 const PEBBLE_DISTANCE = 30;
@@ -31,11 +33,6 @@ const LARGE_CHUNK_NEAR = 40; // large chunks switch to their coarser mesh here..
 const LARGE_CHUNK_FAR = 150; // ...and end here
 const PROP_DISTANCE = 110;
 const CORAL_NEAR = 6; // corals switch to their coarser mesh almost at once
-// leaves: 9 rows of vertices up close, 5 mid-range, then every second leaf (made wider) with 3 rows
-const LEAF_NEAR = 24;
-const LEAF_MID = 58;
-const LEAF_FAR = 150;
-const SMALL_LEAF_DISTANCE = 70;
 
 const PREMULTIPLIED: GPUBlendState = {
   color: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
@@ -60,8 +57,9 @@ interface PipelineOptions {
 
 /**
  * Harness builds only: names of draws to leave out, to compare frames and frame costs with and without them:
- * 'terrain', 'solids', 'chunks', 'props', 'mantas', 'fish', 'leaves', 'bubbles', 'glints', 'snow', and 'shafts'
- * (which the renderer checks). Always empty in the shipped file.
+ * 'terrain', 'solids', 'chunks', 'props', 'mantas', 'fish', 'leaves' (or one band of them: 'leaves near', 'leaves
+ * mid', 'leaves far', 'leaves small'), 'bubbles', 'glints', 'snow', and what the renderer checks: 'shafts',
+ * 'water' (the water texture is not redrawn) and 'bloom'. Always empty in the shipped file.
  */
 export const skippedDraws = new Set<string>();
 export const skipped = (name: string) => __HARNESS__ && skippedDraws.has(name);
@@ -71,7 +69,11 @@ export interface ScenePass {
   encode(pass: GPURenderPassEncoder, world: WorldBuffers, view: CullView): void;
 }
 
-export async function createScenePass(gpu: Gpu, scene: Scene, quality: Quality): Promise<ScenePass> {
+export async function createScenePass(gpu: Gpu, scene: Scene, quality: Quality, tuning: Tuning): Promise<ScenePass> {
+  // leaves: 9 rows of vertices up close, 5 mid-range, then every second leaf (made wider) with 3 rows
+  const { leafNear: LEAF_NEAR, leafMid: LEAF_MID, leafFar: LEAF_FAR, smallLeafDistance: SMALL_LEAF_DISTANCE } = tuning;
+  const rockFade = tuning.rockFade;
+  const SMOOTH_BEND = tuning.smoothBend ? 1 : 0;
   const { device } = gpu;
   const solidModule = shaderModule(device, 'solid', [SceneGroup], solidSource);
   const surfaceModule = shaderModule(device, 'surface', [SceneGroup], surfaceSource);
@@ -121,6 +123,7 @@ export async function createScenePass(gpu: Gpu, scene: Scene, quality: Quality):
       }),
       pipeline('solid', solidModule, 'solidVertex', 'solidFragment', {
         buffers: solidBuffers,
+        vertexConstants: { ROCK_FADE: rockFade },
         constants: shadowConstants,
       }),
       pipeline('surface', surfaceModule, 'surfaceVertex', 'surfaceFragment', { strip: true }),
@@ -130,12 +133,16 @@ export async function createScenePass(gpu: Gpu, scene: Scene, quality: Quality):
         constants: { SHADOW_SIZE: scene.shadowSize },
       }),
       pipeline('fish', creaturesModule, 'fishVertex', 'fishFragment', { buffers: creatureBuffers }),
-      leaf('leaf near', { ROWS: 9 }),
-      leaf('leaf mid', { ROWS: 5 }),
-      leaf('leaf far', { ROWS: 3 }),
-      leaf('leaf small', { ROWS: 3, FAR: SMALL_LEAF_DISTANCE }),
+      leaf('leaf near', { ROWS: 9, FAR: LEAF_FAR, SMOOTH_BEND }),
+      leaf('leaf mid', { ROWS: 5, FAR: LEAF_FAR, SMOOTH_BEND }),
+      leaf('leaf far', { ROWS: 3, FAR: LEAF_FAR, SMOOTH_BEND }),
+      leaf('leaf small', { ROWS: 3, FAR: SMALL_LEAF_DISTANCE, SMOOTH_BEND }),
       pipeline('bubbles', spritesModule, 'bubbleVertex', 'bubbleFragment', { ...sprite, blend: PREMULTIPLIED }),
-      pipeline('glints', leafModule, 'glintVertex', 'glintFragment', { ...sprite, blend: ADDITIVE }),
+      pipeline('glints', leafModule, 'glintVertex', 'glintFragment', {
+        ...sprite,
+        blend: ADDITIVE,
+        vertexConstants: { GLINT_FAR: tuning.glintDistance },
+      }),
       pipeline('snow', spritesModule, 'snowVertex', 'snowFragment', {
         buffers: [SNOW_INSTANCE_LAYOUT],
         strip: true,
@@ -189,8 +196,9 @@ export async function createScenePass(gpu: Gpu, scene: Scene, quality: Quality):
         const chunk = world.chunks[i]!;
         const large = i > 2 && i < 6;
         pass.setVertexBuffer(1, chunk.buffer);
-        drawCells(chunk, MESH.chunk + i, 0, i > 5 ? PEBBLE_DISTANCE : large ? LARGE_CHUNK_NEAR : SMALL_CHUNK_DISTANCE);
-        if (large) drawCells(chunk, MESH.chunkFar + i - 3, LARGE_CHUNK_NEAR, LARGE_CHUNK_FAR);
+        const far = (i > 5 ? PEBBLE_DISTANCE : large ? LARGE_CHUNK_FAR : SMALL_CHUNK_DISTANCE) * rockFade;
+        drawCells(chunk, MESH.chunk + i, 0, large ? LARGE_CHUNK_NEAR : far);
+        if (large) drawCells(chunk, MESH.chunkFar + i - 3, LARGE_CHUNK_NEAR, far);
       }
       // sponges and corals: 3 and 4 are the corals, which have a coarser mesh
       for (let i = 0; i < world.props.length && !skipped('props'); i++) {
@@ -219,15 +227,15 @@ export async function createScenePass(gpu: Gpu, scene: Scene, quality: Quality):
       if (!skipped('leaves')) {
         pass.setPipeline(leafNear);
         pass.setVertexBuffer(0, world.leavesBig.buffer);
-        drawLeaves(world.leavesBig, 9, 5, 0, LEAF_NEAR);
+        if (!skipped('leaves near')) drawLeaves(world.leavesBig, 9, 5, 0, LEAF_NEAR);
         pass.setPipeline(leafMid);
-        drawLeaves(world.leavesBig, 5, 5, LEAF_NEAR, LEAF_MID);
+        if (!skipped('leaves mid')) drawLeaves(world.leavesBig, 5, 5, LEAF_NEAR, LEAF_MID);
         pass.setPipeline(leafFar);
         pass.setVertexBuffer(0, world.leavesBigFar.buffer);
-        drawLeaves(world.leavesBigFar, 3, 5, LEAF_MID, LEAF_FAR);
+        if (!skipped('leaves far')) drawLeaves(world.leavesBigFar, 3, 5, LEAF_MID, LEAF_FAR);
         pass.setPipeline(leafSmall);
         pass.setVertexBuffer(0, world.leavesSmall.buffer);
-        drawLeaves(world.leavesSmall, 3, 1.5, 0, SMALL_LEAF_DISTANCE);
+        if (!skipped('leaves small')) drawLeaves(world.leavesSmall, 3, 1.5, 0, SMALL_LEAF_DISTANCE);
       }
 
       pass.setPipeline(surface);
@@ -236,15 +244,21 @@ export async function createScenePass(gpu: Gpu, scene: Scene, quality: Quality):
       pass.draw(4);
 
       // blended, in this order: bubbles over the scene, then the additive glints and particles
+      /** Sprites sorted into cells are drawn cell by cell, those that can be seen; unsorted ones all at once. */
+      const drawSprites = (sprites: InstanceBuffer, margin: number, distance: number) => {
+        if (!sprites.cells) return pass.draw(4, sprites.count);
+        const n = visibleRuns(view, sprites.cells, margin, 0, distance, true);
+        for (let i = 0; i < n; i++) pass.draw(4, runs[i * 2 + 1]!, 0, runs[i * 2]!);
+      };
       if (!skipped('bubbles')) {
         pass.setPipeline(bubbles);
         pass.setVertexBuffer(0, world.bubbles.buffer);
-        pass.draw(4, world.bubbles.count);
+        drawSprites(world.bubbles, 4, Infinity);
       }
       if (!skipped('glints')) {
         pass.setPipeline(glints);
         pass.setVertexBuffer(0, world.glints.buffer);
-        pass.draw(4, world.glints.count);
+        drawSprites(world.glints, 2, tuning.glintDistance);
       }
       if (!skipped('snow')) {
         pass.setPipeline(snow);

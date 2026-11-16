@@ -1,6 +1,7 @@
 // The sun shadow map. Nothing that casts a shadow moves far, and the sun does not move at all, so the map is drawn
 // once when the world arrives: terrain, rocks, set pieces, sponges, corals and the kelp as it stands at time 0.
 import type { Quality } from '../../config/quality';
+import type { Tuning } from '../../config/tuning';
 import { DEPTH, type Gpu } from '../../gpu/context';
 import { shaderModule } from '../../gpu/shader';
 import leafSource from '../../shaders/leaf.wgsl';
@@ -13,7 +14,7 @@ export interface ShadowBake {
   bake(world: WorldBuffers): void;
 }
 
-export async function createShadowBake(gpu: Gpu, scene: Scene, quality: Quality): Promise<ShadowBake> {
+export async function createShadowBake(gpu: Gpu, scene: Scene, quality: Quality, tuning: Tuning): Promise<ShadowBake> {
   const { device, queue } = gpu;
   const solidModule = shaderModule(device, 'solid', [SceneGroup], solidSource);
   const leafModule = shaderModule(device, 'leaf', [SceneGroup], leafSource);
@@ -39,7 +40,13 @@ export async function createShadowBake(gpu: Gpu, scene: Scene, quality: Quality)
     device.createRenderPipelineAsync({
       label: 'shadow leaf',
       layout: scene.pipelineLayout,
-      vertex: { module: leafModule, entryPoint: 'leafVertex', buffers: [LEAF_INSTANCE_LAYOUT], constants: { ROWS: 3 } },
+      vertex: {
+        module: leafModule,
+        entryPoint: 'leafVertex',
+        buffers: [LEAF_INSTANCE_LAYOUT],
+        // (the blades cast the shadows of the shapes they are drawn with)
+        constants: { ROWS: 3, SMOOTH_BEND: tuning.smoothBend ? 1 : 0 },
+      },
       primitive: { topology: 'triangle-strip', cullMode: 'none' },
       depthStencil,
     }),

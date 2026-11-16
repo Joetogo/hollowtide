@@ -14,6 +14,8 @@ export interface Menu {
   readonly open: boolean;
   /** true while the home view is up: the camera is the page's to move */
   readonly home: boolean;
+  /** true while the pause panel is up, with the world blurred behind it */
+  readonly paused: boolean;
   /** Loading: what is happening and how far along it is, 0..1. */
   progress(text: string, fraction: number): void;
   /** Loading is done: the descent ends, the picture goes black, and the home view comes up. */
@@ -130,6 +132,9 @@ export function createMenu(level: Level, canvas: HTMLCanvasElement, actions: Men
     },
     get home() {
       return state === 'home';
+    },
+    get paused() {
+      return state === 'paused';
     },
     progress(text, fraction) {
       if (state !== 'loading') return;

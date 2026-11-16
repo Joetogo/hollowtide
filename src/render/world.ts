@@ -2,8 +2,8 @@
 import type { Gpu } from '../gpu/context';
 import { breathe } from '../gpu/turns';
 import type { CellInstances, CellTable, MeshRange, WorldData } from '../world/data';
-import { LEAF_BYTES, SOLID_BYTES, VERTEX_BYTES } from '../world/data';
-import { NX, NY, NZ } from '../world/grid';
+import { CELL_COUNT, LEAF_BYTES, SOLID_BYTES, VERTEX_BYTES } from '../world/data';
+import { CELLS, CELL_SIZE, NX, NY, NZ, ORIGIN_X, ORIGIN_Z } from '../world/grid';
 import { GROUND_MAP_SIZE, type Scene } from './scene';
 import { createSolidCull, type SolidCull } from './solids';
 
@@ -58,10 +58,11 @@ export const SNOW_INSTANCE_LAYOUT: GPUVertexBufferLayout = {
   attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x4' }],
 };
 
-/** An instance buffer drawn whole. */
+/** An instance buffer drawn whole, or, if it comes with a cell table, sorted by culling cell. */
 export interface InstanceBuffer {
   buffer: GPUBuffer;
   count: number;
+  cells?: CellTable;
 }
 
 /** An instance buffer sorted by culling cell. */
@@ -111,7 +112,47 @@ const YIELD_BYTES = 4 << 20;
  * Uploads a world. This copies about 200 MB to the GPU process, so it is done in turns: no single task holds the
  * main thread for long.
  */
-export async function uploadWorld(gpu: Gpu, scene: Scene, data: WorldData): Promise<WorldBuffers> {
+/**
+ * Sorts eight-float sprites (glints, bubbles) into the culling cells by where they are, keeping their order
+ * within a cell. `reach` gives how far above its position a sprite can get. Done in turns: there are 600,000.
+ */
+export async function sortSprites(
+  sprites: Float32Array,
+  reach: (sprites: Float32Array, at: number) => number,
+): Promise<CellInstances<Float32Array>> {
+  const count = sprites.length / 8;
+  const cellOf = (at: number) => {
+    const x = Math.min(CELLS - 1, Math.max(0, Math.floor((sprites[at]! - ORIGIN_X) / CELL_SIZE)));
+    const z = Math.min(CELLS - 1, Math.max(0, Math.floor((sprites[at + 2]! - ORIGIN_Z) / CELL_SIZE)));
+    return x + CELLS * z;
+  };
+  const start = new Uint32Array(CELL_COUNT + 1);
+  const lo = new Float32Array(CELL_COUNT).fill(Infinity);
+  const hi = new Float32Array(CELL_COUNT).fill(-Infinity);
+  const cell = new Uint16Array(count);
+  const TURN = 150_000;
+  for (let i = 0; i < count; i++) {
+    const c = (cell[i] = cellOf(i * 8));
+    start[c + 1]!++;
+    const y = sprites[i * 8 + 1]!;
+    if (y < lo[c]!) lo[c] = y;
+    const top = y + reach(sprites, i * 8);
+    if (top > hi[c]!) hi[c] = top;
+    if (i % TURN === TURN - 1) await breathe();
+  }
+  for (let c = 0; c < CELL_COUNT; c++) start[c + 1]! += start[c]!;
+  const next = start.slice(0, CELL_COUNT);
+  const sorted = new Float32Array(sprites.length);
+  for (let i = 0; i < count; i++) {
+    const to = next[cell[i]!]!++ * 8;
+    for (let f = 0; f < 8; f++) sorted[to + f] = sprites[i * 8 + f]!;
+    if (i % TURN === TURN - 1) await breathe();
+  }
+  return { instances: sorted, cells: { start, lo, hi } };
+}
+
+/** @param cullSprites sort the glints and the bubbles into cells, so that only those in view need be drawn */
+export async function uploadWorld(gpu: Gpu, scene: Scene, data: WorldData, cullSprites = false): Promise<WorldBuffers> {
   const { device, queue } = gpu;
   const buffers: GPUBuffer[] = [];
   let sinceYield = 0;
@@ -149,6 +190,16 @@ export async function uploadWorld(gpu: Gpu, scene: Scene, data: WorldData): Prom
     buffer: await upload(label, floats, VERTEX),
     count: floats.length / perInstance,
   });
+
+  const sprites = async (
+    label: string,
+    floats: Float32Array,
+    reach: (sprites: Float32Array, at: number) => number,
+  ): Promise<InstanceBuffer> => {
+    if (!cullSprites) return instances(label, floats, 8);
+    const sorted = await sortSprites(floats, reach);
+    return { buffer: await upload(label, sorted.instances, VERTEX), count: floats.length / 8, cells: sorted.cells };
+  };
 
   const solidCull = createSolidCull(gpu, data);
   const solidCount = data.solids.instances.length / 12;
@@ -189,8 +240,9 @@ export async function uploadWorld(gpu: Gpu, scene: Scene, data: WorldData): Prom
     leavesSmall: await cellBuffer('small leaves', data.leaves.small, LEAF_BYTES),
     fish: await instances('fish', data.fish, 8),
     mantas: await instances('mantas', data.mantas, 8),
-    bubbles: await instances('bubbles', data.bubbles, 8),
-    glints: await instances('glints', data.glints, 8),
+    // (a bubble rises the height of its column, which is its sixth float; a glint stays within a few centimetres)
+    bubbles: await sprites('bubbles', data.bubbles, (b, at) => b[at + 6]!),
+    glints: await sprites('glints', data.glints, () => 0.2),
     snow: await instances('snow', data.snow, 4),
     destroy() {
       buffers.forEach((b) => b.destroy());

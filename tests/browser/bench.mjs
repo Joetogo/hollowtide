@@ -105,7 +105,7 @@ try {
       new MutationObserver(note).observe(status, { childList: true, characterData: true, subtree: true });
     });
   });
-  const { error, report } = await mine.open(`${host.origin}/?level=${level}`, { pause: true });
+  const { error, report } = await mine.open(`${host.origin}/?level=${level}`, { pause: true, tuning: 'tuned' });
   if (error) throw new Error(error);
   // out of the menu, like the original: the menu's blur over the canvas costs GPU time of its own
   // (once the opening has played out: the home view would otherwise come up in the middle of the measurements)

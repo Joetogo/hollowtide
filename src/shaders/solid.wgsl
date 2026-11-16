@@ -3,6 +3,9 @@
 // Solid meshes: the terrain, rocks, the ship, the whale tail, sponges and corals. One mesh vertex format and one
 // instance format for all of them; the terrain is drawn as a single identity instance.
 
+// small rocks vanish at this share of the distance their instance gives (1: as the generator placed them)
+override ROCK_FADE: f32 = 1.;
+
 struct SolidVertex {
   @location(0) position: vec3f, // in the mesh's own space
   @location(1) normal: vec4f, // xyz, and baked ambient occlusion in w
@@ -28,7 +31,7 @@ fn solidVertex(v: SolidVertex) -> SolidVarying {
   var o: SolidVarying;
   var scale = v.placement.w;
   // small rocks shrink to nothing as they near their draw distance, instead of popping (not in the shadow bake)
-  if (v.material.x < 1.5 && v.material.z > 1.5 && frame.res.x > 0.) { scale *= 1. - smoothRamp(v.material.z * .7, v.material.z, distance(v.placement.xyz, frame.camPos) / frame.detail); }
+  if (v.material.x < 1.5 && v.material.z > 1.5 && frame.res.x > 0.) { let gone = v.material.z * ROCK_FADE; scale *= 1. - smoothRamp(gone * .7, gone, distance(v.placement.xyz, frame.camPos) / frame.detail); }
   var world = v.placement.xyz + rotate(v.rotation, v.position * scale);
   world.y += sin(frame.time * .3 + v.material.y * 40.) * v.material.w; // floating boulders bob
   o.clip = frame.viewProj * vec4f(world, 1.); o.world = world; o.normal = rotate(v.rotation, v.normal.xyz); o.objectPosition = v.position * v.placement.w + v.material.y * 37.; o.objectNormal = v.normal.xyz;

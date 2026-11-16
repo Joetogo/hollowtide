@@ -22,6 +22,7 @@ import { uploadWorld, type WorldBuffers } from './world';
 import type { BodyMeshes } from '../body/meshes';
 import { createBodyParts, type BodyParts } from '../body/rig';
 import { createBodyPass } from './passes/body';
+import type { Tuning } from '../config/tuning';
 
 export interface Renderer {
   readonly gpu: Gpu;
@@ -54,6 +55,7 @@ export interface Renderer {
 export async function createRenderer(
   gpu: Gpu,
   quality: Quality,
+  tuning: Tuning,
   onGpuTime: (ms: number) => void = () => undefined,
 ): Promise<Renderer> {
   const { device, queue, canvas, context } = gpu;
@@ -61,8 +63,8 @@ export async function createRenderer(
   const [blit, post, shadow, sceneDraw, shafts, bodyDraw] = await Promise.all([
     createBlit(gpu, scene.linearSampler),
     createPost(gpu, scene.frameBuffer, scene.linearSampler, quality.samples),
-    createShadowBake(gpu, scene, quality),
-    createScenePass(gpu, scene, quality),
+    createShadowBake(gpu, scene, quality, tuning),
+    createScenePass(gpu, scene, quality, tuning),
     createShafts(gpu, scene, quality),
     createBodyPass(gpu, scene, quality),
   ]);
@@ -86,7 +88,7 @@ export async function createRenderer(
     setBody: (meshes) => bodyDraw.setMeshes(meshes),
 
     async setWorld(data) {
-      const next = await uploadWorld(gpu, scene, data);
+      const next = await uploadWorld(gpu, scene, data, tuning.cullSprites);
       renderer.world?.destroy();
       renderer.world = next;
       shadow.bake(next);
@@ -140,7 +142,7 @@ export async function createRenderer(
       queue.writeBuffer(scene.frameBuffer, 0, scene.frameData);
       const encoder = device.createCommandEncoder();
       const stamps = timer.begin();
-      water.encode(encoder, time, stamps?.first);
+      if (!skipped('water')) water.encode(encoder, time, stamps?.first);
       if (!renderer.holdScene) {
         const pass = encoder.beginRenderPass(scenePass);
         if (renderer.world) {
@@ -152,7 +154,7 @@ export async function createRenderer(
         // with no world there is no shadow map to march through, and the shafts stay empty
         if (renderer.world) shafts.encode(encoder, skipped('shafts'));
       }
-      bloom.encode(encoder);
+      if (!skipped('bloom')) bloom.encode(encoder);
       post.encode(encoder, context.getCurrentTexture().createView(), stamps?.last);
       timer.resolve(encoder);
       queue.submit([encoder.finish()]);

@@ -35,6 +35,7 @@ Done so far:
 | 9. Shell | Loading bar, menu, keyboard / mouse / touch, collision, dynamic resolution, detail levels and crash fallback, stats line, sound | A scripted swim of 536 frames (easing, turning, sprinting into rock and sliding along it) traces the original's path bit for bit; no main-thread task over 50 ms while loading; starts and draws in Safari 27 from `file://` |
 | 10. Speed-ups that do not change a pixel | The world is built by two workers side by side and starts alongside shader compilation; the generator itself is about twice as fast; boulders outside the view are not drawn | 48 frames at High and 48 at Medium are bit-identical before and after (`tests/browser/same.mjs`); all 84 generator outputs still have the original's checksums; loading takes about 40 % less |
 | 11. In the water | Your own arms in first person, swimming a breaststroke; a hand-held scooter on `Shift`; the original's glide on `C` | Frames without the body are unchanged to the bit; 18 unit tests of the skeleton and the stroke; a browser test swims, rides the scooter and switches to the glide and back |
+| 12. Speed-ups that change pixels (first part) | A tuned set of draw distances beside the original's faithful one: ground cover, rock chips and pebbles and the far kelp end sooner behind the fades they already had, glints and bubbles are sorted into cells and only drawn where they can be seen, kelp blades no longer flick as their curl passes through zero; half the frames behind the pause panel | A frame takes 13–16 % less at 1280×720 and 2560×1440 (6 % at 640×360), two pages taking turns; 0–6 % of pixels differ at the six viewpoints; the tests against the original draw with the faithful set and still pass |
 | 15. Its own name | Hollowtide: title, menu, package, storage keys (settings saved under the old key are read once), test hook, docs | The old name appears only where the original is meant: the credit, the licence, the reference rig and the tests against it |
 
 **Parity gate: passed.** At that point Hollowtide was the original, from scratch: `dist/index.html` builds the same world (all
@@ -135,7 +136,8 @@ Where the loading time went (milestone 10), each step checked against the origin
 - The collision field is worked out after the world has been handed over, as nothing on screen waits for it.
 - `node tools/profile-generator.mjs --cpu` shows where the time goes now.
 
-The frame costs are still the original's. Both submitted exactly the same geometry (35,034,683 vertices and
+With the original's own draw distances (the faithful set, `?tuning=faithful` in a dev build) the frame costs
+are still the original's; what ships is the tuned set, 13–16 % cheaper (see the status table). Both submitted exactly the same geometry (35,034,683 vertices and
 indices at the first viewpoint), and that geometry, not the pixel count, is what a frame costs on this GPU. Hollowtide
 now leaves out the boulders that are outside the view (they were 5.7 million of those indices, drawn
 wherever the camera looked), which is worth a few per cent. `node tests/browser/profile.mjs` times a frame with
