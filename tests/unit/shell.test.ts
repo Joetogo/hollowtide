@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { createCamera, lookAt } from '../../src/camera/camera';
 import { createIntent, createSwimmer, FAST_SPEED, SPEED, stepSwimmer } from '../../src/camera/controls';
-import { addFrame, addGpuTime, createDynRes, hold, MAX_PIXELS, MIN_DETAIL, settle } from '../../src/render/dynres';
+import {
+  addFrame,
+  addGpuTime,
+  createDynRes,
+  hold,
+  MAX_PIXELS,
+  MIN_DETAIL,
+  settle,
+  SHARP,
+  SMOOTH,
+} from '../../src/render/dynres';
 
 // That swimming matches the original frame for frame is checked in the browser against the original itself
 // (tests/browser/controls.mjs). These tests pin down the rules on their own terms.
@@ -137,6 +147,23 @@ describe('dynamic resolution', () => {
     hold(state);
     for (let i = 0; i < 300; i++) period(state, 40, 40);
     expect(state.pixels).toBe(before);
+  });
+
+  it('asked for a sharp picture, settles for thirty frames a second and spends the rest on pixels', () => {
+    // 22 ms of GPU time is far too slow for the smooth target and just right for the sharp one
+    const smooth = createDynRes(MAX_PIXELS, 1, false);
+    expect(period(smooth, 33, 22)).toBe(true);
+    expect(smooth.pixels).toBeLessThan(MAX_PIXELS);
+    const sharp = createDynRes(MAX_PIXELS, 1, false, SHARP);
+    expect(period(sharp, 33, 22)).toBe(false);
+    expect([sharp.pixels, sharp.detail]).toEqual([MAX_PIXELS, 1]);
+    // switched over while running: what was given up for smoothness comes back
+    const state = createDynRes(5e5, MIN_DETAIL, false);
+    state.target = SHARP;
+    for (let i = 0; i < 12; i++) period(state, 33, 12);
+    expect(state.pixels).toBe(MAX_PIXELS);
+    expect(state.detail).toBe(1);
+    expect(SHARP).toBeGreaterThan(SMOOTH * 2);
   });
 
   it('never goes below fewer pixels on a phone than its own floor', () => {

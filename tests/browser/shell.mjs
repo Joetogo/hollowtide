@@ -1,7 +1,7 @@
 // Drives the shipped page like a person: watches the descent while it loads, waits for the home view, dives with
 // a key, has the eyes open, swims, opens the stats, jumps to a viewpoint, pauses. Saves screenshots to
 // test-results/shell/ and checks that the page and the camera answered.
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { check, finish, launch, need, root, serve } from './lib.mjs';
 
@@ -137,9 +137,77 @@ try {
   );
   await shot(chrome, '4-viewpoint-2');
 
+  // ---- the tour: the camera flies by itself until a swimming key takes over
+  await chrome.page.keyboard.press('KeyT');
+  await chrome.page.waitForTimeout(700);
+  const touring = await camera(chrome);
+  await chrome.page.waitForTimeout(700);
+  const toured = await camera(chrome);
+  const flown = Math.hypot(toured.x - touring.x, toured.y - touring.y, toured.z - touring.z);
+  check(flown > 0.5, `T starts a tour: the camera flies by itself (${flown.toFixed(1)} m in 0.7 s)`);
+  await chrome.page.keyboard.down('KeyS');
+  await chrome.page.waitForTimeout(200);
+  await chrome.page.keyboard.up('KeyS');
+  await chrome.page.waitForTimeout(2500); // coasting to a stop
+  const taken = await camera(chrome);
+  await chrome.page.waitForTimeout(500);
+  const still = await camera(chrome);
+  check(
+    Math.hypot(still.x - taken.x, still.y - taken.y, still.z - taken.z) < 0.05,
+    'a swimming key ends the tour where it has got to',
+  );
+
+  // ---- photo mode: the moment stands still, and Enter saves a picture larger than the screen
+  await chrome.page.keyboard.press('KeyP');
+  await chrome.page.waitForTimeout(300);
+  check(
+    await chrome.page.evaluate(
+      () =>
+        document.body.classList.contains('photo') && /Enter saves/.test(document.getElementById('note').textContent),
+    ),
+    'P is photo mode, and says how to save',
+  );
+  const [download] = await Promise.all([
+    chrome.page.waitForEvent('download', { timeout: 15_000 }),
+    chrome.page.keyboard.press('Enter'),
+  ]);
+  const file = await download.path();
+  const header = readFileSync(file);
+  const [width, height] = [header.readUInt32BE(16), header.readUInt32BE(20)];
+  check(
+    /^hollowtide-.*\.png$/.test(download.suggestedFilename()) &&
+      header.subarray(1, 4).toString() === 'PNG' &&
+      width >= 2560 &&
+      width * height <= 3840 * 2160,
+    `Enter saves a picture: ${download.suggestedFilename()}, ${width} x ${height}`,
+  );
+  await chrome.page.waitForTimeout(400);
+  const size = await chrome.page.evaluate(
+    () =>
+      window.__hollowtide.report && [document.getElementById('scene').width, document.getElementById('scene').height],
+  );
+  check(
+    size[0] <= 1280 && size[1] <= 720,
+    `and the screen is back at its own size afterwards (${size[0]} x ${size[1]})`,
+  );
+  await chrome.page.keyboard.press('KeyP');
+  await chrome.page.waitForTimeout(200);
+  check(await chrome.page.evaluate(() => !document.body.classList.contains('photo')), 'P again leaves photo mode');
+
   await chrome.page.keyboard.press('Escape');
   await chrome.page.waitForTimeout(300);
   check(await chrome.page.evaluate(() => document.body.className === 'menu'), 'Esc pauses');
+  // ---- settings in the pause panel take effect and are remembered
+  await chrome.page.click('#picture button:nth-of-type(2)');
+  await chrome.page.click('#swim button:nth-of-type(2)');
+  await chrome.page.fill('#fov', '1.15');
+  await chrome.page.dispatchEvent('#fov', 'input');
+  const kept = await chrome.page.evaluate(() => JSON.parse(localStorage.getItem('hollowtide')));
+  check(
+    kept.sharp === true && kept.classic === true && kept.fov === 1.15,
+    "the pause panel's settings are remembered (picture, swimming, field of view)",
+  );
+  await chrome.page.click('#swim button:nth-of-type(1)');
   check(
     await chrome.page.evaluate(() => document.getElementById('dive').textContent === 'Resume'),
     'the button now says Resume',

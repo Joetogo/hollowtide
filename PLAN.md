@@ -172,6 +172,10 @@ Key mechanisms:
 - Defect fixes: leaf curvature (series fallback near zero), fog integral, sine hash, the collision brick cap.
 
 **Milestone 13: features and UX**
+- Done: settings in the pause panel (look speed, inverted look, field of view, volume, smooth or sharp picture,
+  arms or classic), photo mode with a picture saved at up to 4K, the tour. Still to do from the list below:
+  share-camera URL, gamepad, arrow-key look, drag-to-look, a visible mute button, `?seed=`, switching the
+  detail level without a reload.
 - Done ahead of the rest (2026-11-16): the opening. A diver sinks while the world loads, the
   picture goes black, the home view drifts through the world with "W A S D to dive", and the dive opens the
   swimmer's eyes on the seabed. See "The opening" in the README.

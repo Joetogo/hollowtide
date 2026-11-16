@@ -23,6 +23,8 @@ export interface Soundscape {
   /** Call on every click, key and touch: builds the graph the first time, and resumes it when the browser allows. */
   wake(): void;
   setMuted(muted: boolean): void;
+  /** 0..1, on top of the mix's own level. */
+  setVolume(volume: number): void;
   /** How hard the scooter's motor is running, 0..1; call as often as it changes. */
   scooter(throttle: number): void;
 }
@@ -32,6 +34,7 @@ export function createSoundscape(camera: Camera, startMuted: boolean): Soundscap
   let master: GainNode | null = null;
   let muted = startMuted;
   let throttle = 0;
+  let volume = 1;
   // its own random stream: the sound never disturbs anything else that draws random numbers
   const random = new Random();
   random.reseed(300);
@@ -152,7 +155,7 @@ export function createSoundscape(camera: Camera, startMuted: boolean): Soundscap
     let lx = camera.x,
       ly = camera.y,
       lz = camera.z;
-    out.gain.setTargetAtTime(muted ? 0 : VOLUME, last, 1);
+    out.gain.setTargetAtTime(muted ? 0 : VOLUME * volume, last, 1);
     return () => {
       const now = ac.currentTime,
         t = now + 0.05,
@@ -215,12 +218,16 @@ export function createSoundscape(camera: Camera, startMuted: boolean): Soundscap
       }
       if (context.state === 'suspended' && !document.hidden) void context.resume();
     },
+    setVolume(value) {
+      volume = value;
+      if (context && master) master.gain.setTargetAtTime(muted ? 0 : VOLUME * volume, context.currentTime, 0.08);
+    },
     scooter(value) {
       throttle = value;
     },
     setMuted(value) {
       muted = value;
-      if (context && master) master.gain.setTargetAtTime(muted ? 0 : VOLUME, context.currentTime, 0.08);
+      if (context && master) master.gain.setTargetAtTime(muted ? 0 : VOLUME * volume, context.currentTime, 0.08);
     },
   };
 }

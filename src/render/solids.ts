@@ -7,6 +7,7 @@ import type { Gpu } from '../gpu/context';
 import { SOLID_BYTES, VERTEX_BYTES, type WorldData } from '../world/data';
 import type { CullView } from './cull';
 import { TAN_HALF_FOV } from './frame';
+import { hypot3 } from '../math/hypot';
 
 const FLOATS = SOLID_BYTES / 4;
 
@@ -60,7 +61,7 @@ export function createSolidCull(gpu: Gpu, data: WorldData): SolidCull {
     );
     let reach = 0;
     for (let v = 0; v < positions.length; v += VERTEX_BYTES / 4)
-      reach = Math.max(reach, Math.hypot(positions[v]!, positions[v + 1]!, positions[v + 2]!));
+      reach = Math.max(reach, hypot3(positions[v]!, positions[v + 1]!, positions[v + 2]!));
     for (let i = first; i < first + n; i++) {
       const o = i * FLOATS;
       balls.set([instances[o]!, instances[o + 1]!, instances[o + 2]!], i * 4);

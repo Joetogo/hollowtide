@@ -5,6 +5,7 @@
 //   playing   in the water
 //   paused    the world blurred behind a panel: resume, detail level, the keys
 import type { Level } from '../config/quality';
+import type { Settings } from '../config/settings';
 import { createVeil } from './veil';
 
 const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -24,6 +25,10 @@ export interface Menu {
   fail(message: string): void;
   /** Pauses (opens the panel), or closes it and returns to the scene. */
   show(open: boolean): void;
+  /** Shows the settings as they are now (after something other than the panel has changed one). */
+  sync(): void;
+  /** The picture comes up out of black over a second and a half: for a cut from one place to another. */
+  fade(): void;
 }
 
 export interface MenuActions {
@@ -35,6 +40,8 @@ export interface MenuActions {
   onToggle(open: boolean): void;
   /** another detail level was picked */
   onLevel(level: Level): void;
+  /** a setting was changed in the panel (the settings object has the new value): apply it and remember it */
+  onSettings(): void;
 }
 
 /** Keys that start the dive from the home view. */
@@ -55,7 +62,7 @@ const BLACK = 0.45;
 /** Seconds into waking at which the swimmer can move: the eyes are half open. */
 const STIR = 1.3;
 
-export function createMenu(level: Level, canvas: HTMLCanvasElement, actions: MenuActions): Menu {
+export function createMenu(level: Level, canvas: HTMLCanvasElement, settings: Settings, actions: MenuActions): Menu {
   const body = document.body;
   const dive = el<HTMLButtonElement>('dive');
   const status = el('status');
@@ -72,6 +79,7 @@ export function createMenu(level: Level, canvas: HTMLCanvasElement, actions: Men
     state = next ? 'paused' : 'playing';
     body.className = next ? 'menu' : captured() ? 'playing captured' : 'playing';
     // focus the resume button so Enter works (delayed: it cannot take focus while it is still hidden)
+    if (next) sync();
     if (next) setTimeout(() => state === 'paused' && dive.focus(), 100);
     else (document.activeElement as HTMLElement | null)?.blur();
     actions.onToggle(next);
@@ -122,6 +130,37 @@ export function createMenu(level: Level, canvas: HTMLCanvasElement, actions: Men
       if (buttonLevel === level) button.className = 'on';
       else button.onclick = () => actions.onLevel(buttonLevel);
     });
+  // ---- the settings in the pause panel: three sliders and three choices, each written straight into `settings`
+  const syncs: (() => void)[] = [];
+  const slider = (id: string, key: 'sensitivity' | 'fov' | 'volume') => {
+    const input = el<HTMLInputElement>(id);
+    input.oninput = () => {
+      settings[key] = +input.value;
+      actions.onSettings();
+    };
+    syncs.push(() => (input.value = String(settings[key])));
+  };
+  /** A row of two buttons for a yes-or-no setting: the first is "no". */
+  const choice = (id: string, key: 'invertY' | 'sharp' | 'classic') => {
+    const buttons = el(id).querySelectorAll('button');
+    buttons.forEach((button, i) => {
+      button.onclick = () => {
+        settings[key] = i === 1;
+        sync();
+        actions.onSettings();
+      };
+    });
+    syncs.push(() => buttons.forEach((button, i) => (button.className = (i === 1) === settings[key] ? 'on' : '')));
+  };
+  slider('look', 'sensitivity');
+  slider('fov', 'fov');
+  slider('volume', 'volume');
+  choice('invert', 'invertY');
+  choice('picture', 'sharp');
+  choice('swim', 'classic');
+  const sync = () => syncs.forEach((each) => each());
+  sync();
+
   // losing the mouse (Esc, or switching away) pauses; taking it resumes. While the eyes are opening the mouse
   // is taken without anything else changing.
   document.addEventListener('pointerlockchange', () => show(!captured()));
@@ -160,5 +199,7 @@ export function createMenu(level: Level, canvas: HTMLCanvasElement, actions: Men
       status.textContent = message;
     },
     show,
+    sync,
+    fade: () => veil.reveal(),
   };
 }

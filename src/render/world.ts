@@ -106,7 +106,7 @@ export interface WorldBuffers {
 const IDENTITY_INSTANCE = [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0];
 
 /** After uploading this much, the page gets a turn: copying is slow enough to notice on a throttled laptop. */
-const YIELD_BYTES = 4 << 20;
+const YIELD_BYTES = 2 << 20;
 
 /**
  * Uploads a world. This copies about 200 MB to the GPU process, so it is done in turns: no single task holds the
@@ -130,7 +130,7 @@ export async function sortSprites(
   const lo = new Float32Array(CELL_COUNT).fill(Infinity);
   const hi = new Float32Array(CELL_COUNT).fill(-Infinity);
   const cell = new Uint16Array(count);
-  const TURN = 150_000;
+  const TURN = 30_000; // few enough that a turn is short even before this loop has been compiled
   for (let i = 0; i < count; i++) {
     const c = (cell[i] = cellOf(i * 8));
     start[c + 1]!++;

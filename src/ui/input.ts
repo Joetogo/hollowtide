@@ -8,6 +8,8 @@ export interface InputActions {
   menuOpen(): boolean;
   /** a key that is not a movement key, by its KeyboardEvent.code */
   onKey(code: string): void;
+  /** how fast the view turns (1 = as shipped), negative for an inverted up and down */
+  lookSpeed(): [x: number, y: number];
 }
 
 export interface Input {
@@ -89,8 +91,9 @@ export function bindInput(canvas: HTMLCanvasElement, intent: Intent, actions: In
   canvas.addEventListener('click', capture);
   addEventListener('mousemove', (event) => {
     if (document.pointerLockElement === canvas) {
-      intent.lookX += event.movementX;
-      intent.lookY += event.movementY;
+      const [sx, sy] = actions.lookSpeed();
+      intent.lookX += event.movementX * sx;
+      intent.lookY += event.movementY * sy;
     }
   });
 
@@ -118,8 +121,9 @@ export function bindInput(canvas: HTMLCanvasElement, intent: Intent, actions: In
         startY = y;
       } else {
         // the view follows the finger at once...
-        intent.lookX += (x - lastX) * scale;
-        intent.lookY += (y - lastY) * scale;
+        const [sx, sy] = actions.lookSpeed();
+        intent.lookX += (x - lastX) * scale * sx;
+        intent.lookY += (y - lastY) * scale * sy;
       }
       lastX = x;
       lastY = y;

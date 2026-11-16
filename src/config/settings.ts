@@ -20,6 +20,19 @@ export interface Settings {
    * system asks for reduced motion.
    */
   classic: boolean;
+  /** how fast the view turns for a given movement of the mouse or a finger, 1 = as shipped */
+  sensitivity: number;
+  /** pushing the mouse forward looks down */
+  invertY: boolean;
+  /** 0..1 */
+  volume: number;
+  /** how wide the view is, as a multiple of the usual lens (0.85 narrow .. 1.2 wide) */
+  fov: number;
+  /**
+   * What the picture gives up when the machine cannot keep up. false: resolution and draw distance, to stay
+   * smooth. true: smoothness, down to thirty frames a second, to stay sharp and far-seeing.
+   */
+  sharp: boolean;
   /** a phone or tablet: touch is the main input */
   readonly mobile: boolean;
 }
@@ -30,8 +43,16 @@ interface Stored {
   detail?: number;
   muted?: boolean;
   classic?: boolean;
+  sensitivity?: number;
+  invertY?: boolean;
+  volume?: number;
+  fov?: number;
+  sharp?: boolean;
 }
 
+/** A stored number if it is one and within its range, else the default. */
+const within = (value: unknown, lo: number, hi: number, otherwise: number) =>
+  typeof value === 'number' && value >= lo && value <= hi ? value : otherwise;
 const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const read = (key: string): string | null => {
@@ -86,6 +107,11 @@ export function loadSettings(): Settings {
     detail: detail || 1,
     muted: !!stored.muted,
     classic: stored.classic ?? reducedMotion(),
+    sensitivity: within(stored.sensitivity, 0.3, 2.5, 1),
+    invertY: !!stored.invertY,
+    volume: within(stored.volume, 0, 1, 1),
+    fov: within(stored.fov, 0.85, 1.2, 1),
+    sharp: !!stored.sharp,
     mobile,
   };
 }
@@ -95,10 +121,8 @@ export function saveSettings(settings: Settings, fullPixels: number): void {
   const pixels = settings.pixels < fullPixels ? Math.floor(settings.pixels) : undefined;
   // the swimming style is remembered only once it differs from what the system's motion setting implies
   const classic = settings.classic === reducedMotion() ? undefined : settings.classic;
-  write(
-    KEY,
-    JSON.stringify({ level: settings.level, pixels, detail: settings.detail, muted: settings.muted, classic }),
-  );
+  const { level, detail, muted, sensitivity, invertY, volume, fov, sharp } = settings;
+  write(KEY, JSON.stringify({ level, pixels, detail, muted, classic, sensitivity, invertY, volume, fov, sharp }));
 }
 
 /** Marks a load as started or finished (see LOADING_KEY). */

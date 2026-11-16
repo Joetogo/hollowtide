@@ -5,12 +5,12 @@
 // runs: dynamic resolution, the swimmer, a frame, the stats line.
 import { createSoundscape } from '../audio/soundscape';
 import { lookAt, updateBasis } from '../camera/camera';
-import { flyPoint } from '../camera/path';
+import { FLY_SECONDS, flyPoint } from '../camera/path';
 import { createIntent, createSwimmer, stepSwimmer, type Drive } from '../camera/controls';
 import { loadSettings, markLoading, saveSettings } from '../config/settings';
 import { quality, type Level } from '../config/quality';
 import { createGpu, StartupError } from '../gpu/context';
-import { addFrame, addGpuTime, createDynRes, MAX_PIXELS, settle } from '../render/dynres';
+import { addFrame, addGpuTime, createDynRes, MAX_PIXELS, settle, SHARP, SMOOTH } from '../render/dynres';
 import { createRenderer } from '../render/renderer';
 import { generateWorld, type Generated } from '../world/client';
 import type { CollisionField } from '../world/collision';
@@ -51,6 +51,10 @@ declare global {
 
 const TRANSFER_BYTES = 16 << 20;
 /** What the loading bar says while each stage of world generation runs. */
+const PHOTO_KEYS = 'Photo: Enter saves a picture, P returns';
+const TOUR_KEYS = 'A tour of the hollow. Any swimming key takes over';
+/** The most pixels a saved picture has: a 4K frame. */
+const PHOTO_PIXELS = 3840 * 2160;
 const CLASSIC_ON = 'Classic glide: no arms, steady speed. C brings the arms back';
 const CLASSIC_OFF = 'Swimming with arms. C switches to the classic glide';
 /** The home view: which stretch of the scripted flight it drifts along (seconds of it), and how fast. */
@@ -144,8 +148,9 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
 
   // the page's controls exist before anything can go wrong, so a failure has somewhere to be shown
   const intent = createIntent();
-  const menu = createMenu(level, canvas, {
+  const menu = createMenu(level, canvas, settings, {
     onWake: () => wake?.(),
+    onSettings: () => applySettings(),
     onDive() {
       sound?.wake();
       // phones: go fullscreen and ask for landscape; where that is refused the page's CSS rotation still applies
@@ -170,6 +175,8 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
   let sound: ReturnType<typeof createSoundscape> | null = null;
   /** Puts the swimmer where they wake (set once there is a world to wake in). */
   let wake: (() => void) | null = null;
+  /** Puts the settings into effect and remembers them (set once there is something to apply them to). */
+  let applySettings: () => void = () => undefined;
   let input: ReturnType<typeof bindInput> | null = null;
 
   try {
@@ -198,7 +205,7 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       });
       making.catch(() => 0); // a failure is reported where the world is awaited, not as an unhandled rejection
     } else menu.progress('Compiling shaders…', 0.05);
-    const dynres = createDynRes(settings.pixels, settings.detail, settings.mobile);
+    const dynres = createDynRes(settings.pixels, settings.detail, settings.mobile, settings.sharp ? SHARP : SMOOTH);
     let gpuMs = 0;
     // dev and harness builds can draw with the original's own distances: ?tuning=faithful
     const tuning = (__DEV__ || __HARNESS__) && params.get('tuning') === 'faithful' ? FAITHFUL : TUNED;
@@ -271,6 +278,7 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
     input = bindInput(canvas, intent, {
       onGesture: () => sound!.wake(),
       menuOpen: () => menu.open,
+      lookSpeed: () => [settings.sensitivity, settings.invertY ? -settings.sensitivity : settings.sensitivity],
       onKey(code) {
         if (code === 'KeyH') hud.toggle();
         else if (code === 'KeyM') {
@@ -282,14 +290,80 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
           // it is said: arms that are simply gone on the next visit would look like a fault
           settings.classic = !settings.classic;
           saveSettings(settings, fullPixels());
+          menu.sync();
           note(settings.classic ? CLASSIC_ON : CLASSIC_OFF);
-        } else if (code === 'Escape') menu.show(true);
-        else if (code >= 'Digit1' && code <= 'Digit6') goTo(code.charCodeAt(5) - 49);
+        } else if (code === 'KeyP') setPhoto(!photo);
+        else if (code === 'Enter' && photo) shoot = true;
+        else if (code === 'KeyT') setTour(tour < 0);
+        else if (code === 'Escape') {
+          // out of a mode first; the panel is one more Esc away
+          if (photo) setPhoto(false);
+          else if (tour >= 0) setTour(false);
+          else menu.show(true);
+        } else if (code >= 'Digit1' && code <= 'Digit6') goTo(code.charCodeAt(5) - 49);
       },
     });
     const deviceWidth = () => Math.max(2, Math.round(canvas.clientWidth * devicePixelRatio));
     const fullPixels = () =>
       Math.min(MAX_PIXELS, deviceWidth() * Math.max(2, Math.round(canvas.clientHeight * devicePixelRatio)));
+
+    // ---- photo mode: the moment stands still, nothing but the world is on screen, and Enter saves a picture
+    let photo = false;
+    let shoot = false;
+    const setPhoto = (on: boolean) => {
+      photo = on;
+      document.body.classList.toggle('photo', on);
+      if (on) {
+        setTour(false);
+        body.shown = 0; // arms out of the picture at once
+        note.hold(PHOTO_KEYS);
+      } else note.clear();
+    };
+    /** Draws the frozen moment again at a larger size, saves it as a PNG, and puts the size back. */
+    const savePicture = () => {
+      const [budget, detail] = [renderer.pixelBudget, renderer.detail];
+      // twice the screen each way, but no more than a 4K frame: the targets for it have to fit in memory
+      renderer.supersample = 2;
+      renderer.pixelBudget = Math.min(PHOTO_PIXELS, fullPixels() * 4);
+      renderer.detail = 1;
+      renderer.resize();
+      renderer.render(time);
+      const [width, height] = [renderer.targets.width, renderer.targets.height];
+      canvas.toBlob((blob) => {
+        if (!blob) return note('The picture could not be saved');
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `hollowtide-${new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-')}.png`;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(link.href), 10_000);
+        note.hold(`Saved, ${width} × ${height}. ${PHOTO_KEYS}`);
+      }, 'image/png');
+      renderer.supersample = 1;
+      renderer.pixelBudget = budget;
+      renderer.detail = detail;
+      renderer.resize();
+      settle(dynres);
+    };
+
+    // ---- the tour: the camera flies the scripted flight; any swimming key takes over where it has got to
+    let tour = -1; // seconds into it, or -1
+    const setTour = (on: boolean) => {
+      if (on === tour >= 0) return;
+      tour = on ? 0 : -1;
+      if (on) {
+        setPhoto(false);
+        Object.assign(swimmer, createSwimmer());
+        menu.fade();
+        note(TOUR_KEYS);
+      }
+    };
+
+    sound.setVolume(settings.volume);
+    applySettings = () => {
+      sound!.setVolume(settings.volume);
+      dynres.target = settings.sharp ? SHARP : SMOOTH;
+      saveSettings(settings, fullPixels());
+    };
 
     // ---- the first frame, finished on the GPU before the reveal (pipelines are compiled on first use)
     menu.progress('Letting the light in…', 1);
@@ -309,6 +383,11 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       last = now;
       if (hook.paused) return;
       const dt = Math.min(frameMs / 1000, 0.1);
+      if (menu.open && (photo || tour >= 0)) {
+        // paused, or back at the start: modes do not outlast that
+        setPhoto(false);
+        setTour(false);
+      }
       // dynamic resolution: when a measuring period ends it may change the pixel budget or the draw distance
       // (not while paused, when frames are skipped on purpose)
       if (!menu.paused && addFrame(dynres, frameMs, menu.open, fullPixels())) {
@@ -319,21 +398,26 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       renderer.pixelBudget = dynres.pixels;
       renderer.detail = dynres.detail;
       if (renderer.resize()) settle(dynres);
-      time += dt;
+      if (!photo) time += dt; // a photograph is of one moment
       // the swimmer's body: in view while in the water, unless the classic glide is chosen
       const [yawBefore, pitchBefore] = [camera.yaw, camera.pitch];
-      if (menu.home) {
+      if (tour >= 0) {
+        tour += dt;
+        flyPoint(tour, flight);
+        lookAt(camera, flight[0]!, flight[1]!, flight[2]!, flight[3]!, flight[4]!, flight[5]!);
+        if (tour >= FLY_SECONDS || intent.forward || intent.right || intent.up || intent.fast) setTour(false);
+      } else if (menu.home) {
         homeClock += dt * HOME_SPEED;
         const there = homeClock % (HOME_SPAN * 2);
         flyPoint(HOME_FROM + (there < HOME_SPAN ? there : HOME_SPAN * 2 - there), flight);
         lookAt(camera, flight[0]!, flight[1]!, flight[2]!, flight[3]!, flight[4]!, flight[5]!);
-      } else stepSwimmer(camera, swimmer, intent, collision, dt, settings.classic ? undefined : drive);
+      } else stepSwimmer(camera, swimmer, intent, collision, dt, settings.classic || photo ? undefined : drive);
       const turned = dt > 0 ? 1 / dt : 0;
       stepBody(
         body,
         intent,
-        !menu.open && !settings.classic,
-        dt,
+        !menu.open && !settings.classic && !photo && tour < 0,
+        photo ? 0 : dt,
         drive,
         (camera.yaw - yawBefore) * turned,
         (camera.pitch - pitchBefore) * turned,
@@ -344,8 +428,12 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       const [y, pitch] = [camera.y, camera.pitch];
       camera.y += body.heave;
       camera.pitch += body.nod;
-      camera.wide = 1 + WIDE_AT_SPEED * body.rush; // and the scooter's pull widens the view
+      camera.wide = settings.fov * (1 + WIDE_AT_SPEED * body.rush); // and the scooter's pull widens the view
       updateBasis(camera);
+      if (shoot) {
+        shoot = false;
+        savePicture();
+      }
       renderer.render(time);
       camera.y = y;
       camera.pitch = pitch;

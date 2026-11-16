@@ -35,6 +35,8 @@ export interface Renderer {
   detail: number;
   /** Pixel budget for the render size. */
   pixelBudget: number;
+  /** Render this many times the canvas's device size each way (1 but for a moment, when a picture is taken). */
+  supersample: number;
   /** The current targets; replaced whenever the render size changes. */
   targets: Targets;
   /** While set, the scene pass is skipped and whatever the scene target holds is composited (used by the harness). */
@@ -82,6 +84,7 @@ export async function createRenderer(
     world: null,
     detail: 1,
     pixelBudget: MAX_PIXELS,
+    supersample: 1,
     targets: undefined as unknown as Targets, // set by the resize() below
     holdScene: false,
     body: createBodyParts(),
@@ -99,7 +102,7 @@ export async function createRenderer(
       const [width, height] = renderSize(
         canvas.clientWidth,
         canvas.clientHeight,
-        window.devicePixelRatio,
+        window.devicePixelRatio * renderer.supersample,
         renderer.pixelBudget,
       );
       const old = renderer.targets as Targets | undefined;

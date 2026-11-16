@@ -64,25 +64,35 @@ try {
   check(drawn.clean, 'a frame drawn after the body is taken away is the same as one drawn before it, to the bit');
   check(drawn.hidden, 'a body that is not shown draws nothing');
 
-  // ---- what it costs: a frame with the body against one without, in many short turns (a laptop that is warm
-  // slows down and speeds up from one second to the next, and a few long turns measure that instead)
+  // ---- what it costs: a frame with the body against one without. A warm laptop slows down and speeds up from
+  // one second to the next, so the two are timed in short turns side by side, and what counts is the difference
+  // within each pair of turns, not between two pools of frames taken at different temperatures.
   const cost = await chrome.page.evaluate(async () => {
     const h = window.__hollowtide.harness;
     const pose = h.viewpoints()[0];
-    const samples = [[], []];
-    for (let round = 0; round < 14; round++) {
-      for (const side of round % 2 ? [1, 0] : [0, 1]) {
-        h.poseBody(side ? { swim: 1, phase: 0.1 } : null);
-        samples[side].push(...(await h.frameCost([pose], 11, 1280 * 720)).totalMs.slice(3));
-      }
+    const median = (a) => [...a].sort((x, y) => x - y)[a.length >> 1];
+    const turn = async (withBody) => {
+      h.poseBody(withBody ? { swim: 1, phase: 0.1 } : null);
+      return median((await h.frameCost([pose], 9, 1280 * 720)).totalMs.slice(3));
+    };
+    const differences = [];
+    const frames = [];
+    for (let round = 0; round < 24; round++) {
+      // without, with; then with, without: whichever comes second in a warming machine is not always the same one
+      const first = await turn(round % 2 === 1);
+      const second = await turn(round % 2 === 0);
+      const [without, withBody] = round % 2 ? [second, first] : [first, second];
+      differences.push(withBody - without);
+      frames.push(without);
     }
     h.poseBody(null);
-    const median = (a) => [...a].sort((x, y) => x - y)[a.length >> 1];
-    return { without: median(samples[0]), withBody: median(samples[1]) };
+    return { extra: median(differences), frame: median(frames) };
   });
   check(
-    cost.withBody - cost.without < Math.max(1.5, cost.without * 0.06),
-    `drawing the body costs ${(cost.withBody - cost.without).toFixed(2)} ms of a ${cost.without.toFixed(1)} ms frame`,
+    // (it measures at 0 to 3 % of a frame; the limit is there to catch it going badly wrong, on a machine whose
+    // own speed moves by more than that while this runs)
+    cost.extra < Math.max(2, cost.frame * 0.12),
+    `drawing the body costs ${cost.extra.toFixed(2)} ms of a ${cost.frame.toFixed(1)} ms frame`,
   );
 
   // ---- live: strokes, the scooter, the classic glide
