@@ -2,6 +2,7 @@
 // signed bytes holding the normal and one extra value per vertex (ambient occlusion, or whatever the shader that
 // draws the mesh wants there).
 import { clamp, TAU } from './scalar';
+import { hypot3 } from './hypot';
 
 export type Point = readonly [number, number, number];
 
@@ -61,7 +62,7 @@ export class MeshBuilder {
       let tx = b[0] - a[0],
         ty = b[1] - a[1],
         tz = b[2] - a[2];
-      const tl = Math.hypot(tx, ty, tz) || 1;
+      const tl = hypot3(tx, ty, tz) || 1;
       tx /= tl;
       ty /= tl;
       tz /= tl;
@@ -69,7 +70,7 @@ export class MeshBuilder {
       let sx = u0[1]! * tz - u0[2]! * ty,
         sy = u0[2]! * tx - u0[0]! * tz,
         sz = u0[0]! * ty - u0[1]! * tx;
-      const sl = Math.hypot(sx, sy, sz) || 1;
+      const sl = hypot3(sx, sy, sz) || 1;
       sx /= sl;
       sy /= sl;
       sz /= sl;
@@ -131,14 +132,14 @@ export class MeshBuilder {
       let tx = b[0] - a[0],
         ty = b[1] - a[1],
         tz = b[2] - a[2];
-      const tl = Math.hypot(tx, ty, tz) || 1;
+      const tl = hypot3(tx, ty, tz) || 1;
       tx /= tl;
       ty /= tl;
       tz /= tl;
       let sx = uy * tz - uz * ty,
         sy = uz * tx - ux * tz,
         sz = ux * ty - uy * tx;
-      const sl = Math.hypot(sx, sy, sz) || 1;
+      const sl = hypot3(sx, sy, sz) || 1;
       sx /= sl;
       sy /= sl;
       sz /= sl;
@@ -206,7 +207,7 @@ export class MeshBuilder {
       const nx = normals[k * 3]!,
         ny = normals[k * 3 + 1]!,
         nz = normals[k * 3 + 2]!;
-      const length = Math.hypot(nx, ny, nz) || 1;
+      const length = hypot3(nx, ny, nz) || 1;
       floats[k * 4] = P[k * 3]!;
       floats[k * 4 + 1] = P[k * 3 + 1]!;
       floats[k * 4 + 2] = P[k * 3 + 2]!;
@@ -240,7 +241,7 @@ export function icosphere(subdivisions: number, shape?: (x: number, y: number, z
     [-t, 0, -1],
     [-t, 0, 1],
   ].map((v) => {
-    const length = Math.hypot(...v);
+    const length = hypot3(v[0], v[1], v[2]);
     return v.map((c) => c / length);
   });
   let F: number[][] = [
@@ -273,7 +274,7 @@ export function icosphere(subdivisions: number, shape?: (x: number, y: number, z
       let r = midpoints.get(key);
       if (r === undefined) {
         const p = [0, 1, 2].map((k) => V[a]![k]! + V[b]![k]!);
-        const length = Math.hypot(...p);
+        const length = hypot3(p[0], p[1], p[2]);
         V.push(p.map((c) => c / length));
         r = V.length - 1;
         midpoints.set(key, r);

@@ -11,7 +11,7 @@ import { quality, type Level } from '../config/quality';
 import { createGpu, StartupError } from '../gpu/context';
 import { addFrame, addGpuTime, createDynRes, MAX_PIXELS, settle } from '../render/dynres';
 import { createRenderer } from '../render/renderer';
-import { generateWorld } from '../world/client';
+import { generateWorld, type Generated } from '../world/client';
 import type { CollisionField } from '../world/collision';
 import { checksum, type FromWorker, type ToWorker } from '../world/protocol';
 import { createHud } from '../ui/hud';
@@ -50,7 +50,6 @@ const TRANSFER_BYTES = 16 << 20;
 const LOADING = {
   density: 'Sculpting the seabed…',
   terrain: 'Carving canyons…',
-  meshes: 'Building set pieces…',
   plants: 'Growing kelp…',
   rocks: 'Scattering rocks and corals…',
 } as const;
@@ -169,13 +168,27 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       } else menu.fail('The graphics device was lost. Reload the page to try again.');
     });
 
-    menu.progress('Compiling shaders…', 0.05);
+    // ---- the world. Dev and harness builds can be told where it comes from: ?world=reference draws a dump of
+    // the original's world (npm run ref:dump), ?world=none starts without one (tests bring their own).
+    const source = __DEV__ || __HARNESS__ ? params.get('world') : null;
+    let making: Promise<Generated> | null = null;
+    if (source !== 'reference' && source !== 'none') {
+      // a load that takes the tab down leaves this mark, and the next visit starts a level lower
+      markLoading(true);
+      addEventListener('pagehide', () => markLoading(false));
+      // it starts being made at once, alongside the shader compilation below: neither waits for the other
+      making = generateWorld(gpu.device, createWorker, level, {
+        onProgress: (stage, fraction) => menu.progress(LOADING[stage], 0.08 + 0.86 * fraction),
+      });
+      making.catch(() => 0); // a failure is reported where the world is awaited, not as an unhandled rejection
+    } else menu.progress('Compiling shaders…', 0.05);
     const dynres = createDynRes(settings.pixels, settings.detail, settings.mobile);
     let gpuMs = 0;
     const renderer = await createRenderer(gpu, quality(level), (ms) => {
       gpuMs = ms;
       addGpuTime(dynres, ms);
     });
+    performance.mark('abyssal:renderer');
     renderer.pixelBudget = dynres.pixels;
     renderer.detail = dynres.detail;
     renderer.resize();
@@ -191,27 +204,22 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
     // ?selftest: a 16 MB round trip through the worker, as a check of transfers on this browser
     if (__HARNESS__ && params.has('selftest')) hook.report.worker = await workerRoundTrip(createWorker);
 
-    // ---- the world. Dev and harness builds can be told where it comes from: ?world=reference draws a dump of
-    // the original's world (npm run ref:dump), ?world=none starts without one (tests bring their own).
-    const source = __DEV__ || __HARNESS__ ? params.get('world') : null;
     let collision: CollisionField | null = null;
+    let collisionReady: Promise<void> | null = null;
     let viewpoints: number[][] = [];
     if (source === 'reference') {
       menu.progress('Loading the reference world…', 0.5);
       viewpoints = await harness!.loadReferenceWorld('/fixtures/');
-    } else if (source !== 'none') {
-      // a load that takes the tab down leaves this mark, and the next visit starts a level lower
-      markLoading(true);
-      addEventListener('pagehide', () => markLoading(false));
-      const made = await generateWorld(gpu.device, createWorker, level, {
-        onProgress: (stage, fraction) => menu.progress(LOADING[stage], 0.08 + 0.86 * fraction),
-      });
+    } else if (making) {
+      const made = await making;
       await renderer.setWorld(made.world);
-      collision = made.collision;
-      if (harness) {
-        harness.collision = collision;
-        harness.generatedViewpoints = made.world.viewpoints;
-      }
+      performance.mark('abyssal:uploaded');
+      // what the swimmer collides with follows a moment later: nothing on screen waits for it
+      collisionReady = made.collision.then((field) => {
+        collision = field;
+        if (harness) harness.collision = field;
+      });
+      if (harness) harness.generatedViewpoints = made.world.viewpoints;
       viewpoints = made.world.viewpoints;
       setTimeout(markLoading, 15_000, false); // the load counts as survived after 15 s of frames
     }
@@ -247,6 +255,7 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
     menu.progress('Letting the light in…', 1);
     renderer.render(0);
     await gpu.queue.onSubmittedWorkDone();
+    performance.mark('abyssal:first frame');
 
     // ---- the loop
     let last = 0;
@@ -278,6 +287,7 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
     });
     menu.ready();
     hook.report.loadMs = Math.round(performance.now());
+    await collisionReady; // the menu is up; a failure here is still a failure to start
   } catch (error) {
     hook.error = error instanceof Error ? (error.stack ?? error.message) : String(error);
     // a StartupError is written for the reader; anything else is unexpected and says so

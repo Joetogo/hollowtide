@@ -4,6 +4,7 @@ import { sampler, surfaceNets } from '../math/field';
 import { clamp } from '../math/scalar';
 import type { CellTable } from './data';
 import { CELLS, CELL_SIZE, NX, NY, NZ, ORIGIN_X, ORIGIN_Y, ORIGIN_Z, VOXEL } from './grid';
+import { hypot3 } from '../math/hypot';
 
 /**
  * Turns rock that is not connected to the seabed into water, in place.
@@ -82,7 +83,7 @@ export function buildTerrain(density: Float32Array): Terrain {
     let nx = sample(x - e, y, z) - sample(x + e, y, z);
     let ny = sample(x, y - e, z) - sample(x, y + e, z);
     let nz = sample(x, y, z - e) - sample(x, y, z + e);
-    const length = Math.hypot(nx, ny, nz) || 1;
+    const length = hypot3(nx, ny, nz) || 1;
     nx /= length;
     ny /= length;
     nz /= length;

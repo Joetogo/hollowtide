@@ -3,10 +3,11 @@ import type { Level } from '../../config/quality';
 import { MeshBuilder, type Point } from '../../math/mesh';
 import type { Random } from '../../math/random';
 import { clamp } from '../../math/scalar';
+import { hypot3 } from '../../math/hypot';
 
 type Vec = [number, number, number];
 const unit = (v: Vec): Vec => {
-  const length = Math.hypot(...v) || 1;
+  const length = hypot3(v[0], v[1], v[2]) || 1;
   return v.map((c) => c / length) as Vec;
 };
 

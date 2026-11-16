@@ -138,19 +138,34 @@ Key mechanisms:
 | 8 | **Generator, part 2.** Scatter systems 1–14 in order, skylight volume, packing | Instance checksums equal at all three levels; live data reproduces milestone 6's frames |
 | 9 | **Shell.** Loading UI, menu, mouse / keyboard / touch, collision, dynamic resolution, crash fallback, audio | A scripted-input camera trace equals the reference; no main-thread task over 50 ms during load; Safari smoke test. **Parity gate** |
 | 10 | **Speed-ups that must not change a pixel.** Cull boulders, chunked shadow bake, provably-equivalent generator speed-ups, tiered leaf ordering | Goldens and checksums unchanged; timings beat the baseline |
-| 11 | **Speed-ups and fixes that do change pixels**, in one re-baseline | You approve the side-by-side review; new goldens |
-| 12 | **Features and UX** | Each setting applies as promised; goldens unchanged at defaults |
-| 13 | **New visuals and creatures** | The default mood is pixel-identical to milestone 11's goldens |
+| 11 | **In the water** (added 2026-11-16 at your request). Your own arms in first person, swimming in strokes; a hand-held jet scooter for fast travel | Goldens unchanged (the body is not drawn in captures); a scripted stroke test; frame cost within 0.3 ms |
+| 12 | **Speed-ups and fixes that do change pixels**, in one re-baseline | You approve the side-by-side review; new goldens |
+| 13 | **Features and UX** | Each setting applies as promised; goldens unchanged at defaults |
+| 14 | **New visuals and creatures** | The default mood is pixel-identical to milestone 12's goldens |
+| 15 | **Its own name** (added 2026-11-16). The project stops calling itself a rebuild: title, repo, README and storage keys take the name you choose; the credit to the original stays | Nothing but the credit line and the licence mentions the old name |
 
 ## Stage II detail
 
-**Milestone 11: performance and fixes** (measured on your M3 / 8 GB first; a change stays only if the numbers move)
+**Milestone 11: in the water**
+- Your arms: two arms in a wetsuit with gloved hands, seen in first person and lit like everything else (sun,
+  caustics, shadow). Each is three rigid parts (upper arm, forearm, hand) placed every frame from the stroke
+  cycle and drawn through the existing set-piece pipeline from one small instance buffer: no new pipeline.
+- Swimming in strokes: holding forward runs a breaststroke cycle of reach, pull and glide. Speed surges on the
+  pull and fades through the glide instead of easing to a constant, and the view dips and rolls a little with
+  each pull. Strafing and turning scull with one hand; at rest the hands drift.
+- Jet propulsion: a hand-held scooter (two grips, a shrouded propeller). Holding the fast key brings it up:
+  steady fast travel, both hands on the grips, a stream of bubbles behind and a hum in the soundscape.
+- The original's glide stays as a setting ("classic"), which reduced motion also selects. The scripted swim test
+  keeps checking classic against the original; strokes get their own test (distance per stroke, speed bounds,
+  no passing through rock).
+
+**Milestone 12: performance and fixes** (measured on your M3 / 8 GB first; a change stays only if the numbers move)
 - Distance-adaptive shadow filtering; fewer shaft steps with a wider blur; cheaper or lower-rate water texture.
 - Dynamic resolution that no longer assumes pixel count is the bottleneck (to be measured on Apple GPUs).
 - Half-rate rendering behind the menu; no fixed 2560×1440 cap.
 - Defect fixes: leaf curvature (series fallback near zero), fog integral, sine hash, the collision brick cap.
 
-**Milestone 12: features and UX**
+**Milestone 13: features and UX**
 - Settings panel in three tiers: instant (field of view, sensitivity, invert Y, volume, exposure), pipeline
   rebuild in about a second (anti-aliasing, shaft quality), and data (detail level: lower instantly by drawing a
   prefix of each cell, raise by regenerating in the worker).
@@ -159,7 +174,7 @@ Key mechanisms:
 - Gamepad; arrow-key look; drag-to-look when pointer lock is refused; a visible mute button; reduced-motion support.
 - `?seed=` reseeds the randomly placed systems. Terrain, set pieces and hand-placed kelp stay authored.
 
-**Milestone 13: new visuals**
+**Milestone 14: new visuals**
 - Mood presets (for example noon, deep dusk, moonlit glow) through about eight uniforms that scale sunlight,
   ambient, fog and exposure, plus one true glow term. The original's "emissive" is proportional to incoming light,
   so a dark mood needs that term. The sun direction stays fixed: moving it would break the caustics and the baked

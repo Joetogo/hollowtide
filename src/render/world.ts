@@ -1,9 +1,11 @@
 // The world on the GPU: vertex, index and instance buffers made from the generator's typed arrays.
 import type { Gpu } from '../gpu/context';
+import { breathe } from '../gpu/turns';
 import type { CellInstances, CellTable, MeshRange, WorldData } from '../world/data';
 import { LEAF_BYTES, SOLID_BYTES, VERTEX_BYTES } from '../world/data';
 import { NX, NY, NZ } from '../world/grid';
 import { GROUND_MAP_SIZE, type Scene } from './scene';
+import { createSolidCull, type SolidCull } from './solids';
 
 /** Mesh and terrain vertices: position, then normal xyz with one extra value (ambient occlusion and the like). */
 export const MESH_VERTEX_LAYOUT: GPUVertexBufferLayout = {
@@ -77,8 +79,13 @@ export interface WorldBuffers {
   meshVertices: GPUBuffer;
   meshIndices: GPUBuffer;
   meshes: MeshRange[];
-  /** The uncull'd solids, followed by one identity instance. The terrain is drawn as that instance. */
+  /**
+   * Every solid (boulders, the ship, the whale tail), followed by one identity instance. The shadow bake draws
+   * them all from here, and the terrain is drawn as the identity instance.
+   */
   solids: GPUBuffer;
+  /** The solids that may be in view this frame: what the scene pass draws. */
+  solidCull: SolidCull;
   solidRanges: [first: number, count: number][];
   identityInstance: number;
   chunks: CellBuffer[];
@@ -97,8 +104,6 @@ export interface WorldBuffers {
 // position 0, scale 1; no rotation; material 0 (terrain), seed 0, no fade, no bob
 const IDENTITY_INSTANCE = [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0];
 
-/** Lets the page breathe: everything queued (input, painting the loading bar) runs before this resolves. */
-const breathe = () => new Promise<void>((resolve) => setTimeout(resolve));
 /** After uploading this much, the page gets a turn: copying is slow enough to notice on a throttled laptop. */
 const YIELD_BYTES = 4 << 20;
 
@@ -145,6 +150,7 @@ export async function uploadWorld(gpu: Gpu, scene: Scene, data: WorldData): Prom
     count: floats.length / perInstance,
   });
 
+  const solidCull = createSolidCull(gpu, data);
   const solidCount = data.solids.instances.length / 12;
   const solids = new Float32Array((solidCount + 1) * 12);
   solids.set(data.solids.instances);
@@ -173,6 +179,7 @@ export async function uploadWorld(gpu: Gpu, scene: Scene, data: WorldData): Prom
     meshIndices: await upload('mesh indices', data.meshes.indices, GPUBufferUsage.INDEX),
     meshes: data.meshes.ranges,
     solids: await upload('solids', solids, VERTEX),
+    solidCull,
     solidRanges: data.solids.ranges,
     identityInstance: solidCount,
     chunks,
@@ -185,6 +192,9 @@ export async function uploadWorld(gpu: Gpu, scene: Scene, data: WorldData): Prom
     bubbles: await instances('bubbles', data.bubbles, 8),
     glints: await instances('glints', data.glints, 8),
     snow: await instances('snow', data.snow, 4),
-    destroy: () => buffers.forEach((b) => b.destroy()),
+    destroy() {
+      buffers.forEach((b) => b.destroy());
+      solidCull.destroy();
+    },
   };
 }

@@ -6,6 +6,7 @@
 // 1/127 m, positive in rock, clamped to one metre either way).
 import { clamp } from '../math/scalar';
 import { NX, NY, ORIGIN_X, ORIGIN_Y, ORIGIN_Z, VOXEL } from './grid';
+import { hypot2 } from '../math/hypot';
 
 /** The bricks start this many voxels in from the grid's x and z edges... */
 export const COLLISION_OFFSET = 52;
@@ -32,7 +33,7 @@ export function buildCollisionField(density: Float32Array): CollisionField {
   for (let bz = 0; bz < N; bz++) {
     for (let by = 1; by < NY / 4 - 1; by++) {
       for (let bx = 0; bx < N; bx++) {
-        if (Math.hypot(bx - N / 2 + 0.5, bz - N / 2 + 0.5) > 52) continue; // more than 156 m out: never reached
+        if (hypot2(bx - N / 2 + 0.5, bz - N / 2 + 0.5) > 52) continue; // more than 156 m out: never reached
         let lo = 127;
         let hi = -127;
         for (let z = 0; z < 4; z++) {

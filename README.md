@@ -31,6 +31,7 @@ Done so far:
 | 8. Generator, part 2 | The 14 scatter systems (kelp, plants, glints, sponges, corals, rocks, set pieces, bubbles, fish, mantas, particles), the skylight volume, packing; the page now builds its own world | All 84 outputs have the same SHA-256 as the original's at all three levels; frames drawn from the generated world pass the same comparison as milestone 6 |
 
 | 9. Shell | Loading bar, menu, keyboard / mouse / touch, collision, dynamic resolution, detail levels and crash fallback, stats line, sound | A scripted swim of 536 frames (easing, turning, sprinting into rock and sliding along it) traces the original's path bit for bit; no main-thread task over 50 ms while loading; starts and draws in Safari 27 from `file://` |
+| 10. Speed-ups that do not change a pixel | The world is built by two workers side by side and starts alongside shader compilation; the generator itself is about twice as fast; boulders outside the view are not drawn | 48 frames at High and 48 at Medium are bit-identical before and after (`tests/browser/same.mjs`); all 84 generator outputs still have the original's checksums; loading takes about 40 % less |
 
 **Parity gate: passed.** The rebuild is the original, from scratch: `dist/index.html` builds the same world (all
 84 generator outputs have the original's checksums), draws the same frames (at High and Medium at most 11 of
@@ -51,17 +52,32 @@ taken minutes apart cannot be compared.
 | | Original | Rebuild |
 |---|---|---|
 | Main thread held while loading | 3.0 s (longest task 1.7 s) | none: no task over 50 ms (see the note) |
-| Load time | 3.4 s | 3.5 s |
+| Load time, both measured in one sitting on a warm machine | 6.1 s | 3.6 s |
 | Peak memory while loading, page / whole browser | 1.1 GB / 1.9 GB | 0.5 GB / 1.2 GB |
 | Loading bar | timed animation | real progress from the generator |
-| Shipped file | 97 kB | 143 kB (its shaders keep readable names; renaming them at build time is on the list) |
-| Frame at 2560×1440, six viewpoints | 45.7 / 35.4 / 26.9 / 38.5 / 35.9 / 35.7 ms | 45.8 / 35.7 / 27.4 / 39.1 / 34.5 / 36.0 ms |
-| Frame at 640×360, six viewpoints | 26.2 / 19.1 / 19.6 / 20.3 / 21.2 / 19.2 ms | 26.4 / 19.5 / 20.0 / 20.6 / 21.6 / 19.4 ms |
+| Shipped file | 97 kB | 147 kB (its shaders keep readable names; renaming them at build time is on the list) |
+| Frame at 2560×1440, six viewpoints | 45.7 / 35.4 / 26.9 / 38.5 / 35.9 / 35.7 ms | the same within 3 % |
+| Frame at 640×360, six viewpoints | 26.2 / 19.1 / 19.6 / 20.3 / 21.2 / 19.2 ms | the same within 3 % |
 | 60 s fly-through at 2560×1440, average | 37.8 ms | 37.1 ms |
 
-The frame costs are the same because the renderer is not optimised yet: both submit exactly the same geometry
-(35,034,683 vertices and indices at the first viewpoint), and that geometry, not the pixel count, is what a frame
-costs on this GPU.
+Where the loading time went (milestone 10), each step checked against the original's checksums:
+
+- The meshes and the ground map need nothing from the density field, so a second worker builds them while the
+  first is busy with the terrain; both start alongside shader compilation instead of after it.
+- Two things took half of the generator's time. One was the test "is this point near the camera's path", made
+  for every plant and rock against all 606 points of the path: the points now sit in a grid, and the test looks
+  at the few nearby. The other was `Math.hypot`, which in V8 is a general routine about nine times slower than
+  the arithmetic it does: `src/math/hypot.ts` does the same arithmetic, to the bit.
+- The collision field is worked out after the world has been handed over, as nothing on screen waits for it.
+- `node tools/profile-generator.mjs --cpu` shows where the time goes now.
+
+The frame costs are still the original's. Both submitted exactly the same geometry (35,034,683 vertices and
+indices at the first viewpoint), and that geometry, not the pixel count, is what a frame costs on this GPU. The
+rebuild now leaves out the boulders that are outside the view (they were 5.7 million of those indices, drawn
+wherever the camera looked), which is worth a few per cent. `node tests/browser/profile.mjs` times a frame with
+each part of the scene left out: no single part dominates (plants and glints about a third, rocks a sixth, the
+fixed passes a sixth), so the larger gains need coarser meshes in the distance, which changes pixels and is a
+later milestone.
 
 Note on the long tasks: the shell test (1280×720) and eight of nine loads measured at 2560×1440 had none. One
 load, on a hot machine with the original open in a second browser, had a single task of 455 ms; it did not

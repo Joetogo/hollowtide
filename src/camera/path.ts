@@ -1,6 +1,7 @@
 // The scripted fly-through: a camera position and look-at point for every moment of a 60-second flight along
 // the authored path, at a steady speed.
 import { FLY_PATH } from '../world/layout';
+import { hypot3 } from '../math/hypot';
 
 /** Length of the flight in seconds. */
 export const FLY_SECONDS = 60;
@@ -38,7 +39,7 @@ function buildLut(): Float32Array {
   let pz = 0;
   for (let k = 0; k <= STEPS; k++) {
     spline((k / STEPS) * (POINTS - 1), p);
-    if (k) length[k] = length[k - 1]! + Math.hypot(p[0]! - px, p[1]! - py, p[2]! - pz);
+    if (k) length[k] = length[k - 1]! + hypot3(p[0]! - px, p[1]! - py, p[2]! - pz);
     px = p[0]!;
     py = p[1]!;
     pz = p[2]!;

@@ -4,6 +4,7 @@
 import { MeshBuilder, type Point } from '../../math/mesh';
 import type { Random } from '../../math/random';
 import { clamp, mix, smoothRamp } from '../../math/scalar';
+import { hypot2 } from '../../math/hypot';
 
 const { abs, cos, sin, pow, max, min, PI } = Math;
 
@@ -25,7 +26,7 @@ export function ship(random: Random): MeshBuilder {
     return [x, s - (d + s) * pow(max(cos(around), 0), 0.66), b * Math.sign(around) * pow(abs(sin(around)), 0.8)];
   };
   const outwards = (p: Point): Point => {
-    const length = Math.hypot(p[1] + 0.5, p[2] * 1.3) || 1;
+    const length = hypot2(p[1] + 0.5, p[2] * 1.3) || 1;
     return [0, (p[1] + 0.5) / length, (p[2] * 1.3) / length];
   };
   const up = (): Point => [0, 1, 0];

@@ -41,16 +41,18 @@ export interface Harness {
   /** Where the camera is, where it looks, and how far it is from the rock (negative: in open water). */
   camera(): { x: number; y: number; z: number; yaw: number; pitch: number; rockDistance: number };
   /**
-   * Frame cost, measured the way the reference rig measures the original: frames run one at a time, each waited
-   * for until the GPU has finished it. `poses` gives the camera for each frame (one pose: it is held, and time
-   * advances by 1/60 s a frame; several: one frame each, `seconds` apart in scene time). `pixels` is the render
-   * size's pixel budget. Resolves with the JavaScript part and the whole of every frame, in milliseconds.
+   * Frame cost, measured the way the reference rig measures the original: frames are submitted `batch` at a time
+   * (default one) and waited for until the GPU has finished them. `poses` gives the camera for each frame (one
+   * pose: it is held, and time advances by 1/60 s a frame; several: one frame each, at `seconds` of scene time).
+   * `pixels` is the render size's pixel budget. Resolves with the JavaScript part and the whole of every frame,
+   * in milliseconds (a batch's time is shared equally among its frames).
    */
   frameCost(
     poses: number[][],
     frames: number,
     pixels: number,
     seconds?: number[],
+    batch?: number,
   ): Promise<{ cpuMs: number[]; totalMs: number[]; size: number[] }>;
   /** Draws a frame from where the camera is and sums it up: the mean colour (0..255) and the share of dark pixels. */
   frameStats(time: number): { mean: number[]; dark: number };
@@ -271,23 +273,29 @@ export function createHarness(
       return { x, y, z, yaw, pitch, rockDistance: collision ? rockDistance(collision, x, y, z) : NaN };
     },
 
-    async frameCost(poses, frames, pixels, seconds) {
+    async frameCost(poses, frames, pixels, seconds, batch = 1) {
       renderer.pixelBudget = pixels;
       renderer.detail = 1;
       renderer.resize();
       const cpuMs: number[] = [];
       const totalMs: number[] = [];
       let time = 2;
-      for (let i = 0; i < frames; i++) {
-        const pose = poses[Math.min(i, poses.length - 1)] as [number, number, number, number, number, number];
-        lookAt(renderer.camera, ...pose);
-        time = seconds ? seconds[i]! : time + 1 / 60;
+      for (let i = 0; i < frames;) {
         const start = performance.now();
-        renderer.render(time);
+        const first = i;
+        for (const end = Math.min(frames, i + batch); i < end; i++) {
+          const pose = poses[Math.min(i, poses.length - 1)] as [number, number, number, number, number, number];
+          lookAt(renderer.camera, ...pose);
+          time = seconds ? seconds[i]! : time + 1 / 60;
+          renderer.render(time);
+        }
         const encoded = performance.now();
         await queue.onSubmittedWorkDone();
-        cpuMs.push(encoded - start);
-        totalMs.push(performance.now() - start);
+        const done = performance.now();
+        for (let k = first; k < i; k++) {
+          cpuMs.push((encoded - start) / (i - first));
+          totalMs.push((done - start) / (i - first));
+        }
       }
       return { cpuMs, totalMs, size: [renderer.targets.width, renderer.targets.height] };
     },
@@ -394,12 +402,14 @@ export function createHarness(
 
     async generate(level) {
       const checksums: Record<string, Made> = {};
-      await generateWorld(device, createWorker, level, { checksums });
+      const made = await generateWorld(device, createWorker, level, { checksums });
+      await made.collision; // its checksums come last
       return checksums;
     },
 
     async useGeneratedWorld(level) {
-      const { world } = await generateWorld(device, createWorker, level);
+      const { world, collision } = await generateWorld(device, createWorker, level);
+      await collision; // not used here, but the generator should be finished before the next one starts
       await renderer.setWorld(world);
       viewpoints = world.viewpoints;
       return world.viewpoints;

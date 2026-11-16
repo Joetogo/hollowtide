@@ -5,6 +5,7 @@ import { icosphere, type MeshBuilder } from '../../math/mesh';
 import { fbm } from '../../math/noise';
 import { quatRandom } from '../../math/quat';
 import type { Random } from '../../math/random';
+import { hypot3 } from '../../math/hypot';
 
 /**
  * @param seed picks the rock's shape, and its random stream (100 + seed)
@@ -25,7 +26,7 @@ export function rock(
   for (let i = 0; i < 4; i++) {
     const q = quatRandom(random);
     planes.push([q[0], q[1], q[2], random.range(0.8, 0.98)]);
-    const length = Math.hypot(q[0], q[1], q[2]) || 1;
+    const length = hypot3(q[0], q[1], q[2]) || 1;
     planes[i][0] /= length;
     planes[i][1] /= length;
     planes[i][2] /= length;

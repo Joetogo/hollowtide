@@ -80,6 +80,7 @@ export async function createRenderer(
       renderer.world?.destroy();
       renderer.world = next;
       shadow.bake(next);
+      void queue.onSubmittedWorkDone().then(() => performance.mark('abyssal:shadows'));
     },
 
     resize() {

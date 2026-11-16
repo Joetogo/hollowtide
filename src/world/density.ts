@@ -1,6 +1,7 @@
 // Fills the density grid on the GPU and reads it back. Runs on the main thread, which owns the device; the result
 // is handed to the generator worker.
 import { shaderModule } from '../gpu/shader';
+import { breathe } from '../gpu/turns';
 import densitySource from '../shaders/density.wgsl';
 import { NX, NY, NZ, ORIGIN_X, ORIGIN_Y, ORIGIN_Z, VOXEL } from './grid';
 import { ARCHES, CLEARINGS, ROCK_MASSES, TUNNELS } from './layout';
@@ -24,6 +25,7 @@ export async function computeDensity(device: GPUDevice): Promise<Float32Array<Ar
     compute: { module, entryPoint: 'fill' },
   });
   const bytes = NX * NY * NZ * 4;
+  performance.mark('abyssal:density compiled');
 
   // DensityParams: size (vec4u), origin + voxel size (vec4f), counts (vec4u)
   const params = new ArrayBuffer(48);
@@ -62,13 +64,14 @@ export async function computeDensity(device: GPUDevice): Promise<Float32Array<Ar
   device.queue.submit([encoder.finish()]);
 
   await readback.mapAsync(GPUMapMode.READ);
+  performance.mark('abyssal:density computed');
   // copied out in slices, with a turn for the page in between: 84 MB in one go would hold the main thread
   const mapped = new Uint8Array(readback.getMappedRange());
   const copy = new Uint8Array(bytes);
   const SLICE = 4 << 20;
   for (let offset = 0; offset < bytes; offset += SLICE) {
     copy.set(mapped.subarray(offset, Math.min(offset + SLICE, bytes)), offset);
-    await new Promise<void>((resolve) => setTimeout(resolve));
+    await breathe();
   }
   const density = new Float32Array(copy.buffer);
   readback.unmap();

@@ -1,11 +1,12 @@
 // Quaternions as [x, y, z, w] arrays. Generation-time only: these allocate.
 import type { Random } from './random';
+import { hypot3 } from './hypot';
 
 export type Quat = [number, number, number, number];
 
 /** Rotation by `angle` radians about an axis (which need not be normalised). */
 export function quatAxis(x: number, y: number, z: number, angle: number): Quat {
-  const length = Math.hypot(x, y, z) || 1;
+  const length = hypot3(x, y, z) || 1;
   const s = Math.sin(angle / 2) / length;
   return [x * s, y * s, z * s, Math.cos(angle / 2)];
 }
@@ -23,7 +24,7 @@ export function quatMul(a: Quat, b: Quat): Quat {
 /** A random rotation: four draws. (A normalised point of a 4D cube, so not quite uniform.) */
 export function quatRandom(random: Random): Quat {
   const q: Quat = [random.range(-1, 1), random.range(-1, 1), random.range(-1, 1), random.range(-1, 1)];
-  const length = Math.hypot(...q) || 1;
+  const length = Math.hypot(...q) || 1; // four numbers: the built-in
   return q.map((v) => v / length) as Quat;
 }
 

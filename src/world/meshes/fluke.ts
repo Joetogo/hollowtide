@@ -3,6 +3,7 @@
 import { sampler, surfaceNets } from '../../math/field';
 import type { BuiltMesh } from '../../math/mesh';
 import { clamp, mix } from '../../math/scalar';
+import { hypot3 } from '../../math/hypot';
 
 /** A chain of points x, y, z, radius; `squash` flattens the chain along z. */
 type Chain = { points: readonly (readonly [number, number, number, number])[]; squash: number };
@@ -49,13 +50,37 @@ export function whaleFluke(): BuiltMesh {
   for (const { points, squash } of CHAINS) {
     for (let i = 0; i < points.length - 1; i++) capsules.push([...points[i], ...points[i + 1], squash]);
   }
+  // A ball around each capsule, in the space where its z is divided by its squash: centre x, y, z, and the
+  // capsule's half length plus its larger radius. Nothing of the capsule lies outside it.
+  const balls = capsules.map((c) => {
+    const az = c[2] / c[8],
+      bz = c[6] / c[8];
+    return [
+      (c[0] + c[4]) / 2,
+      (c[1] + c[5]) / 2,
+      (az + bz) / 2,
+      hypot3(c[4] - c[0], c[5] - c[1], bz - az) / 2 + Math.max(c[3], c[7]),
+    ];
+  });
+  const k = 0.45; // how far apart two surfaces still blend
   /** Distance to the shape, negative inside: the capsules merged with a smooth minimum. */
   const distance = (x: number, y: number, z: number) => {
     let d = 1e9;
-    for (const c of capsules) {
+    for (let n = 0; n < capsules.length; n++) {
+      const c = capsules[n];
       const zs = c[8],
-        pz = z / zs,
-        az = c[2] / zs,
+        pz = z / zs;
+      // A capsule further away than the distance so far plus the blending range changes nothing: the blend
+      // below is then zero and the minimum keeps d, bit for bit. The ball tells without measuring the capsule
+      // (the 1e-6 is a margin a million times the rounding error of these sums). Most capsules go this way,
+      // and this function runs 46 million times.
+      const ball = balls[n];
+      const reach = (d + k + 1e-6) / zs + ball[3];
+      const ox = x - ball[0],
+        oy = y - ball[1],
+        oz = pz - ball[2];
+      if (reach <= 0 || ox * ox + oy * oy + oz * oz >= reach * reach * (1 + 1e-9)) continue;
+      const az = c[2] / zs,
         bz = c[6] / zs;
       const bax = c[4] - c[0],
         bay = c[5] - c[1],
@@ -64,9 +89,8 @@ export function whaleFluke(): BuiltMesh {
         pay = y - c[1],
         paz = pz - az;
       const h = clamp((pax * bax + pay * bay + paz * baz) / (bax * bax + bay * bay + baz * baz), 0, 1);
-      const e = (Math.hypot(pax - bax * h, pay - bay * h, paz - baz * h) - mix(c[3], c[7], h)) * zs;
-      const k = 0.45,
-        hh = Math.max(k - Math.abs(d - e), 0) / k;
+      const e = (hypot3(pax - bax * h, pay - bay * h, paz - baz * h) - mix(c[3], c[7], h)) * zs;
+      const hh = Math.max(k - Math.abs(d - e), 0) / k;
       d = Math.min(d, e) - hh * hh * k * 0.25;
     }
     return d;
@@ -99,7 +123,7 @@ export function whaleFluke(): BuiltMesh {
     const ax = sample(x - e, y, z) - sample(x + e, y, z);
     const ay = sample(x, y - e, z) - sample(x, y + e, z);
     const az = sample(x, y, z - e) - sample(x, y, z + e);
-    const length = Math.hypot(ax, ay, az) || 1;
+    const length = hypot3(ax, ay, az) || 1;
     floats[k * 4] = ox + x * voxel;
     floats[k * 4 + 1] = oy + y * voxel;
     floats[k * 4 + 2] = oz + z * voxel;

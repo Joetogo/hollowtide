@@ -15,7 +15,19 @@ const sizes = args[1]
       ['640x360', 640 * 360],
       ['2560x1440', 2560 * 1440],
     ];
-const PARTS = ['terrain', 'solids', 'chunks', 'props', 'leaves', 'fish', 'mantas', 'glints', 'bubbles', 'snow', 'shafts'];
+const PARTS = [
+  'terrain',
+  'solids',
+  'chunks',
+  'props',
+  'leaves',
+  'fish',
+  'mantas',
+  'glints',
+  'bubbles',
+  'snow',
+  'shafts',
+];
 const BURST = 24;
 const WARM = 4;
 
@@ -59,8 +71,16 @@ try {
     return counts;
   }, viewpoints);
   console.log('per frame, averaged over the six viewpoints: draw calls, instances, vertices or indices');
-  for (const [name, c] of Object.entries(counts).sort((a, b) => b[1][2] - a[1][2]).slice(0, 12))
-    console.log(`  ${name.padEnd(14)} ${String(Math.round(c[0] / 6)).padStart(5)} ${String(Math.round(c[1] / 6)).padStart(9)} ${Math.round(c[2] / 6).toLocaleString().padStart(12)}`);
+  for (const [name, c] of Object.entries(counts)
+    .sort((a, b) => b[1][2] - a[1][2])
+    .slice(0, 12))
+    console.log(
+      `  ${name.padEnd(14)} ${String(Math.round(c[0] / 6)).padStart(5)} ${String(Math.round(c[1] / 6)).padStart(9)} ${Math.round(
+        c[2] / 6,
+      )
+        .toLocaleString()
+        .padStart(12)}`,
+    );
 
   const cost = (pose, pixels, skip) =>
     chrome.page.evaluate(
@@ -74,20 +94,25 @@ try {
       [pose, BURST, pixels, skip],
     );
   for (const [label, pixels] of sizes) {
-    console.log(`\n${label}: milliseconds of the frame that go away when a part is left out (six viewpoints, then their mean)`);
+    console.log(
+      `\n${label}: milliseconds of the frame that go away when a part is left out (six viewpoints, then their mean)`,
+    );
     const whole = [];
     const saved = Object.fromEntries(PARTS.map((p) => [p, []]));
     for (const pose of viewpoints) {
       const full = [];
       for (const part of PARTS) {
         const without = [];
-        for (const side of [0, 1, 1, 0]) (side ? without : full).push(...(await cost(pose, pixels, side ? [part] : [])).slice(WARM));
+        for (const side of [0, 1, 1, 0])
+          (side ? without : full).push(...(await cost(pose, pixels, side ? [part] : [])).slice(WARM));
         saved[part].push(median(full.slice(-2 * (BURST - WARM))) - median(without));
       }
       whole.push(median(full));
     }
     const row = (name, values) =>
-      console.log(`  ${name.padEnd(12)} ${values.map((v) => v.toFixed(1).padStart(6)).join('')}   ${(values.reduce((a, b) => a + b, 0) / values.length).toFixed(1).padStart(6)}`);
+      console.log(
+        `  ${name.padEnd(12)} ${values.map((v) => v.toFixed(1).padStart(6)).join('')}   ${(values.reduce((a, b) => a + b, 0) / values.length).toFixed(1).padStart(6)}`,
+      );
     row('whole frame', whole);
     for (const part of PARTS) row(part, saved[part]);
   }

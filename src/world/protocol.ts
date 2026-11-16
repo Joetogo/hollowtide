@@ -4,22 +4,35 @@ import type { Level } from '../config/quality';
 import type { CollisionField } from './collision';
 import type { WorldData } from './data';
 
-/** The generator's stages, in order, with the share of the time each takes (measured; they sum to 1). */
+/**
+ * The stages of the worker that turns the density field into terrain and everything growing on it, in order,
+ * with the share of its time each takes (measured; they sum to 1). The meshes are built meanwhile by a second
+ * worker, which needs nothing from the density field and is done long before this one.
+ */
 export const STAGES = {
-  terrain: 0.25,
-  meshes: 0.2,
-  plants: 0.35,
-  rocks: 0.2,
+  terrain: 0.24,
+  plants: 0.38,
+  rocks: 0.38,
 } as const;
 export type Stage = keyof typeof STAGES;
+
+/** What the second worker makes: every mesh but the terrain, and the map of what grows where. */
+export interface SetPieces {
+  meshes: WorldData['meshes'];
+  groundMap: Uint8Array;
+}
+/** The world without what the second worker makes. */
+export type Grown = Omit<WorldData, 'meshes' | 'groundMap'>;
 
 export type ToWorker =
   /** a transfer test: the worker sends the buffer straight back */
   | { type: 'echo'; buffer: ArrayBuffer }
   /**
-   * Build the world from the density field (as it comes off the GPU). With `checksums`, the worker also reports
-   * the SHA-256 of everything it makes, for comparing against the original.
+   * Build the meshes and the ground map. With `checksums`, the worker also reports the SHA-256 of everything it
+   * makes, for comparing against the original.
    */
+  | { type: 'setPieces'; level: Level; checksums: boolean }
+  /** Build the rest of the world from the density field (as it comes off the GPU). */
   | { type: 'generate'; density: ArrayBuffer; level: Level; checksums: boolean };
 
 export type FromWorker =
@@ -28,8 +41,11 @@ export type FromWorker =
   /** which stage has started, and how far along the whole job is (0..1) */
   | { type: 'progress'; stage: Stage; fraction: number }
   | { type: 'checksum'; name: string; length: number; sha256: string }
-  /** the finished world, and what the camera collides with */
-  | { type: 'world'; world: WorldData; collision: CollisionField }
+  | ({ type: 'setPieces' } & SetPieces)
+  /** the grown world */
+  | { type: 'world'; world: Grown }
+  /** what the camera collides with: worked out after the world has been handed over, as nothing draws it */
+  | { type: 'collision'; collision: CollisionField }
   | { type: 'done' }
   | { type: 'error'; stage: string; message: string };
 

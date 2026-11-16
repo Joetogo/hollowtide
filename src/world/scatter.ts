@@ -15,9 +15,12 @@ import { CELLS, CELL_SIZE, NX, NY, NZ, ORIGIN_X, ORIGIN_Y, ORIGIN_Z, VOXEL } fro
 import { grottoAt, magentaAt } from './groundMap';
 import { MAGENTA_PATCHES } from './layout';
 import type { Terrain } from './terrain';
+import { hypot2, hypot3 } from '../math/hypot';
+
+/** A leaf instance in 32-bit words. */
+const LEAF_WORDS = LEAF_BYTES / 4;
 
 const { abs, atan2, cos, floor, max, min, PI, pow, round, sin, sqrt } = Math;
-const hypot = Math.hypot;
 const fract = (x: number) => x - floor(x);
 
 /** Leaf types, as the leaf shader numbers them. */
@@ -109,8 +112,14 @@ class LeafList {
     for (let c = 0; c < CELL_COUNT; c++) start[c + 1] = start[c] + this.perCell[c];
     const fill = start.slice();
     const out = new Uint8Array(this.count * LEAF_BYTES);
+    // a leaf is nine 32-bit words; copied word by word, as two million leaves are too many to copy by
+    // making a view of each
+    const from = new Uint32Array(this.bytes.buffer, this.bytes.byteOffset, this.count * LEAF_WORDS);
+    const to = new Uint32Array(out.buffer);
     for (let k = 0; k < this.count; k++) {
-      out.set(this.bytes.subarray(k * LEAF_BYTES, (k + 1) * LEAF_BYTES), fill[this.cell[k]]++ * LEAF_BYTES);
+      const source = k * LEAF_WORDS;
+      const target = fill[this.cell[k]]++ * LEAF_WORDS;
+      for (let w = 0; w < LEAF_WORDS; w++) to[target + w] = from[source + w];
     }
     return { instances: out, cells: { start, lo: this.lo, hi: this.hi } };
   }
@@ -121,10 +130,12 @@ class LeafList {
     for (let c = 0; c < CELL_COUNT; c++) start[c + 1] = start[c] + Math.ceil(this.perCell[c] / 2);
     const out = new Uint8Array(start[CELL_COUNT] * LEAF_BYTES);
     const floats = new Float32Array(out.buffer);
+    const from = new Uint32Array(full.instances.buffer, full.instances.byteOffset, full.instances.length / 4);
+    const to = new Uint32Array(out.buffer);
     let k = 0;
     for (let c = 0; c < CELL_COUNT; c++) {
       for (let i = full.cells.start[c]; i < full.cells.start[c + 1]; i += 2, k++) {
-        out.set(full.instances.subarray(i * LEAF_BYTES, (i + 1) * LEAF_BYTES), k * LEAF_BYTES);
+        for (let w = 0; w < LEAF_WORDS; w++) to[k * LEAF_WORDS + w] = from[i * LEAF_WORDS + w];
         floats[k * 9 + 6] *= 1.5;
       }
     }
@@ -264,7 +275,7 @@ export function scatter(
     const p = viewpoints[i];
     let fx = p[3] - p[0],
       fz = p[5] - p[2];
-    const l = hypot(fx, fz);
+    const l = hypot2(fx, fz);
     fx /= l;
     fz /= l;
     return [p[0] + fx * f - fz * r, p[2] + fz * f + fx * r];
@@ -297,7 +308,7 @@ export function scatter(
     const nx = Dw(x - e, y, z) - Dw(x + e, y, z),
       ny = Dw(x, y - e, z) - Dw(x, y + e, z),
       nz = Dw(x, y, z - e) - Dw(x, y, z + e);
-    const l = hypot(nx, ny, nz) || 1;
+    const l = hypot3(nx, ny, nz) || 1;
     return [nx / l, ny / l, nz / l];
   };
   /** From 2.5 m out along n, marches back in to the rock surface: position and normal there, or null. */
@@ -328,20 +339,55 @@ export function scatter(
   const pickV = () => ((rnd() * T.nv) | 0) * 3;
   const tangent = (n: readonly number[]): [number[], number[]] => {
     let t = abs(n[1]) < 0.9 ? [n[2], 0, -n[0]] : [1, 0, 0];
-    const l = hypot(...t);
+    const l = hypot3(t[0], t[1], t[2]);
     t = t.map((v) => v / l);
     return [t, [n[1] * t[2] - n[2] * t[1], n[2] * t[0] - n[0] * t[2], n[0] * t[1] - n[1] * t[0]]];
   };
+  // The camera path's points sorted into 8 m cells on the ground plane, so that a test looks at the handful of
+  // points nearby instead of all six hundred of them (this test alone was a third of the scattering time).
+  // The answer cannot differ from testing every point: a point within r of (x, z) lies in a cell the loops
+  // below visit (their range is r and a centimetre to spare, far more than rounding could move a point), every
+  // point visited is put to the same test as before, and "is any point near" does not depend on the order.
+  const FLY_CELL = 8;
+  const FLY_CELLS = 48; // -192 m to 192 m; anything beyond lands in the edge cells
+  const flyCell = (v: number) => {
+    const c = Math.floor((v + 192) / FLY_CELL);
+    return c < 0 ? 0 : c > FLY_CELLS - 1 ? FLY_CELLS - 1 : c;
+  };
+  const flyStart = new Uint32Array(FLY_CELLS * FLY_CELLS + 1);
+  for (let i = 0; i < flyPoints.length; i += 3)
+    flyStart[flyCell(flyPoints[i]) + FLY_CELLS * flyCell(flyPoints[i + 2]) + 1]++;
+  for (let c = 0; c < FLY_CELLS * FLY_CELLS; c++) flyStart[c + 1] += flyStart[c];
+  const flyItems = new Uint32Array(flyPoints.length / 3);
+  {
+    const next = flyStart.slice(0, -1);
+    for (let i = 0; i < flyPoints.length; i += 3)
+      flyItems[next[flyCell(flyPoints[i]) + FLY_CELLS * flyCell(flyPoints[i + 2])]++] = i;
+  }
   /** within r metres (on the ground plane) of the camera path, at about its height */
   const nearFly = (x: number, y: number, z: number, r: number) => {
-    for (let i = 0; i < flyPoints.length; i += 3) {
-      if (hypot(x - flyPoints[i], z - flyPoints[i + 2]) < r && y < flyPoints[i + 1] + 3 && y > flyPoints[i + 1] - 13)
-        return true;
+    const x0 = flyCell(x - r - 0.01),
+      x1 = flyCell(x + r + 0.01),
+      z0 = flyCell(z - r - 0.01),
+      z1 = flyCell(z + r + 0.01);
+    for (let cz = z0; cz <= z1; cz++) {
+      for (let cx = x0; cx <= x1; cx++) {
+        const c = cx + FLY_CELLS * cz;
+        for (let k = flyStart[c]; k < flyStart[c + 1]; k++) {
+          const i = flyItems[k];
+          if (
+            hypot2(x - flyPoints[i], z - flyPoints[i + 2]) < r &&
+            y < flyPoints[i + 1] + 3 &&
+            y > flyPoints[i + 1] - 13
+          )
+            return true;
+        }
+      }
     }
     return false;
   };
   const nearPose = (x: number, z: number, r = 3) => {
-    for (const p of viewpoints) if (hypot(x - p[0], z - p[2]) < r) return true;
+    for (const p of viewpoints) if (hypot2(x - p[0], z - p[2]) < r) return true;
     return false;
   };
 
@@ -460,9 +506,9 @@ export function scatter(
     [8, -76, 8],
   ];
   const kelpDens = (x: number, z: number) => {
-    for (const p of NO_KELP) if (hypot(x - p[0], z - p[1]) < p[2]) return 0;
+    for (const p of NO_KELP) if (hypot2(x - p[0], z - p[1]) < p[2]) return 0;
     let d = smoothRamp(0.52, 0.64, fbm(x * 0.022, 4, z * 0.022, 3)) * 0.5;
-    for (const p of KELP_ZONES) d = max(d, p[3] * smoothRamp(p[2], p[2] * 0.75, hypot(x - p[0], z - p[1])));
+    for (const p of KELP_ZONES) d = max(d, p[3] * smoothRamp(p[2], p[2] * 0.75, hypot2(x - p[0], z - p[1])));
     return d;
   };
   /** one column per 2.3 m square */
@@ -482,7 +528,7 @@ export function scatter(
     if (!force) {
       let onPath = false;
       for (let k = 0; k < flyPoints.length; k += 3)
-        if (hypot(x - flyPoints[k], z - flyPoints[k + 2]) < 5) {
+        if (hypot2(x - flyPoints[k], z - flyPoints[k + 2]) < 5) {
           onPath = true;
           break;
         }
@@ -600,7 +646,7 @@ export function scatter(
   ];
   const hot = (x: number, z: number) => {
     let h = 0.4;
-    for (const p of HOT) h = max(h, smoothRamp(p[2], p[2] * 0.4, hypot(x - p[0], z - p[1])));
+    for (const p of HOT) h = max(h, smoothRamp(p[2], p[2] * 0.4, hypot2(x - p[0], z - p[1])));
     return h;
   };
   rseed(3);
@@ -610,11 +656,11 @@ export function scatter(
       y = T.wp[k + 1],
       z = T.wp[k + 2],
       ny = T.wn[k + 1];
-    if (hypot(x, z) > 172 || y > -6) continue;
+    if (hypot2(x, z) > 172 || y > -6) continue;
     const h = hot(x, z),
       zp = grottoAt(x, z),
       u = rnd();
-    if (nearFly(x, y, z, 4) || hypot(x + 1, z - 2) < 9 || nearPose(x, z, 8)) continue;
+    if (nearFly(x, y, z, 4) || hypot2(x + 1, z - 2) < 9 || nearPose(x, z, 8)) continue;
     if (ny > 0.75 && u < 0.1 * h) cluster(x, y, z, (8 + rnd() * 14) | 0, LEAF.seagrass, 1.0, 3.0, 0.13, 0.26, 0.6, 2.5);
     else if (ny > 0.6 && u < 0.1 * h + 0.07 * max(zp, h * 0.4))
       cluster(x, y, z, (10 + rnd() * 18) | 0, rnd() < 0.8 ? LEAF.purple : LEAF.amber, 0.9, 2.6, 0.14, 0.28, 0.9, 1.5);
@@ -718,7 +764,7 @@ export function scatter(
     const x = T.wp[k] + rr(-0.45, 0.45),
       z = T.wp[k + 2] + rr(-0.45, 0.45),
       y = T.wp[k + 1];
-    if (hypot(x, z) > 170 || nearPose(x, z)) continue;
+    if (hypot2(x, z) > 170 || nearPose(x, z)) continue;
     const m = magentaAt(x, z),
       zp = grottoAt(x, z),
       u = rnd();
@@ -772,7 +818,7 @@ export function scatter(
   ];
   const zw = (x: number, z: number) => {
     let h = 0.45;
-    for (const p of SPONGE_ZONES) h = max(h, p[3] * smoothRamp(p[2], p[2] * 0.4, hypot(x - p[0], z - p[1])));
+    for (const p of SPONGE_ZONES) h = max(h, p[3] * smoothRamp(p[2], p[2] * 0.4, hypot2(x - p[0], z - p[1])));
     return h;
   };
   rseed(6);
@@ -781,7 +827,7 @@ export function scatter(
       x = T.wp[k],
       y = T.wp[k + 1],
       z = T.wp[k + 2];
-    if (hypot(x, z) > 170 || y > -8 || T.wn[k + 1] < -0.15 || rnd() > zw(x, z) || nearFly(x, y, z, 3)) continue;
+    if (hypot2(x, z) > 170 || y > -8 || T.wn[k + 1] < -0.15 || rnd() > zw(x, z) || nearFly(x, y, z, 3)) continue;
     const n0 = [T.wn[k], T.wn[k + 1], T.wn[k + 2]],
       [t1, t2] = tangent(n0),
       coral = T.wn[k + 1] > 0.85 || rnd() < 0.35,
@@ -796,7 +842,7 @@ export function scatter(
       let ux = s[3],
         uy = s[4] + (coral ? 0.9 : 1.1),
         uz = s[5];
-      const l = hypot(ux, uy, uz);
+      const l = hypot3(ux, uy, uz);
       ux /= l;
       uy /= l;
       uz /= l;
@@ -843,13 +889,13 @@ export function scatter(
         x = T.wp[k],
         y = T.wp[k + 1],
         z = T.wp[k + 2];
-      if (hypot(x - g[0], z - g[1]) > g[2] || y > -14 || T.wn[k + 1] < -0.1 || nearFly(x, y, z, 2.2)) continue;
+      if (hypot2(x - g[0], z - g[1]) > g[2] || y > -14 || T.wn[k + 1] < -0.1 || nearFly(x, y, z, 2.2)) continue;
       made++;
       const coral = T.wn[k + 1] > 0.85 || rnd() < 0.3,
         nx = T.wn[k],
         ny = T.wn[k + 1] + (coral ? 0.9 : 1.1),
         nz = T.wn[k + 2],
-        l = hypot(nx, ny, nz);
+        l = hypot3(nx, ny, nz);
       const sc = coral ? rr(0.5, 1.4) : rr(0.35, 0.9) * (rnd() < 0.15 ? 1.7 : 1);
       solid(
         coral ? 7 + ((rnd() * 3) | 0) : 4 + ((rnd() * 3) | 0),
@@ -917,7 +963,7 @@ export function scatter(
   rseed(9);
   for (let i = 0; i < 2600; i++) {
     const k = pickV();
-    if (T.wn[k + 1] < 0.7 || hypot(T.wp[k], T.wp[k + 2]) > 170 || nearFly(T.wp[k], T.wp[k + 1], T.wp[k + 2], 6))
+    if (T.wn[k + 1] < 0.7 || hypot2(T.wp[k], T.wp[k + 2]) > 170 || nearFly(T.wp[k], T.wp[k + 1], T.wp[k + 2], 6))
       continue;
     const sc = rr(0.25, 1.3) * (rnd() < 0.1 ? 2 : 1);
     solid((rnd() * 4) | 0, T.wp[k], T.wp[k + 1] + sc * 0.2, T.wp[k + 2], sc, quatRandom(random), 1, rnd(), 1, 0);
@@ -930,7 +976,7 @@ export function scatter(
       y = T.wp[k + 1],
       z = T.wp[k + 2],
       ny = T.wn[k + 1];
-    if (hypot(x, z) > 172 || y > -3 || (ny > 0.8 && rnd() < 0.6) || nearFly(x, y, z, 3.5)) continue;
+    if (hypot2(x, z) > 172 || y > -3 || (ny > 0.8 && rnd() < 0.6) || nearFly(x, y, z, 3.5)) continue;
     const sc = (0.35 + 2.1 * pow(rnd(), 2.6)) * (ny > 0.8 ? 0.5 : 1),
       q = quatRandom(random);
     chunks[(sc > 1.15 ? 3 : 0) + ((rnd() * 3) | 0)][cellOf(x, z)].push(
@@ -955,7 +1001,7 @@ export function scatter(
       x = T.wp[k] + rr(-0.4, 0.4),
       z = T.wp[k + 2] + rr(-0.4, 0.4),
       y = T.wp[k + 1];
-    if (T.wn[k + 1] < 0.8 || hypot(x, z) > 170 || nearFly(x, y, z, 1.3)) continue;
+    if (T.wn[k + 1] < 0.8 || hypot2(x, z) > 170 || nearFly(x, y, z, 1.3)) continue;
     const sc = 0.05 + 0.3 * pow(rnd(), 2),
       q = quatRandom(random);
     // (a pebble that is thinned out does not draw its seed)
@@ -1008,7 +1054,7 @@ export function scatter(
       c = viewpoints[3];
     const ux = (c[0] - p[0]) * 0.07,
       uz = (c[2] - p[1]) * 0.07;
-    const l = hypot(ux, 1, uz);
+    const l = hypot3(ux, 1, uz);
     solid(b[3], p[0], gy(p[0], p[1]) - 0.1, p[1], b[2], quatFromY(ux / l, 1 / l, uz / l), 4, rnd(), 1, 0);
   }
   for (let i = 0; i < 9; i++) {

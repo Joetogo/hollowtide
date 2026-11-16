@@ -3,18 +3,19 @@
 import { fbm } from '../math/noise';
 import { smoothRamp } from '../math/scalar';
 import { GROTTO_CENTER, MAGENTA_PATCHES } from './layout';
+import { hypot2 } from '../math/hypot';
 
 export const GROUND_MAP_SIZE = 512;
 const WORLD_SIZE = 384; // metres covered, centred on the origin
 
 /** How far into the purple grotto a point is: 1 within 26 m of its centre, 0 beyond 44 m. */
 export const grottoAt = (x: number, z: number): number =>
-  smoothRamp(44, 26, Math.hypot(x - GROTTO_CENTER[0], z - GROTTO_CENTER[1]));
+  smoothRamp(44, 26, hypot2(x - GROTTO_CENTER[0], z - GROTTO_CENTER[1]));
 
 /** Magenta ground cover at a point, 0..1: noise patches and the authored discs, broken up by finer noise. */
 export function magentaAt(x: number, z: number): number {
   let m = smoothRamp(0.54, 0.66, fbm(x * 0.03, 7, z * 0.03, 3)) * 0.9;
-  for (const p of MAGENTA_PATCHES) m = Math.max(m, smoothRamp(p[2], p[2] * 0.45, Math.hypot(x - p[0], z - p[1])));
+  for (const p of MAGENTA_PATCHES) m = Math.max(m, smoothRamp(p[2], p[2] * 0.45, hypot2(x - p[0], z - p[1])));
   return m * smoothRamp(0.3, 0.55, fbm(x * 0.17, 1, z * 0.17, 2) + m * 0.25);
 }
 

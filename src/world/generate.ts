@@ -1,15 +1,16 @@
 // The world-generation worker: everything between the density field and the buffers the renderer uploads.
-// Specks, collision, terrain, the ground map and the meshes, then the scattering of plants, rocks, sponges,
-// corals, animals and particles with the skylight volume. Nothing here touches the GPU or the page.
+// Two of them run side by side. One takes the density field: specks, collision, terrain, then the scattering of
+// plants, rocks, sponges, corals, animals and particles with the skylight volume. The other builds the meshes and
+// the ground map, which need nothing from the first. Nothing here touches the GPU or the page.
 import { clearancePoints } from '../camera/path';
 import type { Level } from '../config/quality';
 import { Random } from '../math/random';
 import { buildCollisionField } from './collision';
-import type { CellInstances, WorldData } from './data';
+import type { CellInstances } from './data';
 import { buildGroundMap } from './groundMap';
 import { VIEWPOINTS } from './layout';
 import { buildMeshes } from './meshes';
-import { checksum, STAGES, type FromWorker, type Stage, type ToWorker } from './protocol';
+import { checksum, STAGES, type FromWorker, type Grown, type Stage, type ToWorker } from './protocol';
 import { scatter } from './scatter';
 import { buildTerrain, removeSpecks } from './terrain';
 
@@ -34,16 +35,35 @@ function buffersOf(value: unknown, found = new Set<ArrayBuffer>()): ArrayBuffer[
   return [...found];
 }
 
+/** Reports what was made under the name the reference rig uses for the same data, if checksums were asked for. */
+function reporter(scope: WorkerScope, checksums: boolean) {
+  return async (name: string, data: Bytes) => {
+    if (checksums) scope.postMessage({ type: 'checksum', name, length: data.length, sha256: await sha256(data) }, []);
+  };
+}
+
+/**
+ * The meshes and the ground map. Neither needs the density field, and every mesh builder starts its own random
+ * stream, so this runs in a worker of its own while the other one is busy with the terrain.
+ */
+async function buildSetPieces(scope: WorkerScope, level: Level, checksums: boolean): Promise<void> {
+  const made = reporter(scope, checksums);
+  const meshes = buildMeshes(new Random(), level);
+  await made('meshVertices', meshes.vertices);
+  await made('meshIndices', meshes.indices);
+  const groundMap = buildGroundMap();
+  await made('groundMap', groundMap);
+  scope.postMessage({ type: 'setPieces', meshes, groundMap }, buffersOf([meshes, groundMap]));
+  scope.postMessage({ type: 'done' }, []);
+}
+
 async function generate(
   scope: WorkerScope,
   densityBuffer: ArrayBuffer,
   level: Level,
   checksums: boolean,
 ): Promise<void> {
-  /** Reports what was made under the name the reference rig uses for the same data. */
-  const made = async (name: string, data: Bytes) => {
-    if (checksums) scope.postMessage({ type: 'checksum', name, length: data.length, sha256: await sha256(data) }, []);
-  };
+  const made = reporter(scope, checksums);
   const madeCells = async (name: string, set: CellInstances<Uint8Array | Float32Array>) => {
     await made(name, set.instances);
     await made(name + 'Start', set.cells.start);
@@ -61,9 +81,6 @@ async function generate(
   begin('terrain');
   removeSpecks(density);
   await made('density', density);
-  const collision = buildCollisionField(density);
-  await made('collisionIndex', collision.index);
-  await made('collisionBricks', collision.bricks);
   const terrain = buildTerrain(density);
   await made('terrainVertices', new Uint8Array(terrain.vertices));
   await made('terrainIndices', terrain.indices);
@@ -72,13 +89,6 @@ async function generate(
   await made('terrainHi', terrain.cells.hi);
   const flyPoints = clearancePoints(VIEWPOINTS);
   await made('flyPoints', flyPoints);
-  const groundMap = buildGroundMap();
-  await made('groundMap', groundMap);
-
-  begin('meshes');
-  const meshes = buildMeshes(random, level);
-  await made('meshVertices', meshes.vertices);
-  await made('meshIndices', meshes.indices);
 
   begin('plants');
   const scattered = scatter(random, level, density, terrain, flyPoints, VIEWPOINTS, () => begin('rocks'));
@@ -100,9 +110,8 @@ async function generate(
     v[4]!,
     v[5]!,
   ]);
-  const world: WorldData = {
+  const world: Grown = {
     terrain: { vertices: new Uint8Array(terrain.vertices), indices: terrain.indices, cells: terrain.cells },
-    meshes,
     solids: scattered.solids,
     chunks: scattered.chunks,
     props: scattered.props,
@@ -113,10 +122,15 @@ async function generate(
     mantas: scattered.mantas,
     snow: scattered.snow,
     volume: scattered.volume,
-    groundMap,
     viewpoints,
   };
-  scope.postMessage({ type: 'world', world, collision }, buffersOf([world, collision]));
+  scope.postMessage({ type: 'world', world }, buffersOf(world));
+
+  // last, because nothing on screen waits for it: the page can show the world while this is worked out
+  const collision = buildCollisionField(density);
+  await made('collisionIndex', collision.index);
+  await made('collisionBricks', collision.bricks);
+  scope.postMessage({ type: 'collision', collision }, buffersOf(collision));
   scope.postMessage({ type: 'done' }, []);
 }
 
@@ -128,6 +142,9 @@ export function bootWorker(scope: WorkerScope): void {
       switch (data.type) {
         case 'echo':
           scope.postMessage({ type: 'echo', buffer: data.buffer, checksum: checksum(data.buffer) }, [data.buffer]);
+          break;
+        case 'setPieces':
+          buildSetPieces(scope, data.level, data.checksums).catch(failed);
           break;
         case 'generate':
           generate(scope, data.density, data.level, data.checksums).catch(failed);

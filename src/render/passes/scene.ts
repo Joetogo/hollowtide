@@ -170,15 +170,19 @@ export async function createScenePass(gpu: Gpu, scene: Scene, quality: Quality):
       for (let i = 0; i < n; i++)
         pass.drawIndexed(runs[i * 2 + 1]! * 6, 1, runs[i * 2]! * 6, 0, world.identityInstance);
 
-      // boulders and the two set pieces
+      // boulders and the two set pieces: those that may be in view (see ../solids.ts)
       pass.setPipeline(solid);
       pass.setVertexBuffer(0, world.meshVertices);
       pass.setIndexBuffer(world.meshIndices, 'uint32');
-      for (let mesh = 0; mesh < world.solidRanges.length; mesh++) {
-        const [first, count] = world.solidRanges[mesh]!;
-        if (!count || skipped('solids')) continue;
-        const range = world.meshes[mesh]!;
-        pass.drawIndexed(range.indexCount, count, range.firstIndex, range.firstVertex, first);
+      if (!skipped('solids')) {
+        const visible = world.solidCull.update(view);
+        pass.setVertexBuffer(1, world.solidCull.buffer);
+        for (let mesh = 0; mesh < world.solidRanges.length; mesh++) {
+          const count = visible[mesh * 2 + 1]!;
+          if (!count) continue;
+          const range = world.meshes[mesh]!;
+          pass.drawIndexed(range.indexCount, count, range.firstIndex, range.firstVertex, visible[mesh * 2]!);
+        }
       }
       // rock chunks: 0-2 small, 3-5 large (with a coarser mesh further out), 6 pebbles
       for (let i = 0; i < world.chunks.length && !skipped('chunks'); i++) {
