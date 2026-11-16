@@ -1,14 +1,30 @@
 # Hollowtide
 
-A procedural underwater world for the browser, to swim through: kelp forests, light shafts, a wreck, mantas, and
-your own arms pulling you along. WebGPU, no engine, no asset files, one HTML file.
+**[Swim in it](https://richman-tan.github.io/hollowtide/)** (it needs WebGPU: a current Chrome, Edge or Safari)
+
+[![The swimmer's arms stretched out towards a whale's tail standing among kelp](docs/hero.jpg)](https://richman-tan.github.io/hollowtide/)
+
+An underwater world for the browser, to swim through: kelp forests, light shafts, a wreck, mantas, turtles and
+jellyfish, by day, at dusk or by moonlight, and your own body in the water, from the hands that pull you along
+to the fins you see when you look down. WebGPU, no engine, no asset files: the world is made as the page loads,
+and the page is one HTML file.
+
+| | | |
+|---|---|---|
+| ![Kelp reaching up into shafts of light](docs/kelp.jpg) | ![The same kelp at dusk, the water gone lavender](docs/dusk.jpg) | ![A whale's tail among kelp by moonlight, specks glowing green](docs/moon.jpg) |
+| Noon | Dusk | Moonlight |
+| ![A wreck leaning against a rock, a jellyfish above it](docs/wreck.jpg) | ![A sea turtle rowing over the seabed](docs/turtle.jpg) | ![A jellyfish glowing pink in the dark](docs/jellyfish.jpg) |
+| The wreck | One of three turtles | Jellyfish glow at night |
+| ![Both hands on a yellow scooter](docs/scooter.jpg) | ![Looking down: knees, pads and yellow fins](docs/legs.jpg) | ![A turtle lit warm by the lamp at night](docs/lamp.jpg) |
+| `Shift`: the scooter | Look down: your legs | `F`: the lamp |
 
 The world itself (its design, layout and shading) is ported from
 [Abyssal Garden](https://github.com/Noniv/abyssal-garden) by Noniv (Maksymilian Dendura). Hollowtide began as a
 from-scratch rebuild of that scene in a typed, modular, tested codebase; the original is kept as a reference, and
 Hollowtide's world and frames are checked against it, to the checksum and to the pixel. What Hollowtide adds is
-on top: an opening, loading in half the time without freezing the page, a swimmer with a body, a scooter, and
-more to come. Both are MIT-licensed; see `LICENSE`. `PLAN.md` has the plan and the milestone list.
+on top: an opening, loading in half the time without freezing the page, a swimmer with a body, a scooter and a
+lamp, three lights, turtles and jellyfish, photo mode and a tour. Both are MIT-licensed; see `LICENSE`. `PLAN.md`
+has the plan and the milestone list. The pictures here are frames of the page itself (`npm run shots:readme`).
 
 ## Status
 
