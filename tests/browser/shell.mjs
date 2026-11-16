@@ -305,6 +305,12 @@ try {
   await chrome.page.waitForTimeout(300);
   check(await chrome.page.evaluate(() => document.body.className === 'menu'), 'Esc pauses');
   // ---- settings in the pause panel take effect and are remembered
+  // (on a machine that cannot hold sixty frames a second the page has set the picture to Sharp by itself by
+  // now, and a choice that is already made cannot be clicked: so Smooth first, then Sharp)
+  await chrome.page.evaluate(() => {
+    const smooth = document.querySelector('#picture button:nth-of-type(1)');
+    if (smooth.className !== 'on') smooth.click();
+  });
   await chrome.page.click('#picture button:nth-of-type(2)');
   await chrome.page.click('#swim button:nth-of-type(2)');
   await chrome.page.fill('#fov', '1.15');

@@ -37,7 +37,8 @@ const attempt = (query) =>
       const launcher = path.join(root, `dist/safari-launch-${Date.now().toString(36)}.html`);
       writeFileSync(
         launcher,
-        `<!doctype html><script>location.replace('index.harness.html?selftest${query}&report=' + encodeURIComponent('${listener}'))</script>`,
+        // (&forget: Safari keeps what a page remembers from one run to the next; each run starts from nothing)
+        `<!doctype html><script>location.replace('index.harness.html?selftest&forget${query}&report=' + encodeURIComponent('${listener}'))</script>`,
       );
       execFileSync('open', ['-a', 'Safari', pathToFileURL(launcher).href]);
     });

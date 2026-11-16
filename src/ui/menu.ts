@@ -21,7 +21,7 @@ export interface Menu {
   /** Loading: what is happening and how far along it is, 0..1. */
   progress(text: string, fraction: number): void;
   /** Loading is done: the descent ends, the picture goes black, and the home view comes up. */
-  ready(): void;
+  ready(resume?: boolean, onBlack?: () => void): void;
   /** Could not start, or the graphics device was lost: show a message instead of everything else. */
   fail(message: string): void;
   /** Pauses (opens the panel), or closes it and returns to the scene. */
@@ -67,7 +67,13 @@ const BLACK = 0.45;
 /** Seconds into waking at which the swimmer can move: the eyes are half open. */
 const STIR = 1.3;
 
-export function createMenu(level: Level, canvas: HTMLCanvasElement, settings: Settings, actions: MenuActions): Menu {
+export function createMenu(
+  level: Level,
+  mood: string,
+  canvas: HTMLCanvasElement,
+  settings: Settings,
+  actions: MenuActions,
+): Menu {
   const body = document.body;
   const dive = el<HTMLButtonElement>('dive');
   const status = el('status');
@@ -139,9 +145,9 @@ export function createMenu(level: Level, canvas: HTMLCanvasElement, settings: Se
   el('light')
     .querySelectorAll('button')
     .forEach((button, i) => {
-      const mood = MOODS[i]!;
-      if (mood.name === settings.mood) button.className = 'on';
-      else button.onclick = () => actions.onMood(mood.name);
+      const each = MOODS[i]!;
+      if (each.name === mood) button.className = 'on';
+      else button.onclick = () => actions.onMood(each.name);
     });
   // ---- the settings in the pause panel: three sliders and three choices, each written straight into `settings`
   const syncs: (() => void)[] = [];
@@ -194,14 +200,24 @@ export function createMenu(level: Level, canvas: HTMLCanvasElement, settings: Se
       bar.style.transform = `scaleX(${fraction})`;
       veil.progress(fraction);
     },
-    ready() {
+    ready(resume = false, onBlack) {
       if (state !== 'loading') return;
       void veil.sink().then(() => {
-        // black for a moment, then the home view
+        onBlack?.();
+        // black for a moment, then the home view; or, for a swimmer who was in the water before the page
+        // started over (to change the light, or the detail), the water again, where they were
         setTimeout(() => {
           if (state !== 'loading') return;
-          state = 'home';
-          body.className = 'home';
+          if (resume) {
+            state = 'playing';
+            body.className = 'playing';
+            dive.textContent = 'Resume';
+            actions.onWake();
+            actions.onToggle(false);
+          } else {
+            state = 'home';
+            body.className = 'home';
+          }
           veil.reveal();
         }, BLACK * 1000);
       });

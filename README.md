@@ -59,7 +59,7 @@ Done so far:
 **Parity gate: passed.** At that point Hollowtide was the original, from scratch: `dist/index.html` builds the same world (all
 84 generator outputs have the original's checksums), draws the same frames (at High and Medium at most 11 of
 921,600 pixels differ, by 1/255; three of four spot-checked frames are byte-identical PNG files), and swims the
-same way. What is left is the part that goes beyond the original: milestones 10 to 13.
+same way. Everything after it goes beyond the original: milestones 10 to 15.
 
 ```bash
 npm run build && open dist/index.html     # or: npm run dev
@@ -70,11 +70,15 @@ the scooter and rides it, the mouse or the arrow keys look around, `1`–`6` vie
 saves a picture), `T` a guided tour, `F` the lamp, `L` a link to the view, `Esc` pauses, `M` mute, `H` stats,
 `C` switches between swimming with a body and the original's steady glide.
 
-- **Touchscreen:** hold to swim forward, slide to steer, a second finger for the scooter; a sound button and a
-  menu button are in the corner.
+- **Touchscreen:** hold to swim forward, slide to steer, a second finger for the scooter. Buttons in the corner
+  for the lamp, the sound and the menu; the tour and photo mode are in the pause panel, and photo mode has its
+  own buttons to save and to go back. A phone held upright gets the page turned on its side; the pause panel is
+  laid out to fit either way. (Tried on a touchscreen the size of a phone in Chrome's emulation, not yet on one.)
 - **Gamepad:** left stick swims, right stick looks, the bumpers go down and up, the right trigger is the scooter,
   `A` or `Start` dives, pauses and resumes, `Y` is the lamp.
 - **Where the mouse cannot be captured** (some embeds refuse it): hold the button down on the picture and drag.
+- **Where there is no WebGPU** (an older phone, a browser that has not got it yet) the page says so over a picture
+  of the place, with a link to these pictures.
 
 **A link to a view** (`L`) puts where you are and which way you look after the `#` of the address
 (`#at=x,y,z,turn,tilt`, metres and degrees) and copies it; whoever opens it wakes there. A link to a place
@@ -84,7 +88,8 @@ inside the rock is not followed.
 fish, on the same seabed, with the wreck, the arches and the viewpoints where they are. Without it the world is
 the authored one, to the byte.
 
-The pause panel has the settings: look speed, inverted look, field of view, volume, detail level, and two choices.
+The pause panel has the settings: detail level, light, look speed, inverted look, field of view, volume, and two
+choices; and buttons for the tour and photo mode.
 **Picture: smooth or sharp** says what gives when the machine cannot keep up: smooth trades resolution and draw
 distance for sixty frames a second; sharp settles for thirty and spends the difference on pixels and distance.
 **Swimming: with arms or classic** is the `C` key's switch, where it can be seen.
@@ -131,7 +136,8 @@ Not in the original, which shows a progress bar and then a menu.
 The same world at **noon** (the light it was made for), at **dusk** (red and gold near the surface, lavender
 below, the shafts pale pink) and by **moonlight** (a twentieth of the day's light, cold blue, and what lives
 here shining in it: the jellyfish, the specks among the kelp, the magenta ground cover). Pick one on the home
-view or in the pause panel; the page starts over in it.
+view or in the pause panel; the page starts over in it, and a swimmer who was in the water comes back where
+they were.
 
 - A mood is seven numbers (`src/config/mood.ts`): a colour that scales the sun's own light, a colour that scales
   the daylight the water scatters (the haze, the light from all around, the sky through the surface), how much

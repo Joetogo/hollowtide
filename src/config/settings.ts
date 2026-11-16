@@ -128,6 +128,12 @@ export function loadSettings(): Settings {
   };
 }
 
+/** Forgets everything remembered: the next loadSettings() starts from what the machine suggests. */
+export function forgetSettings(): void {
+  write(KEY, null);
+  write(OLD_KEY, null);
+}
+
 export function saveSettings(settings: Settings, fullPixels: number): void {
   // at full resolution nothing is remembered for the pixel count, so a larger window later starts at its own full size
   const pixels = settings.pixels < fullPixels ? Math.floor(settings.pixels) : undefined;

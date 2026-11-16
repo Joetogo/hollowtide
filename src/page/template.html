@@ -65,10 +65,16 @@ h1 {
 #depth { font: 200 3.6em/1.1 system-ui, sans-serif; font-variant-numeric: tabular-nums; letter-spacing: .04em; text-shadow: 0 .05em .4em #000c; }
 #track { height: 2px; margin: .9em 0 .8em; overflow: hidden; background: #e8fbff26; }
 #bar { display: block; height: 100%; background: #9ff6ff; transform: scaleX(0); transform-origin: 0; transition: transform .5s cubic-bezier(.3, .5, .5, 1); }
-#status, #detail, #light, #keys, #touch-hint { font-size: .8em; letter-spacing: .12em; text-transform: uppercase; }
+#status, #detail, #light, #extras, #keys, #touch-hint { font-size: .8em; letter-spacing: .12em; text-transform: uppercase; }
 #status { font-weight: 500; letter-spacing: .28em; opacity: .8; }
 .failed #track, .failed #depth { visibility: hidden; }
 .failed #status { font-size: 1.1em; letter-spacing: 0; text-transform: none; opacity: 1; }
+/* It could not start (most often: a browser without WebGPU). The descent stops; behind the message is a picture
+   of the place, where the page is published with one beside it, and under it a way to see more. */
+.failed #veil { display: none; }
+.failed #menu { background: linear-gradient(#03131c80, #03131ce6 70%), url(preview.jpg) center / cover #03131c; }
+#look { display: none; width: max-content; margin: 1.6em auto 0; font-size: .85em; }
+.failed #look { display: flex; }
 
 /* ---- buttons */
 button, a {
@@ -110,21 +116,38 @@ button:active, a:active { transform: translateY(.1em); filter: brightness(.9); }
 .menu #menu { background: radial-gradient(#03131c00 30%, #03131ccc); }
 .menu h1 { font-size: 3em; }
 .menu #actions {
-  grid-template: "dive dive" auto "detail keys" auto "light keys" auto "settings keys" 1fr / 27em auto; align-items: start;
+  grid-template: "dive dive" auto "detail keys" auto "light keys" auto "extras keys" auto "settings keys" 1fr / 27em auto; align-items: start;
   max-width: 100%; justify-items: stretch;
 }
 .menu #dive { grid-area: dive; }
 .menu #detail { grid-area: detail; }
 .menu #light { grid-area: light; }
+.menu #extras { grid-area: extras; }
 .menu #settings { grid-area: settings; }
 .menu #keys, .menu #touch-hint { grid-area: keys; }
-@media (pointer: coarse), (max-height: 30em), (max-width: 60em) { .menu #actions { grid-template: none; width: 27em; } .menu #actions > * { grid-area: auto; } }
+/* A phone, or a small window: the list of keys is gone (below), and the panel is two columns of equal width,
+   the settings beside the rest, so that it is no taller than a phone lying on its side. Without its title
+   where there is no room for one; and if it is still too tall, it scrolls. */
+@media (pointer: coarse), (max-height: 30em), (max-width: 60em) {
+  .menu #actions {
+    grid-template: "dive dive" auto "detail settings" auto "light settings" auto "extras settings" auto "keys settings" 1fr / 1fr 1fr;
+    width: min(54em, 100%); gap: .7em;
+  }
+  .menu #menu { place-content: safe center; gap: .8em; padding: .8em; overflow-y: auto; }
+  .menu #dive { padding: .6em; }
+}
+@media (max-height: 30em), (orientation: portrait) and (pointer: coarse) { .menu h1 { display: none; } }
+@media (max-width: 36em) and (orientation: landscape), (max-height: 36em) and (orientation: portrait) and (pointer: coarse) {
+  /* too narrow for two columns: one, scrolling */
+  .menu #actions { grid-template: none; width: min(27em, 100%); }
+  .menu #actions > * { grid-area: auto; }
+}
 .menu #dive { padding: .9em; background: linear-gradient(#9ff6ff, #19c3d6); font-size: 1.3em; box-shadow: inset 0 -.2em #0003, 0 0 2em #19c3d6b3; }
 /* dark plates under the resume button: detail level, settings, list of controls, touch hint */
-#detail, #light, #settings, #keys, #touch-hint { padding: 1em 1.6em; border-radius: .7em; background: #03131cb3; }
+#detail, #light, #extras, #settings, #keys, #touch-hint { padding: 1em 1.6em; border-radius: .7em; background: #03131cb3; }
 /* a choice: a label and its options in a row, the current one lit */
 .choice { display: flex; align-items: center; gap: .4em; }
-#detail, #light { padding: .4em; }
+#detail, #light, #extras { padding: .4em; }
 .choice span { flex: 1; padding: 0 .8em; color: #7ff3ff; text-align: left; }
 .choice button { flex: 1.2; padding: .7em 1em; background: none; box-shadow: none; color: #e8fbff; white-space: nowrap; }
 .choice button:hover { background: #7ff3ff33; }
@@ -135,7 +158,7 @@ button:active, a:active { transform: translateY(.1em); filter: brightness(.9); }
 #settings label span { flex: 1; padding: 0 .8em; color: #7ff3ff; text-align: left; }
 #settings input { flex: 2.4; margin: 0 .8em 0 0; accent-color: #19c3d6; cursor: pointer; }
 #settings .choice button { padding: .55em .8em; }
-.home #settings { display: none; }
+.home #settings, .home #extras { display: none; }
 /* list of controls: two groups, key caps right-aligned against their labels */
 #keys { display: grid; gap: 1.2em; text-align: left; }
 #keys p { display: grid; grid-template-columns: auto auto; align-content: start; align-items: center; gap: .55em .9em; }
@@ -150,13 +173,23 @@ button:active, a:active { transform: translateY(.1em); filter: brightness(.9); }
   position: absolute; top: .6em; right: .6em; display: none; padding: .3em .6em; background: #03222dd9;
   box-shadow: inset 0 0 0 2px #7ff3ff, 0 .3em 1em #0009; font-size: 1.3em; color: #e8fbff; opacity: .8;
 }
-.playing #open-menu, .playing #mute { display: flex; }
-.captured #open-menu, .captured #mute { display: none; }
+.playing #open-menu, .playing #mute, .playing #lamp { display: flex; }
+.captured #open-menu, .captured #mute, .captured #lamp { display: none; }
 /* the sound button beside it: struck through when the sound is off */
 #mute {
   position: absolute; top: .6em; right: 3.4em; display: none; padding: .3em .7em; background: #03222dd9;
   box-shadow: inset 0 0 0 2px #7ff3ff, 0 .3em 1em #0009; font-size: 1.3em; color: #e8fbff; opacity: .8;
 }
+/* and the lamp's, lit when the lamp is */
+#lamp {
+  position: absolute; top: .6em; right: 6.2em; display: none; padding: .3em .6em; background: #03222dd9;
+  box-shadow: inset 0 0 0 2px #7ff3ff, 0 .3em 1em #0009; font-size: 1.3em; color: #e8fbff; opacity: .8;
+}
+#lamp[aria-pressed=true] { color: #ffe9a8; box-shadow: inset 0 0 0 2px #ffe9a8, 0 0 1em #ffe9a880; }
+/* photo mode's two buttons, for where there are no keys */
+#photo-bar { position: absolute; left: 50%; bottom: 3vh; transform: translateX(-50%); display: none; gap: .8em; font-size: .75em; opacity: .85; }
+.photo.playing #photo-bar { display: flex; }
+.captured #photo-bar { display: none; }
 #mute[aria-pressed=true] { color: #7ff3ff80; text-decoration: line-through; box-shadow: inset 0 0 0 2px #7ff3ff60, 0 .3em 1em #0009; }
 #stats {
   position: absolute; top: 1em; left: 1.2em; margin: 0; font: .8em/1.6 ui-monospace, Consolas, monospace;
@@ -170,7 +203,8 @@ button:active, a:active { transform: translateY(.1em); filter: brightness(.9); }
 }
 #note.on { opacity: 1; }
 /* photo mode: nothing on the picture but its one line of keys, and that faint */
-.photo #stats, .photo #open-menu, .photo #mute { display: none; }
+.photo #stats, .photo #open-menu, .photo #mute, .photo #lamp { display: none; }
+.photo #note { bottom: 12vh; }
 .photo #note { opacity: .55; }
 #note b { padding: .1em .45em; border-radius: .3em; background: #e8fbff; color: #03222d; font-weight: 800; }
 @media (prefers-reduced-motion: reduce) {
@@ -187,11 +221,13 @@ button:active, a:active { transform: translateY(.1em); filter: brightness(.9); }
     <p id=depth>0.0 m</p>
     <div id=track><i id=bar></i></div>
     <p id=status aria-live=polite>Diving…</p>
+    <a id=look href="https://github.com/Richman-Tan/hollowtide#readme">See what it looks like</a>
   </div>
   <div id=actions>
     <button id=dive><i><b>W</b><b>A</b><b>S</b><b>D</b></i><span id=press>to dive</span><span id=tap>Tap to dive</span></button>
     <p id=detail class=choice><span>Detail</span><button>Low</button><button>Medium</button><button>High</button></p>
     <p id=light class=choice><span>Light</span><button>Noon</button><button>Dusk</button><button>Moonlit</button></p>
+    <p id=extras class=choice><span>Take</span><button id=tour>A tour</button><button id=photo>A photo</button></p>
     <div id=settings>
       <label><span>Look speed</span><input id=look type=range min=0.3 max=2.5 step=0.05></label>
       <label><span>Field of view</span><input id=fov type=range min=0.85 max=1.2 step=0.01></label>
@@ -223,6 +259,8 @@ button:active, a:active { transform: translateY(.1em); filter: brightness(.9); }
 </div>
 <button id=open-menu aria-label=Menu>≡</button>
 <button id=mute aria-label=Sound aria-pressed=false>♪</button>
+<button id=lamp aria-label=Lamp aria-pressed=false>☼</button>
+<p id=photo-bar><button id=save>Save a picture</button><button id=leave>Back</button></p>
 <pre id=stats></pre>
 <p id=note aria-live=polite></p>
 <script>

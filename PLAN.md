@@ -178,8 +178,9 @@ Key mechanisms:
 **Milestone 13: features and UX**
 - Done: settings in the pause panel (look speed, inverted look, field of view, volume, smooth or sharp picture,
   arms or classic), photo mode with a picture saved at up to 4K, the tour, arrow-key look, drag-to-look, a
-  gamepad, a visible sound button, a link to a view, `?seed=`. Not done: switching the detail level without a
-  reload (it still reloads the page).
+  gamepad, a visible sound button, a link to a view, `?seed=`. Changing the detail level (or the light) still starts the
+  page over, but a swimmer who was in the water now comes back where they were. On a phone: buttons for the lamp,
+  the tour and photo mode, and a pause panel that fits the screen.
 - Done ahead of the rest (2026-11-16): the opening. A diver sinks while the world loads, the
   picture goes black, the home view drifts through the world with "W A S D to dive", and the dive opens the
   swimmer's eyes on the seabed. See "The opening" in the README.

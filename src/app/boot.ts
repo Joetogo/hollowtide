@@ -7,7 +7,7 @@ import { createSoundscape } from '../audio/soundscape';
 import { lookAt, updateBasis } from '../camera/camera';
 import { FLY_SECONDS, flyPoint } from '../camera/path';
 import { createIntent, createSwimmer, stepSwimmer, type Drive } from '../camera/controls';
-import { loadSettings, markLoading, saveSettings } from '../config/settings';
+import { loadSettings, markLoading, saveSettings, forgetSettings } from '../config/settings';
 import { quality, type Level } from '../config/quality';
 import { createGpu, StartupError } from '../gpu/context';
 import { addFrame, addGpuTime, createDynRes, MAX_PIXELS, settle, SHARP, SMOOTH, OUT_OF_REACH } from '../render/dynres';
@@ -30,6 +30,7 @@ import { setShaderMood } from '../gpu/shader';
 import { aimLamp } from '../render/lamp';
 import { createBreath, stepBreath, stepWash } from '../body/breath';
 import { TAN_HALF_FOV } from '../render/frame';
+import { breathe } from '../gpu/turns';
 
 export interface BootReport {
   adapter: string;
@@ -67,10 +68,14 @@ const TRANSFER_BYTES = 16 << 20;
  */
 const EVEN_ABOVE = 14.5;
 const EVEN_BELOW = 11.5;
+/** Where the swimmer's place is kept while the page starts over (for this tab only, and read once). */
+const RESUME = 'hollowtide-resume';
 const THIRTY = 'Thirty frames a second is what this machine holds here: the picture is set to Sharp';
 const LINK_COPIED = 'A link to this view is copied';
 const LINK_IN_BAR = 'A link to this view is in the address bar';
 const PHOTO_KEYS = 'Photo: Enter saves a picture, P returns';
+/** What photo mode says of itself: the keys, or for fingers (which have the two buttons) only what it is. */
+const photoHint = () => (matchMedia('(pointer: coarse)').matches ? 'Photo: the moment stands still' : PHOTO_KEYS);
 const TOUR_KEYS = 'A tour of the hollow. Any swimming key takes over';
 /** The most pixels a saved picture has: a 4K frame. */
 const PHOTO_PIXELS = 3840 * 2160;
@@ -159,17 +164,20 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
   const hook: NonNullable<Window['__hollowtide']> = (window.__hollowtide = { frames: 0 });
   const canvas = document.getElementById('scene') as HTMLCanvasElement;
   const params = new URLSearchParams(location.search);
+  // harness builds can be told to forget what was remembered: for a browser that keeps it from run to run
+  if (__HARNESS__ && params.has('forget')) forgetSettings();
   const settings = loadSettings();
   // dev and harness builds can force the detail level with ?level=0|1|2
   const forced = __DEV__ || __HARNESS__ ? params.get('level') : null;
   if (forced === '0' || forced === '1' || forced === '2') settings.level = Number(forced) as Level;
   const level = settings.level;
   // dev and harness builds can force the light with ?mood=dusk
-  if ((__DEV__ || __HARNESS__) && params.get('mood')) settings.mood = moodNamed(params.get('mood')).name;
+  // (beside the settings, not in them: what a test asks for is not to be remembered)
+  const moodName = ((__DEV__ || __HARNESS__) && params.get('mood')) || settings.mood;
 
   // the page's controls exist before anything can go wrong, so a failure has somewhere to be shown
   const intent = createIntent();
-  const menu = createMenu(level, canvas, settings, {
+  const menu = createMenu(level, moodNamed(moodName).name, canvas, settings, {
     onWake: () => wake?.(),
     onSettings: () => applySettings(),
     onDive() {
@@ -190,11 +198,13 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
     onLevel(next) {
       // another level is another world: remember it and start over (what the screen settled on no longer applies)
       saveSettings({ ...settings, level: next, pixels: Infinity, detail: 1 }, 0);
+      keepPlace();
       location.reload();
     },
     onMood(name) {
       // the light is built into the shaders: remember it and start over
       saveSettings({ ...settings, mood: name }, Infinity);
+      keepPlace();
       location.reload();
     },
   });
@@ -203,6 +213,11 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
   let wake: (() => void) | null = null;
   /** Puts the settings into effect and remembers them (set once there is something to apply them to). */
   let applySettings: () => void = () => undefined;
+  /**
+   * Before the page starts over for another light or another level of detail: notes where the swimmer is, so
+   * that they come back there and not to the home view (set once there is a swimmer to place).
+   */
+  let keepPlace: () => void = () => undefined;
   let input: ReturnType<typeof bindInput> | null = null;
 
   try {
@@ -239,7 +254,7 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
     // dev and harness builds can draw with the original's own distances: ?tuning=faithful
     const tuning = (__DEV__ || __HARNESS__) && params.get('tuning') === 'faithful' ? FAITHFUL : TUNED;
     // the light the shaders are built for: what was chosen in the menu
-    const mood = moodNamed(settings.mood);
+    const mood = moodNamed(moodName);
     setShaderMood(mood);
     const renderer = await createRenderer(gpu, quality(level), tuning, (ms) => {
       gpuMs = ms;
@@ -278,13 +293,19 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       tell('stage', 'uploaded');
       // what the swimmer collides with follows a moment later: nothing on screen waits for it
       // and so do the swimmer's arms, which are not seen before the dive
-      collisionReady = Promise.all([made.collision, made.body, made.turtle]).then(([field, body, turtle]) => {
+      collisionReady = Promise.all([made.collision, made.body, made.turtle]).then(async ([field, body, turtle]) => {
         collision = field;
-        if (harness) harness.collision = field;
         renderer.setBody(body);
-        // jellyfish and turtles go where there is open water, which the collision field knows
+        // jellyfish and turtles go where there is open water, which the collision field knows. (Each of these
+        // steps in a turn of its own: together they were one task of 90 ms on a warm machine.)
+        await breathe();
         if (tuning.jellies) renderer.setJellies(placeJellies(made.world.viewpoints, field));
-        if (tuning.turtles) renderer.setTurtles(turtle, placeTurtles(made.world.viewpoints, field, kelp));
+        await breathe();
+        const turtles = tuning.turtles ? placeTurtles(made.world.viewpoints, field, kelp) : null;
+        await breathe();
+        if (turtles) renderer.setTurtles(turtle, turtles);
+        // (told last: tests take this as the sign that everything that lives here has been placed)
+        if (harness) harness.collision = field;
       });
       if (harness) harness.generatedViewpoints = made.world.viewpoints;
       viewpoints = made.world.viewpoints;
@@ -312,13 +333,38 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
     // the home view drifts along the scripted flight, slowly, there and back
     const flight = new Float64Array(6);
     let homeClock = 0;
+    // ---- a swimmer who was in the water when the page started over comes back where they were
+    let dived = false;
+    let kept: ReturnType<typeof viewFromHash> = null;
+    let keptLamp: boolean | null = null;
+    try {
+      const record = JSON.parse(sessionStorage.getItem(RESUME) ?? 'null') as { at?: string; lamp?: boolean } | null;
+      sessionStorage.removeItem(RESUME); // once: a reload by hand goes to the home view as ever
+      kept = record ? viewFromHash(record.at ?? '') : null;
+      keptLamp = kept ? !!record!.lamp : null;
+    } catch {
+      // storage can be blocked: then the page simply starts at the home view
+    }
+    const resuming = kept !== null;
+    keepPlace = () => {
+      if (!dived) return;
+      try {
+        sessionStorage.setItem(RESUME, JSON.stringify({ at: viewToHash(camera), lamp: lampOn }));
+      } catch {
+        // as above
+      }
+    };
     wake = () => {
-      // still, at the first viewpoint, arms down; or where a link to a view says, if this page was opened by one
+      dived = true;
+      // still, at the first viewpoint, arms down; or where a link to a view says, if this page was opened by
+      // one; or where the swimmer was (a place they had swum to: it is not asked whether it is in the rock)
       goTo(0);
       const view = viewFromHash(location.hash);
-      if (view && collision && rockDistance(collision, view[0], view[1], view[2]) < -CAMERA_RADIUS) {
+      if (kept) [camera.x, camera.y, camera.z, camera.yaw, camera.pitch] = kept;
+      else if (view && collision && rockDistance(collision, view[0], view[1], view[2]) < -CAMERA_RADIUS) {
         [camera.x, camera.y, camera.z, camera.yaw, camera.pitch] = view;
       }
+      kept = null;
       Object.assign(swimmer, createSwimmer());
       body = createBodyState();
       breath = createBreath();
@@ -338,10 +384,8 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
         if (code === 'KeyH') hud.toggle();
         else if (code === 'KeyM') toggleMute();
         else if (code === 'KeyL') shareView();
-        else if (code === 'KeyF') {
-          lampOn = !lampOn;
-          note(lampOn ? 'Lamp on' : 'Lamp off');
-        } else if (code === 'KeyC') {
+        else if (code === 'KeyF') toggleLamp();
+        else if (code === 'KeyC') {
           // the original's steady glide with no body in view, or strokes and the scooter. It is remembered, so
           // it is said: arms that are simply gone on the next visit would look like a fault
           settings.classic = !settings.classic;
@@ -359,9 +403,17 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
         } else if (code >= 'Digit1' && code <= 'Digit6') goTo(code.charCodeAt(5) - 49);
       },
     });
-    // ---- the lamp: F switches it. By moonlight it starts switched on
-    let lampOn = mood.name === 'moon';
+    // ---- the lamp: F switches it, and so does a button. By moonlight it starts switched on
+    let lampOn = keptLamp ?? mood.name === 'moon';
     let lampLevel = 0;
+    const lampButton = document.getElementById('lamp')!;
+    const toggleLamp = () => {
+      lampOn = !lampOn;
+      lampButton.setAttribute('aria-pressed', String(lampOn));
+      note(lampOn ? 'Lamp on' : 'Lamp off');
+    };
+    lampButton.setAttribute('aria-pressed', String(lampOn));
+    lampButton.onclick = toggleLamp;
 
     // ---- sound on and off: the M key, and a button for where there are no keys
     const muteButton = document.getElementById('mute')!;
@@ -404,7 +456,7 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       if (on) {
         setTour(false);
         body.shown = 0; // arms out of the picture at once
-        note.hold(PHOTO_KEYS);
+        note.hold(photoHint());
       } else note.clear();
     };
     /** Draws the frozen moment again at a larger size, saves it as a PNG, and puts the size back. */
@@ -424,7 +476,7 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
         link.download = `hollowtide-${new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-')}.png`;
         link.click();
         setTimeout(() => URL.revokeObjectURL(link.href), 10_000);
-        note.hold(`Saved, ${width} × ${height}. ${PHOTO_KEYS}`);
+        note.hold(`Saved, ${width} × ${height}. ${photoHint()}`);
       }, 'image/png');
       renderer.supersample = 1;
       renderer.pixelBudget = budget;
@@ -448,6 +500,18 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
 
     /** the picture has been set to sharp in this visit because sixty frames a second was out of reach */
     let settledForThirty = false;
+    // the tour and photo mode from the pause panel, and photo mode's own two buttons: for where there are no keys
+    document.getElementById('tour')!.onclick = () => {
+      menu.show(false);
+      setTour(true);
+    };
+    document.getElementById('photo')!.onclick = () => {
+      menu.show(false);
+      setPhoto(true);
+    };
+    document.getElementById('save')!.onclick = () => (shoot = true);
+    document.getElementById('leave')!.onclick = () => setPhoto(false);
+
     sound.setVolume(settings.volume);
     applySettings = () => {
       sound!.setVolume(settings.volume);
@@ -585,11 +649,15 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       hud.frame(frameMs, gpuMs, renderer.targets.width, renderer.targets.height, deviceWidth());
       hook.frames = (hook.frames ?? 0) + 1;
     };
-    requestAnimationFrame((now) => {
-      last = now;
-      requestAnimationFrame(frame);
-    });
-    menu.ready();
+    // The loop starts when the descent has gone black. Until then there is nothing of the scene to see, and the
+    // descent is still being drawn: the loop's first frames, which are its slowest, would land in the same
+    // task as that drawing (61 ms, once in five loads on a warm machine).
+    menu.ready(resuming, () =>
+      requestAnimationFrame((now) => {
+        last = now;
+        requestAnimationFrame(frame);
+      }),
+    );
     hook.report.loadMs = Math.round(performance.now());
     await collisionReady; // the menu is up; a failure here is still a failure to start
   } catch (error) {

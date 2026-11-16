@@ -16,9 +16,15 @@ try {
   let { error, report } = await chrome.open(pathToFileURL(shipped).href);
   check(!error, `dist/index.html starts from file://${error ? ': ' + error : ''}`);
   if (report) check(true, `  device and renderer: ${report.adapter}, ${report.size.join('x')}`);
-  await chrome.page.waitForTimeout(500);
+  // (the loop starts once the opening's descent has gone black)
+  const running = await chrome.page
+    .waitForFunction(() => window.__hollowtide.frames > 5, null, { timeout: 10_000 })
+    .then(
+      () => true,
+      () => false,
+    );
   const frames = await chrome.page.evaluate(() => window.__hollowtide.frames);
-  check(frames > 5, `  frame loop is running (${frames} frames in the first half second)`);
+  check(running, `  frame loop is running (${frames} frames so far)`);
   check(await chrome.page.evaluate(() => !window.__hollowtide.harness), '  ships without the test hooks');
 
   // the harness build: the same code plus hooks

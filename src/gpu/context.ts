@@ -20,7 +20,10 @@ export const HDR: GPUTextureFormat = 'rgba16float';
 export const DEPTH: GPUTextureFormat = 'depth32float';
 
 export async function createGpu(canvas: HTMLCanvasElement): Promise<Gpu> {
-  if (!navigator.gpu) throw new StartupError('This scene needs WebGPU. Try a current Chrome, Edge or Safari.');
+  if (!navigator.gpu)
+    throw new StartupError(
+      'This needs WebGPU, which this browser does not have. It runs in a current Chrome, Edge or Safari.',
+    );
   const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
   if (!adapter) throw new StartupError('No WebGPU adapter found.');
   const timestamps = adapter.features.has('timestamp-query');

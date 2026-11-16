@@ -35,7 +35,13 @@ export function need(file, hint) {
  * Chrome with a throwaway profile; the window is 1280x720 CSS pixels at the given device pixel ratio.
  * `memory` samples the browser's resident memory from outside while it runs (see `peak` on the result).
  */
-export async function launch({ dpr = 1, memory = false, args = [] } = {}) {
+export async function launch({
+  dpr = 1,
+  memory = false,
+  args = [],
+  viewport = { width: 1280, height: 720 },
+  touch = false,
+} = {}) {
   const profile = mkdtempSync(path.join(os.tmpdir(), 'hollowtide-test-'));
   const peak = { rendererMB: 0, gpuMB: 0, totalMB: 0 };
   const sampler = memory
@@ -68,8 +74,11 @@ export async function launch({ dpr = 1, memory = false, args = [] } = {}) {
   const context = await chromium.launchPersistentContext(profile, {
     channel: 'chrome',
     headless: false,
-    viewport: { width: 1280, height: 720 },
+    viewport,
     deviceScaleFactor: dpr,
+    // a phone: fingers instead of a mouse, and the page laid out as on one
+    hasTouch: touch,
+    isMobile: touch,
     args,
   });
   const page = context.pages()[0] ?? (await context.newPage());

@@ -135,6 +135,49 @@ try {
       (await chrome.page.evaluate(() => JSON.parse(localStorage.getItem('hollowtide')).mood === undefined)),
     `back at noon the picture is noon's again (${say(again.mean)})`,
   );
+  // ---- changing the light while in the water: the page starts over, and the swimmer is back where they were
+  await chrome.page.waitForFunction(() => document.body.className === 'home', null, { timeout: 30_000 });
+  await chrome.page.waitForTimeout(1500);
+  await chrome.page.keyboard.press('KeyW');
+  await chrome.page.waitForFunction(() => document.body.className.startsWith('playing'), null, { timeout: 10_000 });
+  await chrome.page.keyboard.press('Digit4');
+  await chrome.page.keyboard.press('KeyF'); // the lamp on, to see that it is still on afterwards
+  await chrome.page.waitForTimeout(400);
+  const place = await chrome.page.evaluate(() => window.__hollowtide.harness.camera());
+  await chrome.page.keyboard.press('Escape');
+  await chrome.page.waitForFunction(() => document.body.className === 'menu', null, { timeout: 5000 });
+  await Promise.all([
+    chrome.page.waitForNavigation({ timeout: 30_000 }),
+    chrome.page.click('#light button:nth-of-type(2)'),
+  ]);
+  await chrome.page.waitForFunction(() => window.__hollowtide?.ready, null, { timeout: 60_000 });
+  // no key is pressed: the water comes back by itself
+  await chrome.page.waitForFunction(() => document.body.className.startsWith('playing'), null, { timeout: 20_000 });
+  const back = await chrome.page.evaluate(() => ({
+    camera: window.__hollowtide.harness.camera(),
+    mood: JSON.parse(localStorage.getItem('hollowtide')).mood,
+    lamp: document.getElementById('lamp').getAttribute('aria-pressed'),
+    resume: document.getElementById('dive').textContent,
+  }));
+  const moved = Math.hypot(back.camera.x - place.x, back.camera.y - place.y, back.camera.z - place.z);
+  check(
+    // (the same heading may come back a whole turn away from the number it was)
+    back.mood === 'dusk' && moved < 0.3 && Math.abs(Math.sin((back.camera.yaw - place.yaw) / 2)) < 0.02,
+    `picking dusk while in the water: the swimmer comes back where they were, at dusk (${moved.toFixed(2)} m from the place)`,
+  );
+  check(
+    back.lamp === 'true' && back.resume === 'Resume',
+    'with the lamp as it was, and no second awakening to go through',
+  );
+  // the place is kept for that once: starting the page over by hand goes to the home view as ever
+  await chrome.page.reload();
+  await chrome.page.waitForFunction(() => window.__hollowtide?.ready, null, { timeout: 60_000 });
+  await chrome.page.waitForFunction(() => /home|playing/.test(document.body.className), null, { timeout: 20_000 });
+  check(
+    (await chrome.page.evaluate(() => document.body.className)) === 'home',
+    'starting the page over by hand goes to the home view',
+  );
+
   check(chrome.errors.length === 0, `no console errors${chrome.errors.length ? ': ' + chrome.errors.join('; ') : ''}`);
 } finally {
   await chrome.close();
