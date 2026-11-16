@@ -42,6 +42,29 @@ try {
         `       not generated yet: ${missing.length} of the original's ${Object.keys(reference).length} outputs`,
       );
   }
+  // ---- ?seed=: other plants and rocks, on the same seabed
+  {
+    const level = levels[0];
+    const reference = JSON.parse(readFileSync(path.join(fixturesDir(level), 'index.json'), 'utf8')).data;
+    const seeded = await chrome.page.evaluate((level) => window.__hollowtide.harness.generate(level, 7), level);
+    const same = (name) => seeded[name]?.sha256 === reference[name]?.sha256;
+    const authored = ['density', 'terrainVertices', 'terrainIndices', 'meshVertices', 'groundMap', 'flyPoints'];
+    const grown = ['leavesBig', 'fish', 'bubbles', 'glints'];
+    check(
+      authored.every(same),
+      `seed 7: the seabed, the meshes and the route are the authored ones (${authored.filter(same).length} of ${authored.length})`,
+    );
+    check(
+      !grown.some(same),
+      `seed 7: what grows and swims there is different (${grown.filter((name) => !same(name)).length} of ${grown.length})`,
+    );
+    const again = await chrome.page.evaluate((level) => window.__hollowtide.harness.generate(level, 7), level);
+    check(
+      Object.keys(seeded).every((name) => seeded[name].sha256 === again[name].sha256),
+      'seed 7: and the same every time it is asked for',
+    );
+  }
+
   const gpuErrors = await chrome.page.evaluate(() => window.__hollowtide.harness.gpuErrors());
   check(gpuErrors.length === 0, `no shader or validation errors${gpuErrors.length ? ': ' + gpuErrors.join('; ') : ''}`);
   check(chrome.errors.length === 0, `no console errors${chrome.errors.length ? ': ' + chrome.errors.join('; ') : ''}`);

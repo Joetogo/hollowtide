@@ -6,7 +6,7 @@ import { buildBody } from '../body/meshes';
 import { buildTurtle } from '../life/turtle';
 import { clearancePoints } from '../camera/path';
 import type { Level } from '../config/quality';
-import { Random } from '../math/random';
+import { Random, seedBase } from '../math/random';
 import { buildCollisionField } from './collision';
 import type { CellInstances } from './data';
 import { buildGroundMap } from './groundMap';
@@ -69,6 +69,7 @@ async function generate(
   densityBuffer: ArrayBuffer,
   level: Level,
   checksums: boolean,
+  seed: number,
 ): Promise<void> {
   const made = reporter(scope, checksums);
   const madeCells = async (name: string, set: CellInstances<Uint8Array | Float32Array>) => {
@@ -82,7 +83,8 @@ async function generate(
     scope.postMessage({ type: 'progress', stage, fraction: done }, []);
     done += STAGES[stage];
   };
-  const random = new Random();
+  // what grows and lies on the seabed is drawn from here; the seabed itself, the meshes and the layout are not
+  const random = new Random(seedBase(seed));
   const density = new Float32Array(densityBuffer);
 
   begin('terrain');
@@ -155,7 +157,7 @@ export function bootWorker(scope: WorkerScope): void {
           buildSetPieces(scope, data.level, data.checksums).catch(failed);
           break;
         case 'generate':
-          generate(scope, data.density, data.level, data.checksums).catch(failed);
+          generate(scope, data.density, data.level, data.checksums, data.seed).catch(failed);
           break;
       }
     } catch (error) {

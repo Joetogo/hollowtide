@@ -5,12 +5,24 @@
 
 const BASE_SEED = 20261110;
 
+/**
+ * Where the streams start for a world asked for by number: 0 is the world as authored, any other whole number
+ * another world of the same kind.
+ */
+export const seedBase = (seed: number): number =>
+  seed ? (BASE_SEED ^ Math.imul((seed | 0) + 0x7f4a7c15, 0x9e3779b1)) | 0 : BASE_SEED;
+
 export class Random {
-  private seed = BASE_SEED;
+  private seed: number;
+
+  /** `base`: where its streams start (seedBase), the authored world's by default. */
+  constructor(private readonly base = BASE_SEED) {
+    this.seed = base;
+  }
 
   /** Starts over on the stream numbered `stream`. */
   reseed(stream: number): void {
-    this.seed = (BASE_SEED + Math.imul(stream, 7919)) | 0;
+    this.seed = (this.base + Math.imul(stream, 7919)) | 0;
   }
 
   /** Uniform in [0, 1). */

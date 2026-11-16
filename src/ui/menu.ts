@@ -29,6 +29,8 @@ export interface Menu {
   sync(): void;
   /** The picture comes up out of black over a second and a half: for a cut from one place to another. */
   fade(): void;
+  /** The one button of a gamepad: dives from the home view, pauses while swimming, resumes from the pause. */
+  press(): void;
 }
 
 export interface MenuActions {
@@ -201,5 +203,10 @@ export function createMenu(level: Level, canvas: HTMLCanvasElement, settings: Se
     show,
     sync,
     fade: () => veil.reveal(),
+    press() {
+      if (state === 'home') wake();
+      else if (state === 'playing') show(true);
+      else if (state === 'paused') dive.click();
+    },
   };
 }

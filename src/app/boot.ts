@@ -13,7 +13,7 @@ import { createGpu, StartupError } from '../gpu/context';
 import { addFrame, addGpuTime, createDynRes, MAX_PIXELS, settle, SHARP, SMOOTH } from '../render/dynres';
 import { createRenderer } from '../render/renderer';
 import { generateWorld, type Generated } from '../world/client';
-import type { CollisionField } from '../world/collision';
+import { CAMERA_RADIUS, rockDistance, type CollisionField } from '../world/collision';
 import { checksum, type FromWorker, type ToWorker } from '../world/protocol';
 import { createHud } from '../ui/hud';
 import { bindInput } from '../ui/input';
@@ -24,6 +24,7 @@ import { createNote } from '../ui/note';
 import { FAITHFUL, TUNED } from '../config/tuning';
 import { placeJellies } from '../world/jellies';
 import { placeTurtles } from '../life/turtle';
+import { viewFromHash, viewToHash } from '../camera/share';
 
 export interface BootReport {
   adapter: string;
@@ -53,6 +54,8 @@ declare global {
 
 const TRANSFER_BYTES = 16 << 20;
 /** What the loading bar says while each stage of world generation runs. */
+const LINK_COPIED = 'A link to this view is copied';
+const LINK_IN_BAR = 'A link to this view is in the address bar';
 const PHOTO_KEYS = 'Photo: Enter saves a picture, P returns';
 const TOUR_KEYS = 'A tour of the hollow. Any swimming key takes over';
 /** The most pixels a saved picture has: a 4K frame. */
@@ -202,8 +205,11 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       markLoading(true);
       addEventListener('pagehide', () => markLoading(false));
       // it starts being made at once, alongside the shader compilation below: neither waits for the other
+      // ?seed=7 (any whole number) grows other plants and rocks on the same seabed
+      const seed = /^\d{1,9}$/.test(params.get('seed') ?? '') ? +params.get('seed')! : 0;
       making = generateWorld(gpu.device, createWorker, level, {
         onProgress: (stage, fraction) => menu.progress(LOADING[stage], 0.08 + 0.86 * fraction),
+        seed,
       });
       making.catch(() => 0); // a failure is reported where the world is awaited, not as an unhandled rejection
     } else menu.progress('Compiling shaders…', 0.05);
@@ -274,8 +280,12 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
     const flight = new Float64Array(6);
     let homeClock = 0;
     wake = () => {
-      // still, at the first viewpoint, arms down
+      // still, at the first viewpoint, arms down; or where a link to a view says, if this page was opened by one
       goTo(0);
+      const view = viewFromHash(location.hash);
+      if (view && collision && rockDistance(collision, view[0], view[1], view[2]) < -CAMERA_RADIUS) {
+        [camera.x, camera.y, camera.z, camera.yaw, camera.pitch] = view;
+      }
       Object.assign(swimmer, createSwimmer());
       body = createBodyState();
       // (a reminder, once the eyes are open, for whoever chose the glide on an earlier visit)
@@ -288,13 +298,12 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       onGesture: () => sound!.wake(),
       menuOpen: () => menu.open,
       lookSpeed: () => [settings.sensitivity, settings.invertY ? -settings.sensitivity : settings.sensitivity],
+      onPadButton: () => menu.press(),
       onKey(code) {
         if (code === 'KeyH') hud.toggle();
-        else if (code === 'KeyM') {
-          settings.muted = !settings.muted;
-          sound!.setMuted(settings.muted);
-          saveSettings(settings, fullPixels());
-        } else if (code === 'KeyC') {
+        else if (code === 'KeyM') toggleMute();
+        else if (code === 'KeyL') shareView();
+        else if (code === 'KeyC') {
           // the original's steady glide with no body in view, or strokes and the scooter. It is remembered, so
           // it is said: arms that are simply gone on the next visit would look like a fault
           settings.classic = !settings.classic;
@@ -312,6 +321,34 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
         } else if (code >= 'Digit1' && code <= 'Digit6') goTo(code.charCodeAt(5) - 49);
       },
     });
+    // ---- sound on and off: the M key, and a button for where there are no keys
+    const muteButton = document.getElementById('mute')!;
+    const showMuted = () => muteButton.setAttribute('aria-pressed', String(settings.muted));
+    const toggleMute = () => {
+      settings.muted = !settings.muted;
+      sound!.setMuted(settings.muted);
+      saveSettings(settings, fullPixels());
+      showMuted();
+    };
+    muteButton.onclick = () => {
+      sound!.wake();
+      toggleMute();
+    };
+    showMuted();
+
+    // ---- a link to this view: where the swimmer is and which way they look, in the address after the #
+    const shareView = () => {
+      const link = location.href.replace(/#.*$/, '') + viewToHash(camera);
+      history.replaceState(null, '', link);
+      const copied = navigator.clipboard?.writeText(link);
+      if (copied)
+        copied.then(
+          () => note(LINK_COPIED),
+          () => note(LINK_IN_BAR),
+        );
+      else note(LINK_IN_BAR);
+    };
+
     const deviceWidth = () => Math.max(2, Math.round(canvas.clientWidth * devicePixelRatio));
     const fullPixels = () =>
       Math.min(MAX_PIXELS, deviceWidth() * Math.max(2, Math.round(canvas.clientHeight * devicePixelRatio)));
@@ -393,6 +430,7 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       last = now;
       if (hook.paused) return;
       const dt = Math.min(frameMs / 1000, 0.1);
+      input!.poll();
       if (menu.open && (photo || tour >= 0)) {
         // paused, or back at the start: modes do not outlast that
         setPhoto(false);

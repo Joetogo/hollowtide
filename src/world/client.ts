@@ -31,6 +31,8 @@ export interface GenerateOptions {
   onProgress?: (stage: Stage | 'density', fraction: number) => void;
   /** If given, filled with the SHA-256 of everything the generator makes (for comparing against the original). */
   checksums?: Record<string, { length: number; sha256: string }>;
+  /** 0 or absent: the world as authored. Another whole number: other plants and rocks on the same seabed. */
+  seed?: number;
 }
 
 type Results = Extract<FromWorker, { type: 'setPieces' | 'body' | 'world' | 'collision' }>;
@@ -129,7 +131,9 @@ export async function generateWorld(
       workers[1],
       async (post) => {
         const field = await density;
-        post({ type: 'generate', density: field.buffer, level, checksums: !!checksums }, [field.buffer]);
+        post({ type: 'generate', density: field.buffer, level, checksums: !!checksums, seed: options.seed ?? 0 }, [
+          field.buffer,
+        ]);
       },
       onResult,
       options,

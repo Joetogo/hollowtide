@@ -88,7 +88,13 @@ export async function launch({ dpr = 1, memory = false, args = [] } = {}) {
      */
     async open(url, { pause = false, tuning = 'faithful' } = {}) {
       // (the original's own draw distances, unless a test is about the tuned ones that ship)
-      if (/^https?:/.test(url) && !/[?&]tuning=/.test(url)) url += (url.includes('?') ? '&' : '?') + 'tuning=' + tuning;
+      if (/^https?:/.test(url) && !/[?&]tuning=/.test(url)) {
+        // (before the #, if the address has one)
+        const [address, hash = ''] = url.split(/(?=#)/);
+        url = address + (address.includes('?') ? '&' : '?') + 'tuning=' + tuning + hash;
+      }
+      // an address that differs from the page's own only after the # would not load the page again
+      if (url.includes('#')) await page.goto('about:blank');
       await page.goto(url);
       await page.waitForFunction(() => window.__hollowtide?.ready, null, { timeout: 60_000 });
       return page.evaluate((pause) => {

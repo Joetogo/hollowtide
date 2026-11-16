@@ -36,7 +36,7 @@ Done so far:
 | 10. Speed-ups that do not change a pixel | The world is built by two workers side by side and starts alongside shader compilation; the generator itself is about twice as fast; boulders outside the view are not drawn | 48 frames at High and 48 at Medium are bit-identical before and after (`tests/browser/same.mjs`); all 84 generator outputs still have the original's checksums; loading takes about 40 % less |
 | 11. In the water | Your own arms in first person, swimming a breaststroke; a hand-held scooter on `Shift`; the original's glide on `C` | Frames without the body are unchanged to the bit; 18 unit tests of the skeleton and the stroke; a browser test swims, rides the scooter and switches to the glide and back |
 | 12. Speed-ups that change pixels (first part) | A tuned set of draw distances beside the original's faithful one: ground cover, rock chips and pebbles and the far kelp end sooner behind the fades they already had, glints and bubbles are sorted into cells and only drawn where they can be seen, kelp blades no longer flick as their curl passes through zero; half the frames behind the pause panel | A frame takes 13–16 % less at 1280×720 and 2560×1440 (6 % at 640×360), two pages taking turns; 0–6 % of pixels differ at the six viewpoints; the tests against the original draw with the faithful set and still pass |
-| 13. Features (first part) | Settings in the pause panel (look speed, inverted look, field of view, volume, a smooth or a sharp picture, swimming with arms or the classic glide), photo mode, a guided tour | Each is driven in the shell test: the tour flies and hands over, a photo is saved larger than the screen, settings are remembered |
+| 13. Features | Settings in the pause panel (look speed, inverted look, field of view, volume, a smooth or a sharp picture, swimming with arms or the classic glide), photo mode, a guided tour; arrow-key look, drag-to-look, a gamepad, a sound button, a link to a view, `?seed=` | Each is driven in the shell test: the tour flies and hands over, a photo is saved larger than the screen, settings are remembered, a made-up gamepad swims and pauses, a link is followed and one into rock is not; with a seed the seabed's checksums are the authored ones and the plants' are not |
 | 14. New life (first part) | Jellyfish: a hundred or so, in groups along the tour's route and ahead of where you wake, pulsing and drifting, glowing by themselves in the dark of the grotto. Three sea turtles rowing round loops of open water. Schools of fish open to let the swimmer through | Jellyfish only ever add light (no pixel darker with them than without); each turtle is found where its loop says; none placed in rock or kelp; in the faithful tuning there are none of them and the frames are the original's |
 | 15. Its own name | Hollowtide: title, menu, package, storage keys (settings saved under the old key are read once), test hook, docs | The old name appears only where the original is meant: the credit, the licence, the reference rig and the tests against it |
 
@@ -50,9 +50,23 @@ npm run build && open dist/index.html     # or: npm run dev
 ```
 
 Controls: any of `W A S D` dives from the home view; then `W A S D` swim, `Q` / `E` down / up, `Shift` brings up
-the scooter and rides it, `1`–`6` viewpoints, `P` photo mode (`Enter` saves a picture), `T` a guided tour, `Esc`
-pauses, `M` mute, `H` stats, `C` switches between swimming with a body and the original's steady glide. On a
-touchscreen: hold to swim forward, slide to steer, a second finger for the scooter.
+the scooter and rides it, the mouse or the arrow keys look around, `1`–`6` viewpoints, `P` photo mode (`Enter`
+saves a picture), `T` a guided tour, `L` a link to the view, `Esc` pauses, `M` mute, `H` stats, `C` switches
+between swimming with a body and the original's steady glide.
+
+- **Touchscreen:** hold to swim forward, slide to steer, a second finger for the scooter; a sound button and a
+  menu button are in the corner.
+- **Gamepad:** left stick swims, right stick looks, the bumpers go down and up, the right trigger is the scooter,
+  `A` or `Start` dives, pauses and resumes.
+- **Where the mouse cannot be captured** (some embeds refuse it): hold the button down on the picture and drag.
+
+**A link to a view** (`L`) puts where you are and which way you look after the `#` of the address
+(`#at=x,y,z,turn,tilt`, metres and degrees) and copies it; whoever opens it wakes there. A link to a place
+inside the rock is not followed.
+
+**Another garden:** `?seed=7` (any whole number) grows other kelp, plants, corals and rocks, and other schools of
+fish, on the same seabed, with the wreck, the arches and the viewpoints where they are. Without it the world is
+the authored one, to the byte.
 
 The pause panel has the settings: look speed, inverted look, field of view, volume, detail level, and two choices.
 **Picture: smooth or sharp** says what gives when the machine cannot keep up: smooth trades resolution and draw

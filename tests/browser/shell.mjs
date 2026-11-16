@@ -194,6 +194,95 @@ try {
   await chrome.page.waitForTimeout(200);
   check(await chrome.page.evaluate(() => !document.body.classList.contains('photo')), 'P again leaves photo mode');
 
+  // ---- other ways to look and swim: the arrow keys, a held drag, a gamepad
+  const turned = async (act) => {
+    const before = await camera(chrome);
+    await act();
+    await chrome.page.waitForTimeout(350); // the view follows through two stages of smoothing
+    const after = await camera(chrome);
+    return [after.yaw - before.yaw, after.pitch - before.pitch];
+  };
+  const [arrowYaw] = await turned(async () => {
+    await chrome.page.keyboard.down('ArrowRight');
+    await chrome.page.waitForTimeout(400);
+    await chrome.page.keyboard.up('ArrowRight');
+  });
+  check(arrowYaw > 0.2 && arrowYaw < 1.2, `the right arrow turns the view right (${arrowYaw.toFixed(2)} rad in 0.4 s)`);
+  const [, arrowPitch] = await turned(async () => {
+    await chrome.page.keyboard.down('ArrowUp');
+    await chrome.page.waitForTimeout(300);
+    await chrome.page.keyboard.up('ArrowUp');
+  });
+  check(arrowPitch > 0.1, `the up arrow looks up (${arrowPitch.toFixed(2)} rad)`);
+  // (made by hand rather than with the mouse: a real click on the picture would capture the mouse)
+  const [dragYaw] = await turned(() =>
+    chrome.page.evaluate(() => {
+      document.getElementById('scene').dispatchEvent(new MouseEvent('mousedown', { button: 0, bubbles: true }));
+      for (let i = 0; i < 10; i++) window.dispatchEvent(new MouseEvent('mousemove', { movementX: -20, buttons: 1 }));
+      window.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+      // and with the button up, moving the mouse does nothing
+      for (let i = 0; i < 10; i++) window.dispatchEvent(new MouseEvent('mousemove', { movementX: 500, buttons: 0 }));
+    }),
+  );
+  check(
+    dragYaw < -0.3 && dragYaw > -0.6,
+    `dragging on the picture looks around (${dragYaw.toFixed(2)} rad for 200 px)`,
+  );
+
+  // a gamepad, as the browser would report one: left stick forward, then the Start button
+  const pad = (axes, pressed = []) =>
+    chrome.page.evaluate(
+      ([axes, pressed]) => {
+        const buttons = Array.from({ length: 17 }, (_, i) => ({
+          pressed: pressed.includes(i),
+          value: +pressed.includes(i),
+        }));
+        navigator.getGamepads = () => (axes ? [{ connected: true, mapping: 'standard', axes, buttons }] : []);
+      },
+      [axes, pressed],
+    );
+  const padFrom = await camera(chrome);
+  await pad([0, -1, 0, 0]);
+  await chrome.page.waitForTimeout(1000);
+  const padTo = await camera(chrome);
+  const padSwum = Math.hypot(padTo.x - padFrom.x, padTo.y - padFrom.y, padTo.z - padFrom.z);
+  check(padSwum > 1.5, `a gamepad's left stick swims (${padSwum.toFixed(1)} m in a second)`);
+  await pad([0, 0, 0, 0], [9]);
+  await chrome.page.waitForTimeout(300);
+  check(await chrome.page.evaluate(() => document.body.className === 'menu'), 'its Start button pauses');
+  await pad([0, 0, 0, 0]);
+  await chrome.page.waitForTimeout(150);
+  await pad([0, 0, 0, 0], [0]);
+  await chrome.page.waitForTimeout(400);
+  check(await chrome.page.evaluate(() => document.body.className.startsWith('playing')), 'and its A button resumes');
+  await pad(null);
+  await chrome.page.waitForTimeout(150);
+
+  // ---- the sound button, for where there is no M key
+  await chrome.page.click('#mute');
+  const muted = await chrome.page.evaluate(() => [
+    document.getElementById('mute').getAttribute('aria-pressed'),
+    JSON.parse(localStorage.getItem('hollowtide')).muted,
+  ]);
+  check(muted[0] === 'true' && muted[1] === true, 'the sound button mutes, shows that it has, and it is remembered');
+  await chrome.page.keyboard.press('KeyM');
+  check(
+    await chrome.page.evaluate(() => document.getElementById('mute').getAttribute('aria-pressed') === 'false'),
+    'and the M key and the button stay in step',
+  );
+
+  // ---- a link to this view
+  await chrome.page.keyboard.press('KeyL');
+  await chrome.page.waitForTimeout(300);
+  const linked = await chrome.page.evaluate(() => [location.hash, document.getElementById('note').textContent]);
+  const here = await camera(chrome);
+  check(
+    /^#at=[-\d.]+(,[-\d.]+){4}$/.test(linked[0]) && /link to this view/.test(linked[1]),
+    `L puts a link to the view in the address: ${linked[0]}`,
+  );
+  const [lx, ly, lz] = linked[0].slice(4).split(',').map(Number);
+  check(Math.hypot(lx - here.x, ly - here.y, lz - here.z) < 1.5, 'and it is where the swimmer is');
+
   await chrome.page.keyboard.press('Escape');
   await chrome.page.waitForTimeout(300);
   check(await chrome.page.evaluate(() => document.body.className === 'menu'), 'Esc pauses');
@@ -222,6 +311,43 @@ try {
   const gpuErrors = await chrome.page.evaluate(() => window.__hollowtide.harness.gpuErrors());
   check(gpuErrors.length === 0, `no shader or validation errors${gpuErrors.length ? ': ' + gpuErrors.join('; ') : ''}`);
   check(chrome.errors.length === 0, `no console errors${chrome.errors.length ? ': ' + chrome.errors.join('; ') : ''}`);
+
+  // ---- opened by a link to a view, the swimmer wakes there instead of at the first viewpoint
+  const second = await chrome.page.evaluate(() => window.__hollowtide.harness.viewpoints()[1]);
+  const at = `#at=${second[0].toFixed(1)},${second[1].toFixed(1)},${second[2].toFixed(1)},90,-10`;
+  await chrome.open(host.origin + '/' + at, { tuning: 'tuned' });
+  await chrome.page.waitForFunction(() => document.body.className === 'home', null, { timeout: 30_000 });
+  await chrome.page.waitForFunction(() => window.__hollowtide.harness.collision, null, { timeout: 30_000 });
+  await chrome.page.waitForTimeout(1500);
+  await chrome.page.keyboard.press('Enter');
+  await chrome.page.waitForFunction(() => document.body.className.startsWith('playing'), null, { timeout: 10_000 });
+  const woke = await camera(chrome);
+  check(
+    Math.hypot(woke.x - second[0], woke.y - second[1], woke.z - second[2]) < 0.8 &&
+      Math.abs(woke.yaw - Math.PI / 2) < 0.1,
+    `a link to a view wakes the swimmer there (${at})`,
+  );
+  // and a link to a place inside the rock is not followed
+  const first = await chrome.page.evaluate(() => window.__hollowtide.harness.viewpoints()[0]);
+  const rock = await chrome.page.evaluate(() => {
+    const h = window.__hollowtide.harness;
+    for (let y = -50; y <= -20; y += 5)
+      for (let x = -100; x <= 100; x += 10)
+        for (let z = -100; z <= 100; z += 10) if (h.rockAt(x, y, z) > 0.9) return [x, y, z];
+    return null;
+  });
+  check(!!rock, `(a place inside the rock: ${rock})`);
+  await chrome.open(`${host.origin}/#at=${rock.join(',')},0,0`, { tuning: 'tuned' });
+  await chrome.page.waitForFunction(() => document.body.className === 'home', null, { timeout: 30_000 });
+  await chrome.page.waitForFunction(() => window.__hollowtide.harness.collision, null, { timeout: 30_000 });
+  await chrome.page.waitForTimeout(1500);
+  await chrome.page.keyboard.press('Enter');
+  await chrome.page.waitForFunction(() => document.body.className.startsWith('playing'), null, { timeout: 10_000 });
+  const stayed = await camera(chrome);
+  check(
+    Math.hypot(stayed.x - first[0], stayed.y - first[1], stayed.z - first[2]) < 0.8,
+    'a link to a place inside the rock is not followed: the swimmer wakes at the first viewpoint',
+  );
 } finally {
   await chrome.close();
   host.close();

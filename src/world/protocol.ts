@@ -35,7 +35,8 @@ export type ToWorker =
    */
   | { type: 'setPieces'; level: Level; checksums: boolean }
   /** Build the rest of the world from the density field (as it comes off the GPU). */
-  | { type: 'generate'; density: ArrayBuffer; level: Level; checksums: boolean };
+  /** `seed`: 0 for the world as authored; another whole number grows other plants and rocks on the same seabed */
+  | { type: 'generate'; density: ArrayBuffer; level: Level; checksums: boolean; seed: number };
 
 export type FromWorker =
   | { type: 'ready' }

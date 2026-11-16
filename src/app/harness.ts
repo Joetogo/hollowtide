@@ -42,6 +42,8 @@ export interface Harness {
   trace(pose: number[], steps: SwimStep[]): number[];
   /** Where the camera is, where it looks, and how far it is from the rock (negative: in open water). */
   camera(): { x: number; y: number; z: number; yaw: number; pitch: number; rockDistance: number };
+  /** Distance to the rock at a point, metres: positive inside it (NaN before the collision field has arrived). */
+  rockAt(x: number, y: number, z: number): number;
   /**
    * Frame cost, measured the way the reference rig measures the original: frames are submitted `batch` at a time
    * (default one) and waited for until the GPU has finished them. `poses` gives the camera for each frame (one
@@ -102,7 +104,7 @@ export interface Harness {
    * Runs Hollowtide's own world generator and resolves with the SHA-256 of everything it made, under the names
    * the reference rig gives the same data.
    */
-  generate(level: Level): Promise<Record<string, Made>>;
+  generate(level: Level, seed?: number): Promise<Record<string, Made>>;
   /** Runs Hollowtide's own generator and draws its world from then on. Resolves with the six viewpoints. */
   useGeneratedWorld(level: Level): Promise<number[][]>;
   /** SHA-256 of a texture's contents, to tell whether two renders produced the same values. */
@@ -293,6 +295,8 @@ export function createHarness(
       return path;
     },
 
+    rockAt: (x, y, z) => (collision ? rockDistance(collision, x, y, z) : NaN),
+
     camera() {
       const { x, y, z, yaw, pitch } = renderer.camera;
       return { x, y, z, yaw, pitch, rockDistance: collision ? rockDistance(collision, x, y, z) : NaN };
@@ -439,9 +443,9 @@ export function createHarness(
       return diff;
     },
 
-    async generate(level) {
+    async generate(level, seed = 0) {
       const checksums: Record<string, Made> = {};
-      const made = await generateWorld(device, createWorker, level, { checksums });
+      const made = await generateWorld(device, createWorker, level, { checksums, seed });
       await Promise.all([made.collision, made.body]); // the collision field's checksums come last
       return checksums;
     },
