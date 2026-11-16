@@ -20,6 +20,9 @@ struct CreatureVarying {
   @location(4) light: f32, // sun shadow, sampled per vertex for fish
 }
 
+// Not in the original (0 there): within this many metres of the swimmer a school opens to let them through.
+override PART: f32 = 0.;
+
 // a fish: model x = forward, y = up, z = sideways
 @vertex
 fn fishVertex(v: CreatureVertex) -> CreatureVarying {
@@ -36,7 +39,14 @@ fn fishVertex(v: CreatureVertex) -> CreatureVarying {
   let offset = S * ((h.y - .5) * 5. + sin(t * .6 + s * 40.) * .5) + Up * ((h.z - .5) * 3.2 + cos(t * .5 + s * 31.) * .4);
   var l = v.position * v.motion.z * (.75 + .5 * h.z);
   l.z += sin(t * 9. + s * 50. + l.x * 5.) * .22 * (.25 * v.motion.z - l.x); // tail beat, growing towards the tail
-  let world = P + offset + T * l.x + Up * l.y + S * l.z;
+  var place = P + offset;
+  if (PART > 0.) {
+    // a fish at distance d from the eye is moved out along the line from it to d + (PART - d)^2 * .45 / PART:
+    // none is left within .45 PART, the order of the fish along any line is kept, and at PART nothing moves
+    let away = place - frame.camPos; let d = length(away); let gap = max(PART - d, 0.);
+    place += away / max(d, .001) * (gap * gap * .45 / PART);
+  }
+  let world = place + T * l.x + Up * l.y + S * l.z;
   o.clip = frame.viewProj * vec4f(world, 1.); o.world = world; o.normal = T * v.normal.x + Up * v.normal.y + S * v.normal.z; o.objectPosition = v.position; o.seed = s;
   o.light = shadow1(world);
   return o;

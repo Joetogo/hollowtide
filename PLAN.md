@@ -188,6 +188,9 @@ Key mechanisms:
 - `?seed=` reseeds the randomly placed systems. Terrain, set pieces and hand-placed kelp stay authored.
 
 **Milestone 14: new visuals**
+- Done: jellyfish (built in the vertex shader rather than from a lathe mesh; added light, drawn last); fish
+  that part around the swimmer (one closed-form term in their vertex shader). Still to do: the turtle, mood
+  presets.
 - Mood presets (for example noon, deep dusk, moonlit glow) through about eight uniforms that scale sunlight,
   ambient, fog and exposure, plus one true glow term. The original's "emissive" is proportional to incoming light,
   so a dark mood needs that term. The sun direction stays fixed: moving it would break the caustics and the baked

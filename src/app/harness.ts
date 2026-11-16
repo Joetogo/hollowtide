@@ -72,6 +72,10 @@ export interface Harness {
   frameStats(time: number): { mean: number[]; dark: number };
   /** The six viewpoints of the world being drawn: eye xyz, target xyz. */
   viewpoints(): number[][];
+  /** The jellyfish in the water, eight floats each: home x, y, z, radius, then seed, drift, colour, beat. */
+  jellies(): number[];
+  /** The first few hundred fish as generated, eight floats each (orbit, then motion): for finding a school. */
+  fish(): number[];
   /** Leaves out draws by name (see skippedDraws in render/passes/scene.ts) until called again; no names draws all. */
   skipDraws(...names: string[]): void;
   /** The pose [eye xyz, target xyz] of the scripted fly-through at `seconds`. */
@@ -197,8 +201,9 @@ async function decodePng(url: string): Promise<Uint8ClampedArray> {
 export function createHarness(
   renderer: Renderer,
   createWorker: () => Worker,
-): Harness & { collision: CollisionField | null; generatedViewpoints: number[][] } {
+): Harness & { collision: CollisionField | null; generatedViewpoints: number[][]; fishSample: Float32Array } {
   let collision: CollisionField | null = null;
+  let fish: Float32Array = new Float32Array(0);
   let viewpoints: number[][] = [];
   const { device, queue, canvas } = renderer.gpu;
   const errors: string[] = [];
@@ -253,6 +258,10 @@ export function createHarness(
     set generatedViewpoints(points: number[][]) {
       viewpoints = points;
     },
+    set fishSample(sample: Float32Array) {
+      fish = sample;
+    },
+    fish: () => Array.from(fish),
     get collision() {
       return collision;
     },
@@ -341,6 +350,8 @@ export function createHarness(
     },
 
     viewpoints: () => viewpoints,
+
+    jellies: () => Array.from(renderer.jellies ?? []),
 
     skipDraws(...names) {
       skippedDraws.clear();

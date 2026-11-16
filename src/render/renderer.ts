@@ -23,6 +23,7 @@ import type { BodyMeshes } from '../body/meshes';
 import { createBodyParts, type BodyParts } from '../body/rig';
 import { createBodyPass } from './passes/body';
 import type { Tuning } from '../config/tuning';
+import { createJellies } from './passes/jellies';
 
 export interface Renderer {
   readonly gpu: Gpu;
@@ -45,6 +46,10 @@ export interface Renderer {
   readonly body: BodyParts;
   /** Gives the body its meshes. */
   setBody(meshes: BodyMeshes): void;
+  /** Puts jellyfish in the water: eight floats each (src/world/jellies.ts). */
+  setJellies(instances: Float32Array): void;
+  /** The jellyfish that were put in, or none. */
+  jellies: Float32Array | null;
   /** Uploads a world and bakes the shadow map for it. */
   setWorld(data: WorldData): Promise<void>;
   /** Matches the render size to the canvas. Returns true if the targets were rebuilt. */
@@ -62,13 +67,14 @@ export async function createRenderer(
 ): Promise<Renderer> {
   const { device, queue, canvas, context } = gpu;
   const scene = createScene(gpu, quality);
-  const [blit, post, shadow, sceneDraw, shafts, bodyDraw] = await Promise.all([
+  const [blit, post, shadow, sceneDraw, shafts, bodyDraw, jellies] = await Promise.all([
     createBlit(gpu, scene.linearSampler),
     createPost(gpu, scene.frameBuffer, scene.linearSampler, quality.samples),
     createShadowBake(gpu, scene, quality, tuning),
     createScenePass(gpu, scene, quality, tuning),
     createShafts(gpu, scene, quality),
     createBodyPass(gpu, scene, quality),
+    createJellies(gpu, scene, quality),
   ]);
   const [water] = await Promise.all([createWater(gpu, blit, scene.water), bakeDetail(gpu, blit, scene.detail)]);
   const bloom = createBloom(blit);
@@ -89,6 +95,11 @@ export async function createRenderer(
     holdScene: false,
     body: createBodyParts(),
     setBody: (meshes) => bodyDraw.setMeshes(meshes),
+    jellies: null,
+    setJellies(instances) {
+      renderer.jellies = instances;
+      jellies.set(instances);
+    },
 
     async setWorld(data) {
       const next = await uploadWorld(gpu, scene, data, tuning.cullSprites);
@@ -152,6 +163,7 @@ export async function createRenderer(
           updateCullView(cullView, targets.width, targets.height, renderer.detail);
           bodyDraw.encode(pass, renderer.body); // nearest first
           sceneDraw.encode(pass, renderer.world, cullView);
+          if (!skipped('jellies')) jellies.encode(pass);
         }
         pass.end();
         // with no world there is no shadow map to march through, and the shafts stay empty

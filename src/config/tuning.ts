@@ -22,6 +22,10 @@ export interface Tuning {
   readonly cullSprites: boolean;
   /** glints have faded out by this distance, metres (the shader drops them past 120 m in any case) */
   readonly glintDistance: number;
+  /** jellyfish drift in the open water (the original has none) */
+  readonly jellies: boolean;
+  /** fish keep clear of the swimmer within this many metres, a school opening to let them through (0: they do not) */
+  readonly fishPart: number;
 }
 
 export const FAITHFUL: Tuning = {
@@ -34,6 +38,8 @@ export const FAITHFUL: Tuning = {
   smoothBend: false,
   cullSprites: false,
   glintDistance: 150,
+  jellies: false,
+  fishPart: 0,
 };
 
 export const TUNED: Tuning = {
@@ -46,4 +52,6 @@ export const TUNED: Tuning = {
   smoothBend: true,
   cullSprites: true,
   glintDistance: 96,
+  jellies: true,
+  fishPart: 3.6,
 };

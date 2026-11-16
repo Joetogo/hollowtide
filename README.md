@@ -37,6 +37,7 @@ Done so far:
 | 11. In the water | Your own arms in first person, swimming a breaststroke; a hand-held scooter on `Shift`; the original's glide on `C` | Frames without the body are unchanged to the bit; 18 unit tests of the skeleton and the stroke; a browser test swims, rides the scooter and switches to the glide and back |
 | 12. Speed-ups that change pixels (first part) | A tuned set of draw distances beside the original's faithful one: ground cover, rock chips and pebbles and the far kelp end sooner behind the fades they already had, glints and bubbles are sorted into cells and only drawn where they can be seen, kelp blades no longer flick as their curl passes through zero; half the frames behind the pause panel | A frame takes 13–16 % less at 1280×720 and 2560×1440 (6 % at 640×360), two pages taking turns; 0–6 % of pixels differ at the six viewpoints; the tests against the original draw with the faithful set and still pass |
 | 13. Features (first part) | Settings in the pause panel (look speed, inverted look, field of view, volume, a smooth or a sharp picture, swimming with arms or the classic glide), photo mode, a guided tour | Each is driven in the shell test: the tour flies and hands over, a photo is saved larger than the screen, settings are remembered |
+| 14. New life (first part) | Jellyfish: a hundred or so, in groups along the tour's route and ahead of where you wake, pulsing and drifting, glowing by themselves in the dark of the grotto Schools of fish open to let the swimmer through | They only ever add light (no pixel darker with them than without); none placed in rock; in the faithful tuning there are none and the frames are the original's |
 | 15. Its own name | Hollowtide: title, menu, package, storage keys (settings saved under the old key are read once), test hook, docs | The old name appears only where the original is meant: the credit, the licence, the reference rig and the tests against it |
 
 **Parity gate: passed.** At that point Hollowtide was the original, from scratch: `dist/index.html` builds the same world (all
@@ -80,6 +81,31 @@ Not in the original, which shows a progress bar and then a menu.
 - `Esc` afterwards pauses on a panel over the blurred world (resume, detail level, the keys), and resuming has
   no second awakening. With reduced motion asked for, the descent stands still and counts, and the eyes simply
   fade open.
+
+### Jellyfish
+
+The original has none. Here about a hundred drift in groups along the tour's route and ahead of the place you
+wake: bells from a hand's width to a metre across, in four colours, each squeezing and opening to its own beat,
+climbing a little with every squeeze, trailing eight hair-thin tentacles and four frilled arms.
+
+- **No mesh.** A jelly is 32 bytes. The vertex shader builds the bell, the tentacles and the arms from the vertex
+  index, the way the leaves are built (`src/shaders/jelly.wgsl`).
+- **Light, added.** They are drawn last and add their light to the picture: a thin shell is brightest seen edge
+  on, so the bell shows as a bright outline with canals down it, a lit rim and four rings at its top. Sunlight
+  makes them shine where it reaches; their own glow is there regardless, so they show in the dark of the grotto.
+- **Tentacles never thinner than a pixel.** Far away a tentacle is far thinner than a pixel, and would come and go
+  between samples. It is drawn a pixel wide and that much dimmer instead.
+- **Only in open water.** Each is placed where the collision field says there is a metre of water all round the
+  loop it drifts on (`src/world/jellies.ts`); they are not part of the generated world, whose output stays the
+  original's to the byte.
+- They cost nothing that can be measured on this machine (within ±4 ms noise of zero, in alternating turns).
+
+### Fish that make way
+
+In the original a school swims straight through the camera. Here a fish within 3.6 m of the swimmer is moved out
+along the line from the eye, the more the nearer, so a school opens as you swim into it and closes behind you.
+Nothing is simulated: it is one more closed-form term in the fish's vertex shader (`PART` in
+`src/shaders/creatures.wgsl`), zero in the faithful tuning.
 
 ### The swimmer
 
