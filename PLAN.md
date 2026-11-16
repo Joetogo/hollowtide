@@ -166,9 +166,13 @@ Key mechanisms:
 - Done so far: the tuned set of draw distances (`src/config/tuning.ts`), sprites culled by cell, the kelp blades'
   smooth bend, half rate behind the pause panel. Measured and dropped: the fog integral's divide by zero (it
   can only bite within a millionth of one viewing angle) and fewer shaft steps (worth under 1 %).
-- Distance-adaptive shadow filtering; fewer shaft steps with a wider blur; cheaper or lower-rate water texture.
-- Dynamic resolution that no longer assumes pixel count is the bottleneck (to be measured on Apple GPUs).
-- Half-rate rendering behind the menu; no fixed 2560×1440 cap.
+- Done: dynamic resolution that no longer assumes pixel count is the bottleneck. It measures what a change of
+  pixel count buys; where that is next to nothing it keeps the pixels and trades only draw distance; where even
+  the lowest settings are far from sixty frames a second it settles for thirty, evenly paced, and says so.
+- Kept: the 2560×1440 cap. The targets are sixteen bytes a pixel four times over; a 5K screen at full size
+  would want over a gigabyte for them, on machines that are the least likely to have it to spare.
+- Not done: distance-adaptive shadow filtering, a cheaper water texture, the Low level's non-repeatable frames
+  (inherited from the original).
 - Defect fixes: leaf curvature (series fallback near zero), fog integral, sine hash, the collision brick cap.
 
 **Milestone 13: features and UX**

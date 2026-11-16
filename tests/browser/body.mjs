@@ -176,10 +176,13 @@ try {
           let last = null;
           const end = performance.now() + seconds * 1000;
           const tick = (t) => {
-            const c = h.camera();
-            if (last && t > last.t)
-              out.push(Math.hypot(c.x - last.x, c.y - last.y, c.z - last.z) / ((t - last.t) / 1000));
-            last = { x: c.x, y: c.y, z: c.z, t };
+            // (over a tenth of a second at a time: a machine that draws every second frame the screen asks
+            // for moves the camera every second time this is called)
+            if (!last || t - last.t >= 100) {
+              const c = h.camera();
+              if (last) out.push(Math.hypot(c.x - last.x, c.y - last.y, c.z - last.z) / ((t - last.t) / 1000));
+              last = { x: c.x, y: c.y, z: c.z, t };
+            }
             if (t < end) requestAnimationFrame(tick);
             else resolve(out);
           };

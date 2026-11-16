@@ -29,6 +29,11 @@ export interface Settings {
   volume: number;
   /** how wide the view is, as a multiple of the usual lens (0.85 narrow .. 1.2 wide) */
   fov: number;
+  /**
+   * The picture was set to sharp for this machine (it cannot hold sixty frames a second) and then set back to
+   * smooth by hand: it is not to be changed again.
+   */
+  keepSmooth: boolean;
   /** the light the world is seen in: 'noon' (as authored), 'dusk' or 'moon' (config/mood.ts) */
   mood: string;
   /**
@@ -52,6 +57,7 @@ interface Stored {
   fov?: number;
   sharp?: boolean;
   mood?: string;
+  keepSmooth?: boolean;
 }
 
 /** A stored number if it is one and within its range, else the default. */
@@ -117,6 +123,7 @@ export function loadSettings(): Settings {
     fov: within(stored.fov, 0.85, 1.2, 1),
     sharp: !!stored.sharp,
     mood: moodNamed(stored.mood).name,
+    keepSmooth: !!stored.keepSmooth,
     mobile,
   };
 }
@@ -128,7 +135,24 @@ export function saveSettings(settings: Settings, fullPixels: number): void {
   const classic = settings.classic === reducedMotion() ? undefined : settings.classic;
   const { level, detail, muted, sensitivity, invertY, volume, fov, sharp } = settings;
   const mood = settings.mood === 'noon' ? undefined : settings.mood;
-  write(KEY, JSON.stringify({ level, pixels, detail, muted, classic, sensitivity, invertY, volume, fov, sharp, mood }));
+  const keepSmooth = settings.keepSmooth || undefined;
+  write(
+    KEY,
+    JSON.stringify({
+      level,
+      pixels,
+      detail,
+      muted,
+      classic,
+      sensitivity,
+      invertY,
+      volume,
+      fov,
+      sharp,
+      mood,
+      keepSmooth,
+    }),
+  );
 }
 
 /** Marks a load as started or finished (see LOADING_KEY). */

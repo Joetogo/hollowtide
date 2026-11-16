@@ -10,7 +10,7 @@ import { createIntent, createSwimmer, stepSwimmer, type Drive } from '../camera/
 import { loadSettings, markLoading, saveSettings } from '../config/settings';
 import { quality, type Level } from '../config/quality';
 import { createGpu, StartupError } from '../gpu/context';
-import { addFrame, addGpuTime, createDynRes, MAX_PIXELS, settle, SHARP, SMOOTH } from '../render/dynres';
+import { addFrame, addGpuTime, createDynRes, MAX_PIXELS, settle, SHARP, SMOOTH, OUT_OF_REACH } from '../render/dynres';
 import { createRenderer } from '../render/renderer';
 import { generateWorld, type Generated } from '../world/client';
 import { CAMERA_RADIUS, rockDistance, type CollisionField } from '../world/collision';
@@ -61,6 +61,13 @@ declare global {
 
 const TRANSFER_BYTES = 16 << 20;
 /** What the loading bar says while each stage of world generation runs. */
+/**
+ * Settled for thirty frames a second: above this much GPU time (ms) a frame cannot keep up with a sixty-hertz
+ * screen and every second one is drawn; it has to fall below the second number before every one is drawn again.
+ */
+const EVEN_ABOVE = 14.5;
+const EVEN_BELOW = 11.5;
+const THIRTY = 'Thirty frames a second is what this machine holds here: the picture is set to Sharp';
 const LINK_COPIED = 'A link to this view is copied';
 const LINK_IN_BAR = 'A link to this view is in the address bar';
 const PHOTO_KEYS = 'Photo: Enter saves a picture, P returns';
@@ -439,9 +446,13 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       }
     };
 
+    /** the picture has been set to sharp in this visit because sixty frames a second was out of reach */
+    let settledForThirty = false;
     sound.setVolume(settings.volume);
     applySettings = () => {
       sound!.setVolume(settings.volume);
+      // set to sharp for this machine, and now back to smooth by hand: that is the swimmer's to decide
+      if (settledForThirty && !settings.sharp) settings.keepSmooth = true;
       dynres.target = settings.sharp ? SHARP : SMOOTH;
       saveSettings(settings, fullPixels());
     };
@@ -457,10 +468,18 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
     let last = 0;
     let time = 0;
     let skip = false;
+    /** the GPU time of a frame, smoothed; and whether frames are being paced at half the screen's rate */
+    let gpuUsual = 0;
+    let evenly = false;
     const frame = (now: number) => {
       requestAnimationFrame(frame);
-      // behind the pause panel the world is a blur: every second frame is enough, and a laptop runs cooler for it
-      if (menu.paused && (skip = !skip)) return;
+      // behind the pause panel the world is a blur: every second frame is enough, and a laptop runs cooler for it.
+      // And a machine that has settled for thirty frames a second because it cannot draw sixty draws every
+      // second frame too: thirty that come evenly look better than forty that do not.
+      gpuUsual += (gpuMs - gpuUsual) * 0.05;
+      if (dynres.target === SHARP ? gpuUsual > (evenly ? EVEN_BELOW : EVEN_ABOVE) : false) evenly = true;
+      else evenly = false;
+      if ((menu.paused || (evenly && !menu.open)) && (skip = !skip)) return;
       const frameMs = now - last;
       last = now;
       if (hook.paused) return;
@@ -477,6 +496,16 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
         settings.pixels = dynres.pixels;
         settings.detail = dynres.detail;
         saveSettings(settings, fullPixels());
+      }
+      // Nothing left to give up and still far from sixty frames a second: this machine does not have them here.
+      // Thirty it may: aim for that instead, and what was given up for nothing comes back.
+      if (dynres.stuck >= OUT_OF_REACH && dynres.target === SMOOTH && !settings.keepSmooth && !menu.open) {
+        settings.sharp = settledForThirty = true;
+        dynres.target = SHARP;
+        dynres.stuck = 0;
+        saveSettings(settings, fullPixels());
+        menu.sync();
+        if (!note.showing()) note(THIRTY);
       }
       renderer.pixelBudget = dynres.pixels;
       renderer.detail = dynres.detail;

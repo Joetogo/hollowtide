@@ -7,6 +7,8 @@ export interface Note {
   /** Shows a line until clear() or another line. */
   hold(text: string): void;
   clear(): void;
+  /** Is a line up now? */
+  showing(): boolean;
 }
 
 export function createNote(element: HTMLElement): Note {
@@ -19,6 +21,7 @@ export function createNote(element: HTMLElement): Note {
   };
   const note = ((text: string) => show(text, 4.5)) as Note;
   note.hold = (text) => show(text, 0);
+  note.showing = () => element.className === 'on';
   note.clear = () => {
     clearTimeout(timer);
     element.className = '';

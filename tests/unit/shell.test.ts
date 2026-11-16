@@ -8,6 +8,7 @@ import {
   hold,
   MAX_PIXELS,
   MIN_DETAIL,
+  OUT_OF_REACH,
   settle,
   SHARP,
   SMOOTH,
@@ -100,28 +101,101 @@ describe('dynamic resolution', () => {
     expect([state.pixels, state.detail]).toEqual([MAX_PIXELS, 1]);
   });
 
+  /**
+   * A machine: the GPU time of a frame for the pixels and the draw distance it is asked for. `follows` is how
+   * closely the time follows the pixel count: 1 for a GPU short of pixels, near 0 for one short of geometry.
+   */
+  const machine =
+    (fullMs: number, follows: number) =>
+    (state: ReturnType<typeof createDynRes>): number =>
+      fullMs * (state.pixels / MAX_PIXELS) ** follows * (0.35 + 0.65 * state.detail * state.detail);
+  /** Lets the controller run a machine for some seconds; returns the GPU time it ends at. */
+  const run = (state: ReturnType<typeof createDynRes>, gpuOf: ReturnType<typeof machine>, seconds: number) => {
+    for (let i = 0; i < seconds; i++) period(state, Math.max(16.7, gpuOf(state)), gpuOf(state));
+    return gpuOf(state);
+  };
+
   it('too slow: gives up pixels first, then draw distance, then the remaining pixels', () => {
+    // short of pixels, and far too slow whatever is given up
+    const slow = machine(400, 1);
     const state = createDynRes(MAX_PIXELS, 1, false);
-    expect(period(state, 33, 30)).toBe(true);
+    expect(period(state, 33, slow(state))).toBe(true);
     expect(state.pixels).toBeCloseTo(MAX_PIXELS * 0.5, 0); // one step is capped at halving
     expect(state.detail).toBe(1);
-    for (let i = 0; i < 3; i++) period(state, 33, 30); // pixels are at half: now the draw distance goes
+    run(state, slow, 3); // pixels are at half: now the draw distance goes
     expect(state.pixels).toBe(MAX_PIXELS / 2);
     expect(state.detail).toBe(MIN_DETAIL);
-    for (let i = 0; i < 4; i++) period(state, 33, 30);
+    run(state, slow, 4);
     expect(state.pixels).toBe(state.minPixels);
+    expect(state.geometryBound).toBe(false);
   });
 
   it('fast again: comes back the same way', () => {
+    const fast = machine(9, 1);
     const state = createDynRes(5e5, MIN_DETAIL, false);
-    period(state, 16.7, 5);
+    run(state, fast, 1);
     expect(state.pixels).toBeGreaterThan(5e5); // pixels up to half first
     expect(state.detail).toBe(MIN_DETAIL);
-    for (let i = 0; i < 6; i++) period(state, 16.7, 5);
+    run(state, fast, 6);
     expect(state.pixels).toBe(MAX_PIXELS / 2);
     expect(state.detail).toBe(1);
-    for (let i = 0; i < 4; i++) period(state, 16.7, 5);
+    run(state, fast, 4);
     expect(state.pixels).toBe(MAX_PIXELS);
+  });
+
+  it('settles a machine that is short of pixels where its time is in the band', () => {
+    const state = createDynRes(MAX_PIXELS, 1, false);
+    const gpu = run(state, machine(30, 1), 20);
+    expect(gpu).toBeGreaterThan(9.8);
+    expect(gpu).toBeLessThan(13.6);
+    expect(state.pixels).toBeLessThan(MAX_PIXELS / 2 + 1);
+    expect(state.geometryBound).toBe(false);
+    expect(state.stuck).toBe(0);
+  });
+
+  it('a GPU short of geometry keeps its pixels: only the draw distance is traded', () => {
+    // a quarter of the pixels buys 7 % of the time; the draw distance buys the rest
+    const bound = machine(20, 0.05);
+    const state = createDynRes(MAX_PIXELS, 1, false);
+    const gpu = run(state, bound, 20);
+    expect(state.geometryBound).toBe(true);
+    expect(state.pixels).toBe(MAX_PIXELS);
+    expect(state.detail).toBeLessThan(0.8);
+    expect(state.detail).toBeGreaterThan(MIN_DETAIL);
+    expect(gpu).toBeGreaterThan(9.8);
+    expect(gpu).toBeLessThan(13.6);
+    expect(state.stuck).toBe(0);
+    // on another screen it is asked again (here one with a quarter of the pixels)
+    period(state, Math.max(16.7, bound(state)), bound(state));
+    for (let i = 0; i < 70; i++) addFrame(state, 16.7, false, FULL / 4);
+    expect(state.geometryBound).toBe(false);
+  });
+
+  it('says when the lowest settings are still far too slow, and stops saying it once they are not', () => {
+    // 42 ms at full settings, 19 at the lowest: sixty frames a second is not to be had, thirty is
+    const hopeless = machine(42, 0.05);
+    const state = createDynRes(MAX_PIXELS, 1, false);
+    // while there is still something to give up, it is not stuck
+    let seconds = 0;
+    while (state.pixels !== MAX_PIXELS || state.detail !== MIN_DETAIL || !state.geometryBound) {
+      expect(state.stuck).toBe(0);
+      run(state, hopeless, 1);
+      expect(++seconds).toBeLessThan(15);
+    }
+    // from then on every second counts
+    run(state, hopeless, OUT_OF_REACH);
+    expect(state.stuck).toBeGreaterThanOrEqual(OUT_OF_REACH);
+    // told to settle for thirty frames a second, it finds room again and gives back draw distance
+    state.target = SHARP;
+    const gpu = run(state, hopeless, 12);
+    expect(state.stuck).toBe(0);
+    expect(state.detail).toBeGreaterThan(MIN_DETAIL + 0.1);
+    expect(state.pixels).toBe(MAX_PIXELS);
+    expect(gpu).toBeLessThan(13.6 * (SHARP / SMOOTH));
+    // a machine that is only a little slow at its lowest is not counted as stuck
+    const nearly = createDynRes(5e5, MIN_DETAIL, false);
+    for (let i = 0; i < 10; i++) period(nearly, 16.7, 15);
+    expect(nearly.stuck).toBe(0);
   });
 
   it('without GPU times: acts on slow frame intervals only after two slow periods in a row', () => {
@@ -168,7 +242,8 @@ describe('dynamic resolution', () => {
 
   it('never goes below fewer pixels on a phone than its own floor', () => {
     const state = createDynRes(1280 * 720, 1, true);
-    for (let i = 0; i < 20; i++) period(state, 50, 50);
+    const slow = machine(600, 1);
+    for (let i = 0; i < 20; i++) period(state, 50, slow(state));
     expect(state.pixels).toBe(25e4);
     expect(state.detail).toBe(MIN_DETAIL);
   });

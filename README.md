@@ -35,7 +35,7 @@ Done so far:
 | 9. Shell | Loading bar, menu, keyboard / mouse / touch, collision, dynamic resolution, detail levels and crash fallback, stats line, sound | A scripted swim of 536 frames (easing, turning, sprinting into rock and sliding along it) traces the original's path bit for bit; no main-thread task over 50 ms while loading; starts and draws in Safari 27 from `file://` |
 | 10. Speed-ups that do not change a pixel | The world is built by two workers side by side and starts alongside shader compilation; the generator itself is about twice as fast; boulders outside the view are not drawn | 48 frames at High and 48 at Medium are bit-identical before and after (`tests/browser/same.mjs`); all 84 generator outputs still have the original's checksums; loading takes about 40 % less |
 | 11. In the water | Your own arms in first person, swimming a breaststroke; a hand-held scooter on `Shift`; the original's glide on `C` | Frames without the body are unchanged to the bit; 18 unit tests of the skeleton and the stroke; a browser test swims, rides the scooter and switches to the glide and back |
-| 12. Speed-ups that change pixels (first part) | A tuned set of draw distances beside the original's faithful one: ground cover, rock chips and pebbles and the far kelp end sooner behind the fades they already had, glints and bubbles are sorted into cells and only drawn where they can be seen, kelp blades no longer flick as their curl passes through zero; half the frames behind the pause panel | A frame takes 13–16 % less at 1280×720 and 2560×1440 (6 % at 640×360), two pages taking turns; 0–6 % of pixels differ at the six viewpoints; the tests against the original draw with the faithful set and still pass |
+| 12. Speed-ups that change pixels | A tuned set of draw distances beside the original's faithful one: ground cover, rock chips and pebbles and the far kelp end sooner behind the fades they already had, glints and bubbles are sorted into cells and only drawn where they can be seen, kelp blades no longer flick as their curl passes through zero; half the frames behind the pause panel; a picture controller that finds out whether the machine is short of pixels or of geometry, settles for thirty even frames a second where sixty is out of reach, and says so | A frame takes 13–16 % less at 1280×720 and 2560×1440 (6 % at 640×360), two pages taking turns; 0–6 % of pixels differ at the six viewpoints; the tests against the original draw with the faithful set and still pass |
 | 13. Features | Settings in the pause panel (look speed, inverted look, field of view, volume, a smooth or a sharp picture, swimming with arms or the classic glide), photo mode, a guided tour; arrow-key look, drag-to-look, a gamepad, a sound button, a link to a view, `?seed=` | Each is driven in the shell test: the tour flies and hands over, a photo is saved larger than the screen, settings are remembered, a made-up gamepad swims and pauses, a link is followed and one into rock is not; with a seed the seabed's checksums are the authored ones and the plants' are not |
 | 14. New life and new light | Jellyfish: a hundred or so, in groups along the tour's route and ahead of where you wake, pulsing and drifting, glowing by themselves in the dark of the grotto. Three sea turtles rowing round loops of open water. Schools of fish open to let the swimmer through. Three lights: noon, dusk, moonlight | Jellyfish only ever add light (no pixel darker with them than without); each turtle is found where its loop says; none placed in rock or kelp; in the faithful tuning there are none of them and the frames are the original's; each mood is picked in the menu, remembered and compiled, dusk measures violet and moonlight dark and blue against noon |
 | 15. Its own name | Hollowtide: title, menu, package, storage keys (settings saved under the old key are read once), test hook, docs | The old name appears only where the original is meant: the credit, the licence, the reference rig and the tests against it |
@@ -72,6 +72,20 @@ The pause panel has the settings: look speed, inverted look, field of view, volu
 **Picture: smooth or sharp** says what gives when the machine cannot keep up: smooth trades resolution and draw
 distance for sixty frames a second; sharp settles for thirty and spends the difference on pixels and distance.
 **Swimming: with arms or classic** is the `C` key's switch, where it can be seen.
+
+The page finds out what the machine is short of. The original's controller (and this one until now) gives up
+pixels first, on the assumption that pixels are what a slow frame is made of. On the laptop this was built on
+they are not: a frame takes nearly as long at a sixteenth of the pixels, because what it is short of is
+geometry, and the picture ended up at 942×530 and 40 % draw distance, blurred for nothing. Now:
+
+- When a change of pixel count buys next to nothing twice running, the pixels go back to full and stay there,
+  and only the draw distance is traded.
+- When the lowest settings are still far from sixty frames a second, the picture is set to Sharp and a line
+  says so; set back to Smooth by hand, it stays there.
+- A machine that has settled for thirty and cannot draw sixty draws every second frame, so that they come
+  evenly: thirty even frames look better than forty uneven ones.
+
+On that laptop: 2560×1440 at an even thirty frames a second, where it was 942×530 at an uneven forty.
 
 **Photo mode** (`P`) stops the moment, clears the screen of everything but the world, and lets you still move
 to frame it; `Enter` draws it again at twice the screen's size each way (up to 4K) and saves a PNG.
@@ -330,11 +344,11 @@ These drive the installed Google Chrome in a visible window (WebGPU needs the re
 | Frame cost at 2560×1440 | 28–47 ms at the six viewpoints; 39 ms on average along the fly-through (26 fps) |
 | Frame cost at 1280×720 | 23–33 ms; 27 ms on average along the fly-through |
 | Frame cost at 640×360 | 20–28 ms |
-| Where its dynamic resolution ends up | 942×530 at 40 % draw distance, the lowest it can go |
+| Where its dynamic resolution ends up | 942×530 at 40 % draw distance, the lowest it can go (Hollowtide now: 2560×1440 at 40 %, thirty even frames a second) |
 
 Frame cost is measured by running frames one at a time and waiting for the GPU to finish each. A frame costs about
 20 ms however few pixels it has, so on this machine the scene is bound by geometry, not by resolution, and lowering
-the resolution cannot reach 60 fps. That is the main target for the performance work.
+the resolution cannot reach 60 fps. Hollowtide's controller now finds that out for itself (see the settings, above).
 
 The reference world at High: 808k terrain vertices, 2.17M leaves and plants, 629k glints, 68k rocks and pebbles,
 18k sponges and corals, 18k bubbles, 4,240 fish, 6 mantas.
