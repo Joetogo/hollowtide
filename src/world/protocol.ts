@@ -1,6 +1,7 @@
 // Messages between the main thread and the world-generation worker.
 // Buffers always travel as transferables: ownership moves, nothing is copied.
 import type { BodyMeshes } from '../body/meshes';
+import type { TurtleMesh } from '../life/turtle';
 import type { Level } from '../config/quality';
 import type { CollisionField } from './collision';
 import type { WorldData } from './data';
@@ -44,7 +45,7 @@ export type FromWorker =
   | { type: 'checksum'; name: string; length: number; sha256: string }
   | ({ type: 'setPieces' } & SetPieces)
   /** the swimmer's arms and gear: sculpted after the set pieces are handed over, as no first frame needs them */
-  | { type: 'body'; body: BodyMeshes }
+  | { type: 'body'; body: BodyMeshes; turtle: TurtleMesh }
   /** the grown world */
   | { type: 'world'; world: Grown }
   /** what the camera collides with: worked out after the world has been handed over, as nothing draws it */

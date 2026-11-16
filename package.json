@@ -14,7 +14,7 @@
     "test": "vitest run",
     "check": "npm run typecheck && npm run lint && npm run test",
     "build:harness": "node tools/build.mjs --harness",
-    "test:browser": "npm run build && npm run build:harness && node tests/browser/boot.mjs && node tests/browser/post.mjs && node tests/browser/bakes.mjs && node tests/browser/opaque.mjs && node tests/browser/scene.mjs && node tests/browser/frame.mjs && node tests/browser/generator.mjs && node tests/browser/frame.mjs 0,1,2 --generated && node tests/browser/controls.mjs && node tests/browser/shell.mjs && node tests/browser/body.mjs && node tests/browser/jellies.mjs",
+    "test:browser": "npm run build && npm run build:harness && node tests/browser/boot.mjs && node tests/browser/post.mjs && node tests/browser/bakes.mjs && node tests/browser/opaque.mjs && node tests/browser/scene.mjs && node tests/browser/frame.mjs && node tests/browser/generator.mjs && node tests/browser/frame.mjs 0,1,2 --generated && node tests/browser/controls.mjs && node tests/browser/shell.mjs && node tests/browser/body.mjs && node tests/browser/life.mjs",
     "shots": "npm run build:harness && node tests/browser/shots.mjs",
     "bench": "npm run build:harness && node tests/browser/bench.mjs",
     "test:safari": "node tests/browser/safari.mjs",

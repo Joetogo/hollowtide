@@ -36,6 +36,8 @@ export interface Scattered {
   bubbles: Float32Array;
   fish: Float32Array;
   mantas: Float32Array;
+  /** every column of kelp: x, y of its foot, z, height */
+  kelp: Float32Array;
   snow: Float32Array;
   /** 256 x 40 x 256, two bytes per voxel: openness and skylight */
   volume: Uint8Array;
@@ -513,6 +515,8 @@ export function scatter(
   };
   /** one column per 2.3 m square */
   const occ = new Set<number>();
+  /** where each column stands and how tall it is (not in the original's output: for what is placed afterwards) */
+  const columns: number[] = [];
   rseed(1);
   const tryColumn = (x: number, z: number, kind: number, force: boolean, dens = 1) => {
     const key = floor(x / 2.3) * 4096 + floor(z / 2.3);
@@ -535,7 +539,9 @@ export function scatter(
       if (onPath) return;
     }
     occ.add(key);
-    column(x, y - 0.3, z, min(f[i + 1] - rr(0.8, 5), force ? rr(30, 42) : rr(15, 40)), kind, dens);
+    const tall = min(f[i + 1] - rr(0.8, 5), force ? rr(30, 42) : rr(15, 40));
+    columns.push(x, y - 0.3, z, tall);
+    column(x, y - 0.3, z, tall, kind, dens);
   };
   // hand-placed columns framing the viewpoints: x, z, kind, density
   const PLACED: (number | undefined)[][] = [
@@ -1222,6 +1228,7 @@ export function scatter(
     bubbles: new Float32Array(bubbles),
     fish: new Float32Array(fish),
     mantas: new Float32Array(mantas),
+    kelp: new Float32Array(columns),
     snow,
     volume,
     floorAt: gy,

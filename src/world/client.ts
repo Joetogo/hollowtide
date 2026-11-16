@@ -1,5 +1,6 @@
 // The main thread's side of world generation: the density field on the GPU, then everything else in two workers.
 import type { BodyMeshes } from '../body/meshes';
+import type { TurtleMesh } from '../life/turtle';
 import type { Level } from '../config/quality';
 import type { CollisionField } from './collision';
 import type { WorldData } from './data';
@@ -13,6 +14,8 @@ export interface Generated {
    * the world's own meshes and arrive when they are done.
    */
   body: Promise<BodyMeshes>;
+  /** the turtle's mesh, which comes with the body */
+  turtle: Promise<TurtleMesh>;
   /**
    * What the camera collides with. Nothing draws it, so the generator works it out after it has handed the
    * world over, and it arrives a moment later (about a tenth of a second).
@@ -99,6 +102,7 @@ export async function generateWorld(
   const grown = deferred<Grown>();
   const collision = deferred<CollisionField>();
   const body = deferred<BodyMeshes>();
+  const turtle = deferred<TurtleMesh>();
 
   // both workers start at once: one builds the meshes straight away, the other waits for the density field
   const workers = [createWorker(), createWorker()] as const;
@@ -113,8 +117,10 @@ export async function generateWorld(
   });
   const onResult = (result: Results) => {
     if (result.type === 'setPieces') pieces.resolve(result);
-    else if (result.type === 'body') body.resolve(result.body);
-    else if (result.type === 'world') grown.resolve(result.world);
+    else if (result.type === 'body') {
+      body.resolve(result.body);
+      turtle.resolve(result.turtle);
+    } else if (result.type === 'world') grown.resolve(result.world);
     else collision.resolve(result.collision);
   };
   Promise.all([
@@ -138,7 +144,12 @@ export async function generateWorld(
     });
 
   const [{ meshes, groundMap }, rest] = await Promise.all([pieces.promise, grown.promise]);
-  return { world: { ...rest, meshes, groundMap }, body: body.promise, collision: collision.promise };
+  return {
+    world: { ...rest, meshes, groundMap },
+    body: body.promise,
+    turtle: turtle.promise,
+    collision: collision.promise,
+  };
 }
 
 export { STAGES };

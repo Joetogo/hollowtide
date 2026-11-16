@@ -23,6 +23,7 @@ import { createBodyState, poseBody, stepBody } from '../body/rig';
 import { createNote } from '../ui/note';
 import { FAITHFUL, TUNED } from '../config/tuning';
 import { placeJellies } from '../world/jellies';
+import { placeTurtles } from '../life/turtle';
 
 export interface BootReport {
   adapter: string;
@@ -239,18 +240,20 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       viewpoints = await harness!.loadReferenceWorld('/fixtures/');
     } else if (making) {
       const made = await making;
+      const kelp = made.world.kelp; // (kept: it is not sent to the GPU)
       if (harness) harness.fishSample = made.world.fish.slice(0, 8 * 400);
       await renderer.setWorld(made.world);
       performance.mark('hollowtide:uploaded');
       tell('stage', 'uploaded');
       // what the swimmer collides with follows a moment later: nothing on screen waits for it
       // and so do the swimmer's arms, which are not seen before the dive
-      collisionReady = Promise.all([made.collision, made.body]).then(([field, body]) => {
+      collisionReady = Promise.all([made.collision, made.body, made.turtle]).then(([field, body, turtle]) => {
         collision = field;
         if (harness) harness.collision = field;
         renderer.setBody(body);
-        // jellyfish go where there is open water, which the collision field knows
+        // jellyfish and turtles go where there is open water, which the collision field knows
         if (tuning.jellies) renderer.setJellies(placeJellies(made.world.viewpoints, field));
+        if (tuning.turtles) renderer.setTurtles(turtle, placeTurtles(made.world.viewpoints, field, kelp));
       });
       if (harness) harness.generatedViewpoints = made.world.viewpoints;
       viewpoints = made.world.viewpoints;

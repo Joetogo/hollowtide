@@ -1,5 +1,6 @@
-// The jellyfish: that they are there in the shipped tuning and not in the faithful one, that they only ever add
-// light to the picture, and that drawing them costs next to nothing.
+// What lives here that the original does not have: jellyfish and turtles. That they are there in the shipped
+// tuning and not in the faithful one, that jellyfish only ever add light to the picture, that a turtle is where
+// its loop says it is, and that drawing them all costs next to nothing.
 import path from 'node:path';
 import { check, finish, launch, need, root, serve } from './lib.mjs';
 
@@ -16,7 +17,8 @@ for (const tuning of ['tuned', 'faithful']) {
     await chrome.page.waitForFunction(() => window.__hollowtide.harness.collision, null, { timeout: 30_000 });
     const count = await chrome.page.evaluate(() => window.__hollowtide.harness.jellies().length / 8);
     if (tuning === 'faithful') {
-      check(count === 0, 'faithful: no jellyfish (the original has none)');
+      const turtles = await chrome.page.evaluate(() => window.__hollowtide.harness.turtles().length / 8);
+      check(count === 0 && turtles === 0, 'faithful: no jellyfish and no turtles (the original has none)');
       continue;
     }
     check(count > 60, `tuned: ${count} jellyfish in the water`);
@@ -63,13 +65,65 @@ for (const tuning of ['tuned', 'faithful']) {
     check(darker === 0, `they only add light: ${darker} pixels darker with them than without, over four views`);
     check(seen.errors.length === 0, `no shader or validation errors${seen.errors.length ? ': ' + seen.errors[0] : ''}`);
 
+    // ---- turtles: each on its loop; looked at from two metres off, there it is
+    const turtles = await chrome.page.evaluate(async () => {
+      const h = window.__hollowtide.harness;
+      const t = h.turtles();
+      const decode = async (url) => {
+        const bitmap = await createImageBitmap(await (await fetch(url)).blob());
+        const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+        const context = canvas.getContext('2d');
+        context.drawImage(bitmap, 0, 0);
+        return context.getImageData(0, 0, bitmap.width, bitmap.height);
+      };
+      const seen = [];
+      for (let i = 0; i < t.length; i += 8) {
+        const [cx, cy, cz, R, phase, speed, size, second] = t.slice(i, i + 8);
+        // where the loop puts it at a given moment (life/turtle.ts: loopPoint)
+        const time = 6;
+        const a = time * speed + phase;
+        const at = [cx + R * Math.cos(a), cy + 1.1 * Math.sin(2 * a + second), cz + R * 0.8 * Math.sin(a)];
+        // from straight above, so that nothing but water is in between
+        const pose = [at[0] + 0.05, at[1] + 2.4 * size, at[2], ...at];
+        const withIt = await decode(h.capture(pose, time).png);
+        h.skipDraws('turtles');
+        const without = await decode(h.capture(pose, time).png);
+        h.skipDraws();
+        // how much of the picture it changes, and how much of the middle ninth of it
+        let [all, middle] = [0, 0];
+        const { width, height, data } = withIt;
+        for (let y = 0; y < height; y++) {
+          for (let x = 0; x < width; x++) {
+            const p = (y * width + x) * 4;
+            if (Math.abs(data[p] - without.data[p]) + Math.abs(data[p + 1] - without.data[p + 1]) < 6) continue;
+            all++;
+            if (Math.abs(x / width - 0.5) < 1 / 6 && Math.abs(y / height - 0.5) < 1 / 6) middle++;
+          }
+        }
+        seen.push({ all: all / (width * height), middle: middle / ((width * height) / 9) });
+      }
+      return { count: t.length / 8, seen, errors: h.gpuErrors() };
+    });
+    check(turtles.count >= 2 && turtles.count <= 3, `${turtles.count} turtles found a loop of open water`);
+    for (const [i, { all, middle }] of turtles.seen.entries()) {
+      check(
+        // (were it anywhere else, the middle would not change at all; a shell seen from 2.4 m above fills about half of it)
+        middle > 0.3 && all > 0.03 && all < 0.35,
+        `turtle ${i + 1} is where its loop says: ${(middle * 100).toFixed(0)} % of the middle of the picture, ${(all * 100).toFixed(0)} % of all of it`,
+      );
+    }
+    check(
+      turtles.errors.length === 0,
+      `no shader or validation errors${turtles.errors.length ? ': ' + turtles.errors[0] : ''}`,
+    );
+
     // ---- what they cost: frames with them against frames without, in short turns side by side (see body.mjs)
     const cost = await chrome.page.evaluate(async () => {
       const h = window.__hollowtide.harness;
       const pose = h.viewpoints()[0];
       const median = (a) => [...a].sort((x, y) => x - y)[a.length >> 1];
       const turn = async (withThem) => {
-        h.skipDraws(...(withThem ? [] : ['jellies']));
+        h.skipDraws(...(withThem ? [] : ['jellies', 'turtles']));
         return median((await h.frameCost([pose], 9, 1280 * 720)).totalMs.slice(3));
       };
       const differences = [];
@@ -86,7 +140,7 @@ for (const tuning of ['tuned', 'faithful']) {
     });
     check(
       cost.extra < Math.max(2, cost.frame * 0.12),
-      `drawing them costs ${cost.extra.toFixed(2)} ms of a ${cost.frame.toFixed(1)} ms frame`,
+      `drawing jellyfish and turtles costs ${cost.extra.toFixed(2)} ms of a ${cost.frame.toFixed(1)} ms frame`,
     );
   } finally {
     await chrome.close();

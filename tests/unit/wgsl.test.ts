@@ -1,6 +1,7 @@
+import { readdirSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { WgslReflect } from 'wgsl_reflect';
-import { loadWgsl, minifyWgsl } from '../../tools/wgsl.mjs';
+import { loadWgsl, minifyWgsl, wgslPieces } from '../../tools/wgsl.mjs';
 import { declarations } from '../../src/gpu/bindings';
 import { BlitGroup } from '../../src/render/passes/blit';
 import { postGroup } from '../../src/render/passes/post';
@@ -44,6 +45,22 @@ describe('loadWgsl', () => {
     expect(code.indexOf('fn shared(')).toBeLessThan(code.indexOf('fn a('));
     expect(code.indexOf('fn a(')).toBeLessThan(code.indexOf('fn root('));
     expect(files.map((f: string) => f.split('/').pop())).toEqual(['root.wgsl', 'a.wgsl', 'shared.wgsl']);
+  });
+
+  it('in pieces, as the build ships it, it is the same text in the same order', () => {
+    const pieces = wgslPieces('tests/unit/fixtures/wgsl/root.wgsl');
+    expect(pieces.map((piece: { text: string }) => piece.text).join('')).toBe(
+      loadWgsl('tests/unit/fixtures/wgsl/root.wgsl').code,
+    );
+    // and so for every shader the app has, minified piece by piece or all at once
+    for (const file of readdirSync('src/shaders').filter((name) => name.endsWith('.wgsl'))) {
+      const whole = loadWgsl('src/shaders/' + file, { minify: true }).code;
+      const joined = wgslPieces('src/shaders/' + file)
+        .map((piece: { text: string }) => minifyWgsl(piece.text))
+        .filter(Boolean)
+        .join('\n');
+      expect(joined.replace(/\n/g, ''), file).toBe(whole);
+    }
   });
 
   it('names the including file when an include is missing', () => {

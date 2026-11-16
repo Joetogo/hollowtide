@@ -24,6 +24,8 @@ import { createBodyParts, type BodyParts } from '../body/rig';
 import { createBodyPass } from './passes/body';
 import type { Tuning } from '../config/tuning';
 import { createJellies } from './passes/jellies';
+import { createTurtles } from './passes/turtles';
+import type { TurtleMesh } from '../life/turtle';
 
 export interface Renderer {
   readonly gpu: Gpu;
@@ -50,6 +52,10 @@ export interface Renderer {
   setJellies(instances: Float32Array): void;
   /** The jellyfish that were put in, or none. */
   jellies: Float32Array | null;
+  /** Puts turtles in the water: the mesh, and eight floats for each (src/life/turtle.ts). */
+  setTurtles(mesh: TurtleMesh, instances: Float32Array): void;
+  /** The turtles that were put in, or none. */
+  turtles: Float32Array | null;
   /** Uploads a world and bakes the shadow map for it. */
   setWorld(data: WorldData): Promise<void>;
   /** Matches the render size to the canvas. Returns true if the targets were rebuilt. */
@@ -67,7 +73,7 @@ export async function createRenderer(
 ): Promise<Renderer> {
   const { device, queue, canvas, context } = gpu;
   const scene = createScene(gpu, quality);
-  const [blit, post, shadow, sceneDraw, shafts, bodyDraw, jellies] = await Promise.all([
+  const [blit, post, shadow, sceneDraw, shafts, bodyDraw, jellies, turtles] = await Promise.all([
     createBlit(gpu, scene.linearSampler),
     createPost(gpu, scene.frameBuffer, scene.linearSampler, quality.samples),
     createShadowBake(gpu, scene, quality, tuning),
@@ -75,6 +81,7 @@ export async function createRenderer(
     createShafts(gpu, scene, quality),
     createBodyPass(gpu, scene, quality),
     createJellies(gpu, scene, quality),
+    createTurtles(gpu, scene, quality),
   ]);
   const [water] = await Promise.all([createWater(gpu, blit, scene.water), bakeDetail(gpu, blit, scene.detail)]);
   const bloom = createBloom(blit);
@@ -99,6 +106,11 @@ export async function createRenderer(
     setJellies(instances) {
       renderer.jellies = instances;
       jellies.set(instances);
+    },
+    turtles: null,
+    setTurtles(mesh, instances) {
+      renderer.turtles = instances;
+      turtles.set(mesh, instances);
     },
 
     async setWorld(data) {
@@ -162,6 +174,7 @@ export async function createRenderer(
         if (renderer.world) {
           updateCullView(cullView, targets.width, targets.height, renderer.detail);
           bodyDraw.encode(pass, renderer.body); // nearest first
+          if (!skipped('turtles')) turtles.encode(pass);
           sceneDraw.encode(pass, renderer.world, cullView);
           if (!skipped('jellies')) jellies.encode(pass);
         }

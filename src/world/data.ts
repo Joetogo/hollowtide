@@ -73,6 +73,8 @@ export interface WorldData {
   bubbles: Float32Array; // 8 floats each
   fish: Float32Array; // 8 floats each
   mantas: Float32Array; // 8 floats each
+  /** Every column of kelp: x, y of its foot, z, height. Not drawn from: for placing what must keep clear of it. */
+  kelp: Float32Array;
   snow: Float32Array; // 4 floats each
   /** 256 x 40 x 256, two bytes per voxel: openness and skylight. */
   volume: Uint8Array;

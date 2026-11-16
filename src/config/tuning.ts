@@ -24,6 +24,8 @@ export interface Tuning {
   readonly glintDistance: number;
   /** jellyfish drift in the open water (the original has none) */
   readonly jellies: boolean;
+  /** sea turtles swim their loops (the original has none) */
+  readonly turtles: boolean;
   /** fish keep clear of the swimmer within this many metres, a school opening to let them through (0: they do not) */
   readonly fishPart: number;
 }
@@ -39,6 +41,7 @@ export const FAITHFUL: Tuning = {
   cullSprites: false,
   glintDistance: 150,
   jellies: false,
+  turtles: false,
   fishPart: 0,
 };
 
@@ -53,5 +56,6 @@ export const TUNED: Tuning = {
   cullSprites: true,
   glintDistance: 96,
   jellies: true,
+  turtles: true,
   fishPart: 3.6,
 };

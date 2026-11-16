@@ -37,7 +37,7 @@ Done so far:
 | 11. In the water | Your own arms in first person, swimming a breaststroke; a hand-held scooter on `Shift`; the original's glide on `C` | Frames without the body are unchanged to the bit; 18 unit tests of the skeleton and the stroke; a browser test swims, rides the scooter and switches to the glide and back |
 | 12. Speed-ups that change pixels (first part) | A tuned set of draw distances beside the original's faithful one: ground cover, rock chips and pebbles and the far kelp end sooner behind the fades they already had, glints and bubbles are sorted into cells and only drawn where they can be seen, kelp blades no longer flick as their curl passes through zero; half the frames behind the pause panel | A frame takes 13–16 % less at 1280×720 and 2560×1440 (6 % at 640×360), two pages taking turns; 0–6 % of pixels differ at the six viewpoints; the tests against the original draw with the faithful set and still pass |
 | 13. Features (first part) | Settings in the pause panel (look speed, inverted look, field of view, volume, a smooth or a sharp picture, swimming with arms or the classic glide), photo mode, a guided tour | Each is driven in the shell test: the tour flies and hands over, a photo is saved larger than the screen, settings are remembered |
-| 14. New life (first part) | Jellyfish: a hundred or so, in groups along the tour's route and ahead of where you wake, pulsing and drifting, glowing by themselves in the dark of the grotto Schools of fish open to let the swimmer through | They only ever add light (no pixel darker with them than without); none placed in rock; in the faithful tuning there are none and the frames are the original's |
+| 14. New life (first part) | Jellyfish: a hundred or so, in groups along the tour's route and ahead of where you wake, pulsing and drifting, glowing by themselves in the dark of the grotto. Three sea turtles rowing round loops of open water. Schools of fish open to let the swimmer through | Jellyfish only ever add light (no pixel darker with them than without); each turtle is found where its loop says; none placed in rock or kelp; in the faithful tuning there are none of them and the frames are the original's |
 | 15. Its own name | Hollowtide: title, menu, package, storage keys (settings saved under the old key are read once), test hook, docs | The old name appears only where the original is meant: the credit, the licence, the reference rig and the tests against it |
 
 **Parity gate: passed.** At that point Hollowtide was the original, from scratch: `dist/index.html` builds the same world (all
@@ -100,6 +100,25 @@ climbing a little with every squeeze, trailing eight hair-thin tentacles and fou
   original's to the byte.
 - They cost nothing that can be measured on this machine (within ±4 ms noise of zero, in alternating turns).
 
+### Turtles
+
+Three green sea turtles, each rowing round its own loop of open water: one near where you wake, two along the
+tour's route.
+
+- **Sculpted, not modelled.** The mesh is made the way the swimmer's hands are: a distance function (a domed
+  shell, four flat blades, a neck and head) meshed with surface nets when the page loads, 22,000 vertices, in the
+  worker that builds the swimmer's body (`src/life/turtle.ts`).
+- **Rowed without bones.** Each vertex knows which limb moves it and how much. The vertex shader turns the front
+  flippers about the shoulder (up and forward, then down and back, the tip following the root, the blade edge on
+  to the water on the way down), sculls the rear ones and turns the head, all as functions of time; the body
+  rises with each down beat (`src/shaders/turtle.wgsl`).
+- **Drawn on.** The carapace's plates (five down the middle, four down each side, a ring of small ones round the
+  rim) are laid out in the fragment shader, each rayed with amber from its middle; the skin is a field of
+  scattered cells, dark scales with pale edges, larger on the flippers than on the head.
+- **Kept out of the rock and the kelp.** A loop is used only if the collision field has open water all the way
+  round it and no column of kelp stands within 2.6 m of it (the generator now also reports where each column
+  stands; nothing it made before has changed).
+
 ### Fish that make way
 
 In the original a school swims straight through the camera. Here a fish within 3.6 m of the swimmer is moved out
@@ -158,7 +177,7 @@ taken minutes apart cannot be compared.
 | Load time on a cool machine (separate sittings) | 3.4 s | 1.6 s |
 | Peak memory while loading, page / whole browser | 1.1 GB / 1.9 GB | 0.5 GB / 1.2 GB |
 | Loading bar | timed animation | real progress from the generator |
-| Shipped file | 97 kB | 176 kB: 147 kB for what the original does (its shaders keep readable names; renaming them at build time is on the list), the rest is the swimmer |
+| Shipped file | 97 kB | 189 kB (73 kB gzipped), with the swimmer, the opening, jellyfish and turtles that the original does not have. Shaders keep their readable names; the code they share is in the file once and joined to each when the page starts (spliced into each, it was there eight times: 28 kB) |
 | Frame at 2560×1440, six viewpoints | 45.7 / 35.4 / 26.9 / 38.5 / 35.9 / 35.7 ms | the same within 3 % |
 | Frame at 640×360, six viewpoints | 26.2 / 19.1 / 19.6 / 20.3 / 21.2 / 19.2 ms | the same within 3 % |
 | 60 s fly-through at 2560×1440, average | 37.8 ms | 37.1 ms |
@@ -205,7 +224,7 @@ sine hash, and the timing of the shadow bake. Finding the cause is on the list f
 npm install
 npm run dev            # http://127.0.0.1:5173, rebuilds and reloads on save
 npm run check          # typecheck, lint, unit tests
-npm run build          # dist/index.html: one self-contained file, size printed, 130 kB budget enforced
+npm run build          # dist/index.html: one self-contained file, size printed, 200 kB budget enforced
 npm run test:browser   # Chrome: 519 checks against the original (frames, checksums, swimming) and of the shell
 npm run test:safari    # Safari: the build starts from file:// and draws (Safari is left open on the test page)
 ```

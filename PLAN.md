@@ -189,8 +189,8 @@ Key mechanisms:
 
 **Milestone 14: new visuals**
 - Done: jellyfish (built in the vertex shader rather than from a lathe mesh; added light, drawn last); fish
-  that part around the swimmer (one closed-form term in their vertex shader). Still to do: the turtle, mood
-  presets.
+  that part around the swimmer (one closed-form term in their vertex shader); turtles (sculpted like the
+  swimmer's hands rather than built on the manta rig; rowed in the vertex shader). Still to do: mood presets.
 - Mood presets (for example noon, deep dusk, moonlit glow) through about eight uniforms that scale sunlight,
   ambient, fog and exposure, plus one true glow term. The original's "emissive" is proportional to incoming light,
   so a dark mood needs that term. The sun direction stays fixed: moving it would break the caustics and the baked

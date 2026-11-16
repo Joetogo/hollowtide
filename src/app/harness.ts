@@ -74,6 +74,8 @@ export interface Harness {
   viewpoints(): number[][];
   /** The jellyfish in the water, eight floats each: home x, y, z, radius, then seed, drift, colour, beat. */
   jellies(): number[];
+  /** The turtles, eight floats each: the middle of the loop and its radius, then phase, speed, size, phase. */
+  turtles(): number[];
   /** The first few hundred fish as generated, eight floats each (orbit, then motion): for finding a school. */
   fish(): number[];
   /** Leaves out draws by name (see skippedDraws in render/passes/scene.ts) until called again; no names draws all. */
@@ -352,6 +354,7 @@ export function createHarness(
     viewpoints: () => viewpoints,
 
     jellies: () => Array.from(renderer.jellies ?? []),
+    turtles: () => Array.from(renderer.turtles ?? []),
 
     skipDraws(...names) {
       skippedDraws.clear();
@@ -504,6 +507,7 @@ export function createHarness(
         bubbles: await floats('bubbles'),
         fish: await floats('fish'),
         mantas: await floats('mantas'),
+        kelp: new Float32Array(0),
         snow: await floats('snow'),
         volume: await bytes('volume'),
         groundMap: await bytes('groundMap'),

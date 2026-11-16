@@ -50,13 +50,64 @@ export function minifyWgsl(source) {
   return out;
 }
 
-/** esbuild plugin: `import source from './x.wgsl'` gives the assembled text, minified in production builds. */
+/**
+ * The same assembly as loadWgsl, kept in pieces: each file's own text, cut where its includes stand, in the order
+ * the assembled source has them. A piece is named by its file and its place in it.
+ * @returns {{ file: string, index: number, text: string }[]}
+ */
+export function wgslPieces(file) {
+  const seen = new Set();
+  const pieces = [];
+  const read = (target, from) => {
+    const abs = path.resolve(target);
+    if (seen.has(abs)) return;
+    seen.add(abs);
+    let text;
+    try {
+      text = readFileSync(abs, 'utf8');
+    } catch {
+      throw new Error(`${from}: cannot include ${abs}`);
+    }
+    let last = 0;
+    let index = 0;
+    for (const match of text.matchAll(INCLUDE)) {
+      pieces.push({ file: abs, index: index++, text: text.slice(last, match.index) });
+      read(path.resolve(path.dirname(abs), match[1]), abs);
+      last = match.index + match[0].length;
+    }
+    pieces.push({ file: abs, index, text: text.slice(last) });
+  };
+  read(file, file);
+  return pieces;
+}
+
+/**
+ * esbuild plugin: `import source from './x.wgsl'` gives the assembled text, minified in production builds.
+ * Most shaders start with the same includes, so the bundle holds each piece of each file once and a shader is
+ * joined from its pieces when the page starts: spliced in whole, the shared part was in the file eight times over.
+ */
 export const wgslPlugin = ({ minify }) => ({
   name: 'wgsl',
   setup(build) {
+    const PIECE = /^wgsl-piece:(.*)#(\d+)$/;
+    const own = (text) => (minify ? minifyWgsl(text) : text);
     build.onLoad({ filter: /\.wgsl$/ }, (args) => {
-      const { code, files } = loadWgsl(args.path, { minify });
-      return { contents: code, loader: 'text', watchFiles: files };
+      const pieces = wgslPieces(args.path).filter((piece) => own(piece.text).trim());
+      const names = pieces.map((piece) => JSON.stringify(`wgsl-piece:${piece.file}#${piece.index}`));
+      const contents =
+        names.map((name, i) => `import p${i} from ${name};`).join('\n') +
+        // a line break between pieces: the end of one and the start of the next must not run into one token
+        `\nexport default ${names.map((_, i) => `p${i}`).join(' + "\\n" + ')};\n`;
+      return { contents, loader: 'js', watchFiles: [...new Set(pieces.map((piece) => piece.file))] };
+    });
+    build.onResolve({ filter: PIECE }, (args) => ({
+      path: args.path.slice('wgsl-piece:'.length),
+      namespace: 'wgsl-piece',
+    }));
+    build.onLoad({ filter: /.*/, namespace: 'wgsl-piece' }, (args) => {
+      const [, file, index] = PIECE.exec('wgsl-piece:' + args.path);
+      const piece = wgslPieces(file).find((each) => each.file === file && each.index === +index);
+      return { contents: own(piece.text), loader: 'text', watchFiles: [file] };
     });
   },
 });
