@@ -66,7 +66,8 @@ function sleeve(side: 1 | -1): BuiltMesh {
     let d = capsule(x, y, z, [0, -0.03, 0], [0, U * 0.5, 0.004], 0.061, 0.059);
     d = melt(d, capsule(x, y, z, [0, U * 0.5, 0.004], [0, U, 0], 0.059, 0.0485), 0.03);
     d = melt(d, capsule(x, y, z, [0, U, 0], [0, U + 0.09, 0.002], 0.0475, 0.0495), 0.03);
-    return melt(d, capsule(x, y, z / flat(y), [0, U + 0.09, 0.002], [0, WRIST - 0.025, 0], 0.0495, 0.0315), 0.02);
+    // (it ends inside the glove's cuff, and slimmer than the cuff, so that a bent wrist cannot push it through)
+    return melt(d, capsule(x, y, z / flat(y), [0, U + 0.09, 0.002], [0, WRIST - 0.05, 0], 0.0495, 0.0295), 0.02);
   };
   const distance = (x: number, y: number, z: number) => {
     x *= side;
@@ -99,11 +100,11 @@ function sleeve(side: 1 | -1): BuiltMesh {
         // down the forearm the twist comes in gradually, as it does in a real one
         out[0] = first + BONE.fore;
         out[1] = first + BONE.twist;
-        out[2] = 1 - smoothstep(U + ELBOW_BLEND, WRIST - 0.03, y);
+        out[2] = 1 - smoothstep(U + ELBOW_BLEND, WRIST - 0.06, y);
       }
     },
     min: [-0.078, -0.1, -0.078],
-    max: [0.078, WRIST - 0.004, 0.078],
+    max: [0.078, WRIST - 0.012, 0.078],
     voxel: 0.0052,
   });
 }

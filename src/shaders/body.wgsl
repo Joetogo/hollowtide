@@ -64,7 +64,11 @@ fn bodyFragment(v: BodyVarying) -> @location(0) vec4f {
   let girth = length(p.xz);
 
   var albedo = vec3f(0.); var gloss = .3; var bump = .25; var sheen = 0.; var glow = vec3f(0.);
-  switch v.material {
+  // A material is one number for a whole triangle, so a border between two of them is a row of teeth. The
+  // wrist strap's border is simple enough to draw exactly instead: it is a band at one place along the arm.
+  var material = v.material;
+  if ((material == FABRIC || material == STRAP) && p.y < WRIST - .005) { material = select(u32(FABRIC), u32(STRAP), abs(p.y - (WRIST - .026)) < .0098 || (material == STRAP && abs(p.y - (WRIST - .026)) < .0125 && p.z > .02)); }
+  switch material {
     case NEOPRENE: {
       // wetsuit: near-black neoprene with a fine jersey face; a teal panel down the back of the forearm and
       // over the shoulder, seamed and stitched; a thin band above the elbow
