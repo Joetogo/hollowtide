@@ -29,7 +29,7 @@ const result = await new Promise((resolve, reject) => {
     const launcher = path.join(root, 'dist/safari-launch.html');
     writeFileSync(
       launcher,
-      `<!doctype html><script>location.replace('index.harness.html?report=' + encodeURIComponent('${listener}'))</script>`,
+      `<!doctype html><script>location.replace('index.harness.html?selftest&report=' + encodeURIComponent('${listener}'))</script>`,
     );
     execFileSync('open', ['-a', 'Safari', pathToFileURL(launcher).href]);
   });

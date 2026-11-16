@@ -57,6 +57,12 @@
       'surface', 'backdrop', 'bubbles', 'snow', 'glints', 'solidShadow', 'terrainShadow', 'leafShadow', 'water', 'shaftBlur', 'shafts', 'post', 'detailBake'];
     ref.setMask = (names) => { ref.mask.clear(); for (const n of names) { const i = ref.pipelineNames.indexOf(n); if (i < 0) throw new Error('no pipeline ' + n); ref.mask.add(i); } };
 
+    // ---- what one frame submits, by pipeline name: [draw calls, instances, vertices or indices]
+    ref.countDraws = (pose, time) => {
+      ref.counts = {}; ref.capture(pose, time); const c = ref.counts; ref.counts = null;
+      return Object.fromEntries(Object.entries(c).map(([i, v]) => [ref.pipelineNames[i] ?? i, v]));
+    };
+
     // ---- textures: six static ones first, then the eleven size-dependent targets of the latest resize()
     const STATIC = ['shadow', 'shadowDummy', 'water', 'detail', 'volume', 'groundMap'];
     const TARGET = ['msaa', 'depth', 'scene', 'shafts', 'shaftsBlurred', 'bloom0', 'bloom1', 'bloom2', 'bloom3', 'bloom4', 'bloom5'];
@@ -121,6 +127,11 @@
     ref.costEmpty = async (n) => { const ms = []; for (let i = 0; i < n; i++) { const t0 = performance.now(); Q.submit([]); await Q.onSubmittedWorkDone(); ms.push(performance.now() - t0); } return ms; };
     ref.costPose = (pose, n) => { lookAt(...POSES[pose]); return timeFrames(n, () => { F[TIME] += 1 / 60; }); };
     ref.costFly = (n) => timeFrames(n, (i) => { F[FLT] = ((i + 0.5) * FLYT) / n; flyAt(); F[TIME] = F[FLT]; });
+    // frames from..to of an n-frame fly-through, after `warm` uncounted frames at the first of them
+    ref.costFlyRange = async (n, from, to, warm = 0) => {
+      const r = await timeFrames(warm + to - from, (i) => { F[FLT] = ((from + Math.max(0, i - warm) + 0.5) * FLYT) / n; flyAt(); F[TIME] = F[FLT]; });
+      return { cpuMs: r.cpuMs.slice(warm), totalMs: r.totalMs.slice(warm) };
+    };
     // upstream's scripted 60 s fly-through benchmark (dev.js, key B); resolves with its own report text
     ref.flyBench = () => new Promise((done) => {
       ui(false); dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyB' }));

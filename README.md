@@ -44,15 +44,29 @@ npm run build && open dist/index.html     # or: npm run dev
 Controls are the original's: `W A S D` swim, `Q` / `E` down / up, `Shift` faster, `1`–`6` viewpoints, `Esc` menu,
 `M` mute, `H` stats. On a touchscreen: hold to swim forward, slide to steer, a second finger to go faster.
 
-What already differs from the original, on an Apple M3 with 8 GB at High detail:
+What already differs from the original, on an Apple M3 with 8 GB at High detail. `npm run bench` opens both
+side by side and lets them take turns, a few dozen frames each: a laptop slows by half as it warms up, so timings
+taken minutes apart cannot be compared.
 
 | | Original | Rebuild |
 |---|---|---|
-| Main thread blocked while loading | 3.2 s (longest task 1.7 s) | none (no task over 50 ms) |
-| Load time | 3.7 s | about 3.9 s |
+| Main thread held while loading | 3.0 s (longest task 1.7 s) | none: no task over 50 ms (see the note) |
+| Load time | 3.4 s | 3.5 s |
+| Peak memory while loading, page / whole browser | 1.1 GB / 1.9 GB | 0.5 GB / 1.2 GB |
 | Loading bar | timed animation | real progress from the generator |
 | Shipped file | 97 kB | 143 kB (its shaders keep readable names; renaming them at build time is on the list) |
-| Frame cost | see the baseline below | the same: the renderer is not optimised yet |
+| Frame at 2560×1440, six viewpoints | 45.7 / 35.4 / 26.9 / 38.5 / 35.9 / 35.7 ms | 45.8 / 35.7 / 27.4 / 39.1 / 34.5 / 36.0 ms |
+| Frame at 640×360, six viewpoints | 26.2 / 19.1 / 19.6 / 20.3 / 21.2 / 19.2 ms | 26.4 / 19.5 / 20.0 / 20.6 / 21.6 / 19.4 ms |
+| 60 s fly-through at 2560×1440, average | 37.8 ms | 37.1 ms |
+
+The frame costs are the same because the renderer is not optimised yet: both submit exactly the same geometry
+(35,034,683 vertices and indices at the first viewpoint), and that geometry, not the pixel count, is what a frame
+costs on this GPU.
+
+Note on the long tasks: the shell test (1280×720) and eight of nine loads measured at 2560×1440 had none. One
+load, on a hot machine with the original open in a second browser, had a single task of 455 ms; it did not
+happen again in six attempts to reproduce it, three of them under the same conditions. The benchmark now records
+when a long task starts and which loading message was up, so the next one can be placed.
 
 For development the page can also draw a dump of the original's world instead of its own: `npm run ref:dump`
 once, then `http://127.0.0.1:5173/?world=reference` (add `&level=1` or `2` for Medium or Low). `npm run shots`

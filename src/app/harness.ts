@@ -40,11 +40,23 @@ export interface Harness {
   trace(pose: number[], steps: SwimStep[]): number[];
   /** Where the camera is, where it looks, and how far it is from the rock (negative: in open water). */
   camera(): { x: number; y: number; z: number; yaw: number; pitch: number; rockDistance: number };
+  /**
+   * Frame cost, measured the way the reference rig measures the original: frames run one at a time, each waited
+   * for until the GPU has finished it. `poses` gives the camera for each frame (one pose: it is held, and time
+   * advances by 1/60 s a frame; several: one frame each, `seconds` apart in scene time). `pixels` is the render
+   * size's pixel budget. Resolves with the JavaScript part and the whole of every frame, in milliseconds.
+   */
+  frameCost(
+    poses: number[][],
+    frames: number,
+    pixels: number,
+    seconds?: number[],
+  ): Promise<{ cpuMs: number[]; totalMs: number[]; size: number[] }>;
   /** Draws a frame from where the camera is and sums it up: the mean colour (0..255) and the share of dark pixels. */
   frameStats(time: number): { mean: number[]; dark: number };
   /** The six viewpoints of the world being drawn: eye xyz, target xyz. */
   viewpoints(): number[][];
-  /** Leaves out draws by name ('mantas', 'fish', 'leaves', 'bubbles', 'glints', 'snow', 'shafts') until called again; no names draws all. */
+  /** Leaves out draws by name (see skippedDraws in render/passes/scene.ts) until called again; no names draws all. */
   skipDraws(...names: string[]): void;
   /** The pose [eye xyz, target xyz] of the scripted fly-through at `seconds`. */
   flyPose(seconds: number): number[];
@@ -257,6 +269,27 @@ export function createHarness(
     camera() {
       const { x, y, z, yaw, pitch } = renderer.camera;
       return { x, y, z, yaw, pitch, rockDistance: collision ? rockDistance(collision, x, y, z) : NaN };
+    },
+
+    async frameCost(poses, frames, pixels, seconds) {
+      renderer.pixelBudget = pixels;
+      renderer.detail = 1;
+      renderer.resize();
+      const cpuMs: number[] = [];
+      const totalMs: number[] = [];
+      let time = 2;
+      for (let i = 0; i < frames; i++) {
+        const pose = poses[Math.min(i, poses.length - 1)] as [number, number, number, number, number, number];
+        lookAt(renderer.camera, ...pose);
+        time = seconds ? seconds[i]! : time + 1 / 60;
+        const start = performance.now();
+        renderer.render(time);
+        const encoded = performance.now();
+        await queue.onSubmittedWorkDone();
+        cpuMs.push(encoded - start);
+        totalMs.push(performance.now() - start);
+      }
+      return { cpuMs, totalMs, size: [renderer.targets.width, renderer.targets.height] };
     },
 
     frameStats(time) {

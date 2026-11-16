@@ -23,6 +23,8 @@ export interface BootReport {
   adapter: string;
   level: Level;
   size: [width: number, height: number];
+  /** milliseconds from the start of navigation until the menu is up */
+  loadMs?: number;
   /** harness builds only: a 16 MB buffer sent to the worker and back by transfer */
   worker?: { megabytes: number; roundTripMs: number; detached: boolean; intact: boolean };
 }
@@ -186,7 +188,8 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
     };
     const harness = __DEV__ || __HARNESS__ ? createHarness(renderer, createWorker) : null;
     if (harness) hook.harness = harness;
-    if (__HARNESS__) hook.report.worker = await workerRoundTrip(createWorker);
+    // ?selftest: a 16 MB round trip through the worker, as a check of transfers on this browser
+    if (__HARNESS__ && params.has('selftest')) hook.report.worker = await workerRoundTrip(createWorker);
 
     // ---- the world. Dev and harness builds can be told where it comes from: ?world=reference draws a dump of
     // the original's world (npm run ref:dump), ?world=none starts without one (tests bring their own).
@@ -274,6 +277,7 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       requestAnimationFrame(frame);
     });
     menu.ready();
+    hook.report.loadMs = Math.round(performance.now());
   } catch (error) {
     hook.error = error instanceof Error ? (error.stack ?? error.message) : String(error);
     // a StartupError is written for the reader; anything else is unexpected and says so
@@ -288,7 +292,7 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
   if (__HARNESS__) {
     // for browsers that cannot be driven: how start-up went, any GPU errors, and whether a frame has a picture in it
     const harness = hook.harness;
-    const frame = harness && !hook.error ? harness.frameStats(2) : null;
+    const frame = harness && !hook.error && params.has('report') ? harness.frameStats(2) : null;
     tell('result', {
       error: hook.error,
       report: hook.report,

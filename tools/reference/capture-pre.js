@@ -84,7 +84,10 @@
     const pass = GPURenderPassEncoder.prototype, setPipeline = pass.setPipeline, draw = pass.draw, drawIndexed = pass.drawIndexed;
     const current = new WeakMap();
     pass.setPipeline = function (p) { current.set(this, ref.pipelines.get(p)); return setPipeline.call(this, p); };
-    pass.draw = function (...a) { if (!ref.mask.has(current.get(this))) draw.apply(this, a); };
-    pass.drawIndexed = function (...a) { if (!ref.mask.has(current.get(this))) drawIndexed.apply(this, a); };
+    // while ref.counts is an object, every draw is tallied by pipeline: [draw calls, instances, vertices or indices]
+    ref.counts = null;
+    const tally = (pass, a) => { if (ref.counts) { const c = (ref.counts[current.get(pass)] ||= [0, 0, 0]); c[0]++; c[1] += a[1] ?? 1; c[2] += a[0] * (a[1] ?? 1); } };
+    pass.draw = function (...a) { if (!ref.mask.has(current.get(this))) { tally(this, a); draw.apply(this, a); } };
+    pass.drawIndexed = function (...a) { if (!ref.mask.has(current.get(this))) { tally(this, a); drawIndexed.apply(this, a); } };
   }
 }

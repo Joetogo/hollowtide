@@ -59,8 +59,9 @@ interface PipelineOptions {
 }
 
 /**
- * Harness builds only: names of draws to leave out ('mantas', 'fish', 'leaves', 'bubbles', 'glints', 'snow', and 'shafts'), to compare frames with
- * and without them. Always empty in the shipped file.
+ * Harness builds only: names of draws to leave out, to compare frames and frame costs with and without them:
+ * 'terrain', 'solids', 'chunks', 'props', 'mantas', 'fish', 'leaves', 'bubbles', 'glints', 'snow', and 'shafts'
+ * (which the renderer checks). Always empty in the shipped file.
  */
 export const skippedDraws = new Set<string>();
 export const skipped = (name: string) => __HARNESS__ && skippedDraws.has(name);
@@ -165,7 +166,7 @@ export async function createScenePass(gpu: Gpu, scene: Scene, quality: Quality):
       pass.setVertexBuffer(0, world.terrainVertices);
       pass.setVertexBuffer(1, world.solids);
       pass.setIndexBuffer(world.terrainIndices, 'uint32');
-      const n = visibleRuns(view, world.terrainCells, 1.5, 0, TERRAIN_DISTANCE, true);
+      const n = skipped('terrain') ? 0 : visibleRuns(view, world.terrainCells, 1.5, 0, TERRAIN_DISTANCE, true);
       for (let i = 0; i < n; i++)
         pass.drawIndexed(runs[i * 2 + 1]! * 6, 1, runs[i * 2]! * 6, 0, world.identityInstance);
 
@@ -175,12 +176,12 @@ export async function createScenePass(gpu: Gpu, scene: Scene, quality: Quality):
       pass.setIndexBuffer(world.meshIndices, 'uint32');
       for (let mesh = 0; mesh < world.solidRanges.length; mesh++) {
         const [first, count] = world.solidRanges[mesh]!;
-        if (!count) continue;
+        if (!count || skipped('solids')) continue;
         const range = world.meshes[mesh]!;
         pass.drawIndexed(range.indexCount, count, range.firstIndex, range.firstVertex, first);
       }
       // rock chunks: 0-2 small, 3-5 large (with a coarser mesh further out), 6 pebbles
-      for (let i = 0; i < world.chunks.length; i++) {
+      for (let i = 0; i < world.chunks.length && !skipped('chunks'); i++) {
         const chunk = world.chunks[i]!;
         const large = i > 2 && i < 6;
         pass.setVertexBuffer(1, chunk.buffer);
@@ -188,7 +189,7 @@ export async function createScenePass(gpu: Gpu, scene: Scene, quality: Quality):
         if (large) drawCells(chunk, MESH.chunkFar + i - 3, LARGE_CHUNK_NEAR, LARGE_CHUNK_FAR);
       }
       // sponges and corals: 3 and 4 are the corals, which have a coarser mesh
-      for (let i = 0; i < world.props.length; i++) {
+      for (let i = 0; i < world.props.length && !skipped('props'); i++) {
         const prop = world.props[i]!;
         const coral = i === 3 || i === 4;
         pass.setVertexBuffer(1, prop.buffer);

@@ -99,8 +99,8 @@ const IDENTITY_INSTANCE = [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0];
 
 /** Lets the page breathe: everything queued (input, painting the loading bar) runs before this resolves. */
 const breathe = () => new Promise<void>((resolve) => setTimeout(resolve));
-/** After uploading this much, the page gets a turn: a 48 MB buffer takes several milliseconds to hand over. */
-const YIELD_BYTES = 12 << 20;
+/** After uploading this much, the page gets a turn: copying is slow enough to notice on a throttled laptop. */
+const YIELD_BYTES = 4 << 20;
 
 /**
  * Uploads a world. This copies about 200 MB to the GPU process, so it is done in turns: no single task holds the

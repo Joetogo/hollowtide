@@ -1,5 +1,6 @@
 // Shared by the browser tests: Chrome, a local page host and a pass/fail tally.
 // WebGPU needs the real GPU, so these run in a visible Chrome window and are not part of CI.
+import { execFileSync } from 'node:child_process';
 import { createReadStream, existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
@@ -30,14 +31,46 @@ export function need(file, hint) {
   process.exit(2);
 }
 
-/** Chrome with a throwaway profile; the window is 1280x720 CSS pixels at the given device pixel ratio. */
-export async function launch({ dpr = 1 } = {}) {
+/**
+ * Chrome with a throwaway profile; the window is 1280x720 CSS pixels at the given device pixel ratio.
+ * `memory` samples the browser's resident memory from outside while it runs (see `peak` on the result).
+ */
+export async function launch({ dpr = 1, memory = false, args = [] } = {}) {
   const profile = mkdtempSync(path.join(os.tmpdir(), 'abyssal-test-'));
+  const peak = { rendererMB: 0, gpuMB: 0, totalMB: 0 };
+  const sampler = memory
+    ? setInterval(() => {
+        let rows;
+        try {
+          rows = execFileSync('ps', ['-axo', 'pid=,ppid=,rss=,command='], {
+            encoding: 'utf8',
+            maxBuffer: 1 << 26,
+          }).split('\n');
+        } catch {
+          return;
+        }
+        const procs = rows
+          .map((r) => r.trim().match(/^(\d+)\s+(\d+)\s+(\d+)\s+(.*)$/))
+          .filter(Boolean)
+          .map((m) => ({ pid: m[1], ppid: m[2], mb: m[3] / 1024, cmd: m[4] }));
+        const main = procs.find((p) => p.cmd.includes(profile) && !p.cmd.includes('--type='));
+        if (!main) return;
+        let total = main.mb;
+        for (const p of procs) {
+          if (p.ppid !== main.pid) continue;
+          total += p.mb;
+          if (p.cmd.includes('--type=renderer')) peak.rendererMB = Math.max(peak.rendererMB, p.mb);
+          if (p.cmd.includes('--type=gpu-process')) peak.gpuMB = Math.max(peak.gpuMB, p.mb);
+        }
+        peak.totalMB = Math.max(peak.totalMB, total);
+      }, 250)
+    : null;
   const context = await chromium.launchPersistentContext(profile, {
     channel: 'chrome',
     headless: false,
     viewport: { width: 1280, height: 720 },
     deviceScaleFactor: dpr,
+    args,
   });
   const page = context.pages()[0] ?? (await context.newPage());
   const errors = [];
@@ -46,6 +79,8 @@ export async function launch({ dpr = 1 } = {}) {
   return {
     page,
     errors,
+    /** peak resident memory in MB so far, if launched with `memory` */
+    peak,
     /**
      * Opens a URL and waits until the app has finished starting (or failed to). With `pause`, the app's own
      * frame loop then stops drawing, so the only frames are the ones the test asks for.
@@ -59,6 +94,7 @@ export async function launch({ dpr = 1 } = {}) {
       }, pause);
     },
     async close() {
+      if (sampler) clearInterval(sampler);
       await context.close();
       rmSync(profile, { recursive: true, force: true });
     },
@@ -74,10 +110,12 @@ export const shotsDir = (level = 0) =>
  *   /fixtures/<file>                      the dumped world and textures at High detail
  *   /reference/L<level>/fixtures/<file>   the same for any level
  *   /reference/L<level>/shots/<file>      the captured frames
+ *   /original.html                        the original with the timing hooks (tools/reference/build-ref.mjs)
  */
 export function serve(pageFile, fixtures = fixturesDir(0)) {
   const resolve = (pathname) => {
     if (pathname === '/') return pageFile;
+    if (pathname === '/original.html') return path.join(root, '.cache/reference/reference-bench.html');
     let m = /^\/fixtures\/([\w.-]+)$/.exec(pathname);
     if (m) return path.join(fixtures, m[1]);
     m = /^\/reference\/L([012](?:-\w+)?)\/(fixtures|shots)\/([\w.-]+)$/.exec(pathname);
@@ -93,7 +131,7 @@ export function serve(pageFile, fixtures = fixturesDir(0)) {
       return;
     }
     res.writeHead(200, {
-      'content-type': pathname === '/' ? 'text/html; charset=utf-8' : 'application/octet-stream',
+      'content-type': /^\/(original\.html)?$/.test(pathname) ? 'text/html; charset=utf-8' : 'application/octet-stream',
       'cache-control': 'no-store',
     });
     createReadStream(file).pipe(res);

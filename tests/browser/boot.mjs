@@ -22,7 +22,7 @@ try {
   check(await chrome.page.evaluate(() => !window.__abyssal.harness), '  ships without the test hooks');
 
   // the harness build: the same code plus hooks
-  ({ error, report } = await chrome.open(pathToFileURL(harness).href));
+  ({ error, report } = await chrome.open(pathToFileURL(harness).href + '?selftest'));
   check(!error, `dist/index.harness.html starts from file://${error ? ': ' + error : ''}`);
   const worker = report?.worker;
   check(

@@ -65,7 +65,7 @@ export async function computeDensity(device: GPUDevice): Promise<Float32Array<Ar
   // copied out in slices, with a turn for the page in between: 84 MB in one go would hold the main thread
   const mapped = new Uint8Array(readback.getMappedRange());
   const copy = new Uint8Array(bytes);
-  const SLICE = 12 << 20;
+  const SLICE = 4 << 20;
   for (let offset = 0; offset < bytes; offset += SLICE) {
     copy.set(mapped.subarray(offset, Math.min(offset + SLICE, bytes)), offset);
     await new Promise<void>((resolve) => setTimeout(resolve));
