@@ -42,9 +42,23 @@ const options = (prod) => ({
   logLevel: 'warning',
 });
 
+/** The page's icon (src/page/icon.svg) as an address that holds the picture itself: nothing to fetch. */
+function iconUri() {
+  const svg = readFileSync(path.join(root, 'src/page/icon.svg'), 'utf8')
+    .replace(/<!--[^]*?-->/g, '')
+    .replace(/>\s+</g, '><')
+    .replace(/\s+/g, ' ')
+    .trim();
+  // quotes become apostrophes (the address stands between quotes) and only what must be is escaped
+  return (
+    'data:image/svg+xml,' +
+    svg.replace(/"/g, "'").replace(/%/g, '%25').replace(/#/g, '%23').replace(/</g, '%3C').replace(/>/g, '%3E')
+  );
+}
+
 /** Puts the bundle into the page template. */
 async function page(js, prod) {
-  let html = readFileSync(path.join(root, 'src/page/template.html'), 'utf8');
+  let html = readFileSync(path.join(root, 'src/page/template.html'), 'utf8').replace('/*ICON*/', iconUri);
   // an inline script ends at the first "</script", and "<!--" changes how the rest is parsed
   const script = js
     .trim()

@@ -1,8 +1,9 @@
 // The pictures in the README.
-//   npm run shots:readme        (builds the harness build, then writes docs/*.jpg)
+//   npm run shots:readme              (builds the harness build, then writes docs/*.jpg and docs/icon.png)
+//   npm run shots:readme -- --icon    (the icon alone)
 // Each is one frame of the page itself at a fixed place and moment, drawn at twice the size and scaled down, so
 // they can be made again whenever the look changes.
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { launch, need, root, serve } from './lib.mjs';
 
@@ -32,8 +33,27 @@ const SHOTS = {
   ],
 };
 
+// ---- the icon as a PNG, for where one is wanted (a phone's home screen, the README): the page's own icon,
+// with square corners, since whatever shows it rounds them itself
+{
+  const svg = readFileSync(path.join(root, 'src/page/icon.svg'), 'utf8').replace(/rx="14"/, 'rx="0"');
+  const chrome = await launch();
+  try {
+    await chrome.page.setViewportSize({ width: 512, height: 512 });
+    await chrome.page.setContent(
+      `<body style="margin:0"><img width=512 height=512 src="data:image/svg+xml,${encodeURIComponent(svg)}"></body>`,
+    );
+    await chrome.page.waitForTimeout(200);
+    await chrome.page.screenshot({ path: path.join(out, 'icon.png') });
+    console.log('docs/icon.png');
+  } finally {
+    await chrome.close();
+  }
+}
+
+// (`-- --icon` draws the icon alone)
 const host = await serve(page);
-for (const [mood, shots] of Object.entries(SHOTS)) {
+for (const [mood, shots] of process.argv.includes('--icon') ? [] : Object.entries(SHOTS)) {
   const chrome = await launch({ dpr: 2 });
   try {
     const { error } = await chrome.open(`${host.origin}/?mood=${mood}`, { pause: true, tuning: 'tuned' });

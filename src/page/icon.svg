@@ -1,0 +1,25 @@
+<!-- The page's icon: the whale's tail that stands on the seabed at the first viewpoint, rising out of the deep
+     into the light. The build puts it into the page as its tab icon; docs/icon.png is the same picture for
+     where a PNG is wanted (npm run shots:readme draws it). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="w" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6fe9f6"/>
+      <stop offset=".45" stop-color="#1493ab"/>
+      <stop offset="1" stop-color="#03222d"/>
+    </linearGradient>
+    <linearGradient id="f" x1="0" y1="0" x2="0" y2="1">
+      <stop offset=".15" stop-color="#f6feff"/>
+      <stop offset=".6" stop-color="#c3f0f6"/>
+      <stop offset="1" stop-color="#1c7c92"/>
+    </linearGradient>
+    <clipPath id="c"><rect width="64" height="64" rx="14"/></clipPath>
+  </defs>
+  <g clip-path="url(#c)">
+    <rect width="64" height="64" fill="url(#w)"/>
+    <path d="M12 0h15L16 64H0V40ZM39 0h9l6 64H42Z" fill="#fff" opacity=".11"/>
+    <path d="M26 64C26 54 27.500 46.500 29.300 40.500 19.500 40.500 8 33 3 12.500 12 22 24.500 20.500 32 30 39.500 20.500 52 22 61 12.500 56 33 44.500 40.500 34.700 40.500 36.500 46.500 38 54 38 64Z" fill="url(#f)"/>
+    <circle cx="50.500" cy="42" r="1.700" fill="#fff" opacity=".55"/>
+    <circle cx="53.500" cy="36.500" r="1.100" fill="#fff" opacity=".45"/>
+  </g>
+</svg>

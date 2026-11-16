@@ -1,4 +1,4 @@
-# Hollowtide
+# <img src="docs/icon.png" width="36" height="36" alt="" align="top"> Hollowtide
 
 **[Swim in it](https://richman-tan.github.io/hollowtide/)** (it needs WebGPU: a current Chrome, Edge or Safari)
 

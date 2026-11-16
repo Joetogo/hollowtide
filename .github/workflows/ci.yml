@@ -22,13 +22,14 @@ jobs:
       - run: npm run check
       # builds the single file and fails if it is over the size budget
       - run: npm run build
-      # what goes on the web: the file itself, and a picture for when a link to it is shared
+      # what goes on the web: the file itself, a picture for when a link to it is shared, and its icon
       - name: Put the site together
         if: github.event_name == 'push'
         run: |
           mkdir site
           cp dist/index.html site/index.html
           cp docs/hero.jpg site/preview.jpg
+          cp docs/icon.png site/icon.png
           touch site/.nojekyll
       - uses: actions/upload-pages-artifact@v5
         if: github.event_name == 'push'
