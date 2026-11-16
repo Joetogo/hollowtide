@@ -134,10 +134,11 @@ fn leafFragment(v: LeafVarying, @builtin(front_facing) front: bool) -> @location
   c += sun * (pow(clamp01(dot(n, H)), 40.) * (.45 + iridescence * v.look.z * 2.) + pow(clamp01(dot(n, H)), 9.) * .07) + ambientLight * iridescence * v.look.z * pow(1. - ndv, 3.) * 1.5;
   c += sun * throughColor * v.look.y * pow(clamp01(dot(-V, L)), 3.) * 1.2; // glow when looking towards the sun through it
   c += albedo * v.look.w * (.5 + 3. * dot(ambientLight + sun * .3, vec3f(.1, .5, .5)));
+  c += albedo * v.look.w * (MOOD_GLOW * 1.6); // and in the dark the same leaves shine by themselves
   // sparkle: whole-leaf glints that twinkle slowly
   let twinkle = pow(.5 + .5 * sin(frame.time * (.5 + v.seeds.y * 1.4) + v.seeds.x * 90.), 5.);
   let band = smoothRamp(.2, .0, abs(v.uv.y - (.35 + .45 * v.seeds.y))) * (1. - v.uv.x * v.uv.x);
-  let lit = .35 + sun.g * 1.2;
+  let lit = .35 + sun.g * 1.2 + MOOD_GLOW * .5;
   c += v.sparkle * v.look.x * (.1 + twinkle) * band * lit * .6;
   return hdrOutput(applyFog(c, v.world, zone));
 }
@@ -161,7 +162,7 @@ fn glintVertex(@builtin(vertex_index) index: u32, @location(0) place: vec4f, @lo
   let world = p + (frame.right * q.x + frame.up * q.y) * size;
   o.clip = frame.viewProj * vec4f(world, 1.); o.uv = q;
   let zone = zoneAt(p);
-  let lit = .3 + 1.8 * shadow1(p) * sunlight(p.y, zone).g;
+  let lit = .3 + 1.8 * shadow1(p) * sunlight(p.y, zone).g + MOOD_GLOW * 1.1;
   let e = spark.z / size;
   o.color = sparklePalette(spark.y) * (.12 + twinkle * 1.7) * lit * e * e * exp(-EXTINCTION.g * d) * smoothRamp(.4, 1.5, d) * 17. * smoothRamp(GLINT_FAR, GLINT_FAR * .8, d);
   return o;

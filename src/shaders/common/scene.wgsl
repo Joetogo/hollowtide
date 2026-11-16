@@ -44,18 +44,18 @@ fn causticsMono(p: vec3f, viewDistance: f32) -> f32 {
 
 // ---- light
 // sunlight reaching height y: faded along its slanted path down
-fn sunlight(y: f32, zone: f32) -> vec3f { return SUN_COLOR * exp(downwelling(zone) * (min(y, 0.) / frame.sunDir.y)) * (.5 + .5 * clamp01(-y / 30.)); }
+fn sunlight(y: f32, zone: f32) -> vec3f { return (SUN_COLOR * MOOD_SUN) * exp(downwelling(zone) * (min(y, 0.) / frame.sunDir.y)) * (.5 + .5 * clamp01(-y / 30.)); }
 // the baked volume around `p`: r = openness (0.5 at a rock surface, more in open water), g = skylight from above
 fn volume(p: vec3f) -> vec4f { return textureSampleLevel(volumeTexture, clampSampler, (p - vec3f(-192., -56., -192.)) / vec3f(384., 60., 384.), 0.); }
 // light from the water all around, strongest from above, dimmed where the sky is blocked
 fn ambient(p: vec3f, n: vec3f, sky: f32, zone: f32) -> vec3f {
   let up = n.y * .5 + .5;
-  return mix(vec3f(.22, .60, .80), vec3f(.34, .56, .82), zone) * exp(downwelling(zone) * min(p.y, 0.) * 1.2) * (.3 + .7 * sky) * (.24 + .76 * up * up) * 1.3 * (.55 + .45 * clamp01(-p.y / 30.)) + vec3f(.003, .010, .016);
+  return (mix(vec3f(.22, .60, .80), vec3f(.34, .56, .82), zone) * exp(downwelling(zone) * min(p.y, 0.) * 1.2) * (.3 + .7 * sky) * (.24 + .76 * up * up) * 1.3 * (.55 + .45 * clamp01(-p.y / 30.)) + vec3f(.003, .010, .016)) * MOOD_SKY;
 }
 // how much a point belongs to the grotto: the camera's zone, nudged by the ground map
 fn zoneAt(p: vec3f) -> f32 { return mix(frame.zoneBlend, textureSampleLevel(groundMap, clampSampler, p.xz / 384. + .5, 0.).b, .2); }
 // glow of open water seen sideways, on surfaces that face it
-fn sideGlow(p: vec3f, n: vec3f, open: f32, zone: f32) -> vec3f { return mix(WATER_COLOR, GROTTO_COLOR, zone) * exp(downwelling(zone) * min(p.y, 0.)) * open * (1. - abs(n.y)) * .7; }
+fn sideGlow(p: vec3f, n: vec3f, open: f32, zone: f32) -> vec3f { return mix(WATER_COLOR, GROTTO_COLOR, zone) * exp(downwelling(zone) * min(p.y, 0.)) * open * (1. - abs(n.y)) * .7 * MOOD_SKY; }
 
 // A lit colour as seen from the camera: faded by the water in between, plus the light scattered into the view.
 // Skylight is taken at most 150 m along the ray: past that, terrain and the backdrop behind it get the same haze.

@@ -38,5 +38,5 @@ fn marchShafts(@builtin(position) position: vec4f) -> @location(0) vec4f {
   let mu = max(dot(dir, sun), 0.);
   let phase = mix(.2 + 2.0 * mu * mu * mu, .8, frame.zoneBlend); // strongest when looking towards the sun
   let color = mix(WATER_COLOR + vec3f(.04, .07, .05), GROTTO_COLOR + vec3f(.28, .16, .12), frame.zoneBlend);
-  return vec4f(min(acc * dt * sigma * color * SUN_COLOR * phase * frame.shaftGain * (1. - .55 * frame.zoneBlend), vec3f(20.)), viewDepth);
+  return vec4f(min(acc * dt * sigma * color * (SUN_COLOR * MOOD_SUN) * phase * frame.shaftGain * (1. - .55 * frame.zoneBlend), vec3f(20.)), viewDepth);
 }

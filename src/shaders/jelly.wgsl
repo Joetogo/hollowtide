@@ -96,7 +96,7 @@ fn jellyVertex(@builtin(vertex_index) index: u32, @location(0) place: vec4f, @lo
   // lit as a whole, from where its middle is: sunlight makes it shine where it reaches it; its own light is
   // there regardless, stronger on the squeeze
   let lit = sunlight(centre.y, zoneAt(centre)).g * shadow1(centre);
-  o.tint = jellyColor(motion.z) * (.3 + 1.1 * lit + .45 * (.6 + .8 * squeeze));
+  o.tint = jellyColor(motion.z) * (.3 * MOOD_SKY.g + 1.1 * lit + .45 * (.6 + .8 * squeeze) * (1. + 1.6 * MOOD_GLOW));
   // too far to be seen through this water: not drawn
   if (distance(centre, frame.camPos) > 110.) { o.clip = vec4f(0.); }
   return o;

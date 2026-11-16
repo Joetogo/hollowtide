@@ -29,7 +29,7 @@ fn surfaceFragment(v: SurfaceVarying) -> @location(0) vec4f {
   let refracted = refract(V, n, 1.33);
   let towardsSun = max(dot(refracted, frame.sunDir), 0.);
   let fresnel = pow(1. - sqrt(max(k, 0.)), 5.);
-  let sky = (vec3f(.30, .78, 1.) * 1.3 * clamp(1. + 3.8 * (s.x * .6 - s.y * .8), .25, 3.) + vec3f(1., .95, .85) * (pow(towardsSun, 60.) * 1.3 + pow(towardsSun, 500.) * 12.)) * (1. - fresnel);
+  let sky = (vec3f(.30, .78, 1.) * 1.3 * clamp(1. + 3.8 * (s.x * .6 - s.y * .8), .25, 3.) * MOOD_SKY + vec3f(1., .95, .85) * (pow(towardsSun, 60.) * 1.3 + pow(towardsSun, 500.) * 12.) * MOOD_SUN) * (1. - fresnel);
   let zone = zoneAt(v.world);
   let R = reflect(V, n);
   let mirrored = inScatter(v.world, R, 300., zone, frame.sunDir) * 1.15; // the water itself, seen in the mirror

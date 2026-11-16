@@ -13,6 +13,13 @@ const GROTTO_COLOR = vec3f(.58, .66, .98);
 const SUN_COLOR = vec3f(1.7, 1.6, 1.45); // sunlight just under the surface
 const TAU = 6.2831853;
 
+// The mood (config/mood.ts): the sun's light and the daylight the water scatters, each scaled by a colour, and
+// how much living things shine by themselves. These three lines are rewritten when a mood other than noon is
+// chosen; as they stand they change nothing.
+const MOOD_SUN = vec3f(1., 1., 1.);
+const MOOD_SKY = vec3f(1., 1., 1.);
+const MOOD_GLOW = 0.;
+
 // `zone` runs from 0 in open water to 1 inside the grotto
 fn downwelling(zone: f32) -> vec3f { return mix(DOWNWELLING, DOWNWELLING_GROTTO, zone); }
 fn extinction(zone: f32) -> vec3f { return mix(EXTINCTION, vec3f(.034, .026, .022), zone); }
@@ -29,5 +36,5 @@ fn inScatter(origin: vec3f, dir: vec3f, dist: f32, zone: f32, sun: vec3f) -> vec
   let I = (1. - exp(-a * dist)) / a;
   let mu = max(dot(dir, sun), 0.);
   let m2 = mu * mu;
-  return mix(WATER_COLOR, GROTTO_COLOR, zone) * extinction(zone) * exp(k * origin.y) * I * (1.22 + .3 * m2 * m2);
+  return mix(WATER_COLOR, GROTTO_COLOR, zone) * extinction(zone) * exp(k * origin.y) * I * (1.22 + .3 * m2 * m2) * MOOD_SKY;
 }

@@ -37,7 +37,7 @@ Done so far:
 | 11. In the water | Your own arms in first person, swimming a breaststroke; a hand-held scooter on `Shift`; the original's glide on `C` | Frames without the body are unchanged to the bit; 18 unit tests of the skeleton and the stroke; a browser test swims, rides the scooter and switches to the glide and back |
 | 12. Speed-ups that change pixels (first part) | A tuned set of draw distances beside the original's faithful one: ground cover, rock chips and pebbles and the far kelp end sooner behind the fades they already had, glints and bubbles are sorted into cells and only drawn where they can be seen, kelp blades no longer flick as their curl passes through zero; half the frames behind the pause panel | A frame takes 13–16 % less at 1280×720 and 2560×1440 (6 % at 640×360), two pages taking turns; 0–6 % of pixels differ at the six viewpoints; the tests against the original draw with the faithful set and still pass |
 | 13. Features | Settings in the pause panel (look speed, inverted look, field of view, volume, a smooth or a sharp picture, swimming with arms or the classic glide), photo mode, a guided tour; arrow-key look, drag-to-look, a gamepad, a sound button, a link to a view, `?seed=` | Each is driven in the shell test: the tour flies and hands over, a photo is saved larger than the screen, settings are remembered, a made-up gamepad swims and pauses, a link is followed and one into rock is not; with a seed the seabed's checksums are the authored ones and the plants' are not |
-| 14. New life (first part) | Jellyfish: a hundred or so, in groups along the tour's route and ahead of where you wake, pulsing and drifting, glowing by themselves in the dark of the grotto. Three sea turtles rowing round loops of open water. Schools of fish open to let the swimmer through | Jellyfish only ever add light (no pixel darker with them than without); each turtle is found where its loop says; none placed in rock or kelp; in the faithful tuning there are none of them and the frames are the original's |
+| 14. New life and new light | Jellyfish: a hundred or so, in groups along the tour's route and ahead of where you wake, pulsing and drifting, glowing by themselves in the dark of the grotto. Three sea turtles rowing round loops of open water. Schools of fish open to let the swimmer through. Three lights: noon, dusk, moonlight | Jellyfish only ever add light (no pixel darker with them than without); each turtle is found where its loop says; none placed in rock or kelp; in the faithful tuning there are none of them and the frames are the original's; each mood is picked in the menu, remembered and compiled, dusk measures violet and moonlight dark and blue against noon |
 | 15. Its own name | Hollowtide: title, menu, package, storage keys (settings saved under the old key are read once), test hook, docs | The old name appears only where the original is meant: the credit, the licence, the reference rig and the tests against it |
 
 **Parity gate: passed.** At that point Hollowtide was the original, from scratch: `dist/index.html` builds the same world (all
@@ -95,6 +95,26 @@ Not in the original, which shows a progress bar and then a menu.
 - `Esc` afterwards pauses on a panel over the blurred world (resume, detail level, the keys), and resuming has
   no second awakening. With reduced motion asked for, the descent stands still and counts, and the eyes simply
   fade open.
+
+### Three lights
+
+The same world at **noon** (the light it was made for), at **dusk** (red and gold near the surface, lavender
+below, the shafts pale pink) and by **moonlight** (a twentieth of the day's light, cold blue, and what lives
+here shining in it: the jellyfish, the specks among the kelp, the magenta ground cover). Pick one on the home
+view or in the pause panel; the page starts over in it.
+
+- A mood is seven numbers (`src/config/mood.ts`): a colour that scales the sun's own light, a colour that scales
+  the daylight the water scatters (the haze, the light from all around, the sky through the surface), how much
+  living things shine by themselves, and how far the eye opens.
+- **A glow that does not need the sun.** The original's glowing plants glow in proportion to the light that
+  reaches them, so in the dark they would go out. The moods add a term that does not.
+- **Dusk has to be far redder than a sunset.** Water takes the red out of light within a few tens of metres; a
+  sun tinted like a sunset in air turns the seabed green. For any warmth to arrive, the sun's red is 2.4 times
+  noon's.
+- **Noon is untouched.** The numbers live in three constants the shaders share; as written they are ones and a
+  zero, and the shader compiler folds them away, so noon's frames are still the original's (the parity tests are
+  unchanged). Another mood rewrites those three lines when the shaders are made.
+- The sun does not move: the caustics and the baked shadows are made for where it is.
 
 ### Jellyfish
 

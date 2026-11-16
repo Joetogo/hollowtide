@@ -1,6 +1,7 @@
 // What the page remembers between visits, and how the first detail level is picked.
 import { MAX_PIXELS } from '../render/dynres';
 import type { Level } from './quality';
+import { moodNamed } from './mood';
 
 const KEY = 'hollowtide';
 /** Set while a world is being built. Still set on the next visit, it means that load took the tab down. */
@@ -28,6 +29,8 @@ export interface Settings {
   volume: number;
   /** how wide the view is, as a multiple of the usual lens (0.85 narrow .. 1.2 wide) */
   fov: number;
+  /** the light the world is seen in: 'noon' (as authored), 'dusk' or 'moon' (config/mood.ts) */
+  mood: string;
   /**
    * What the picture gives up when the machine cannot keep up. false: resolution and draw distance, to stay
    * smooth. true: smoothness, down to thirty frames a second, to stay sharp and far-seeing.
@@ -48,6 +51,7 @@ interface Stored {
   volume?: number;
   fov?: number;
   sharp?: boolean;
+  mood?: string;
 }
 
 /** A stored number if it is one and within its range, else the default. */
@@ -112,6 +116,7 @@ export function loadSettings(): Settings {
     volume: within(stored.volume, 0, 1, 1),
     fov: within(stored.fov, 0.85, 1.2, 1),
     sharp: !!stored.sharp,
+    mood: moodNamed(stored.mood).name,
     mobile,
   };
 }
@@ -122,7 +127,8 @@ export function saveSettings(settings: Settings, fullPixels: number): void {
   // the swimming style is remembered only once it differs from what the system's motion setting implies
   const classic = settings.classic === reducedMotion() ? undefined : settings.classic;
   const { level, detail, muted, sensitivity, invertY, volume, fov, sharp } = settings;
-  write(KEY, JSON.stringify({ level, pixels, detail, muted, classic, sensitivity, invertY, volume, fov, sharp }));
+  const mood = settings.mood === 'noon' ? undefined : settings.mood;
+  write(KEY, JSON.stringify({ level, pixels, detail, muted, classic, sensitivity, invertY, volume, fov, sharp, mood }));
 }
 
 /** Marks a load as started or finished (see LOADING_KEY). */

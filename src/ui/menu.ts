@@ -5,6 +5,7 @@
 //   playing   in the water
 //   paused    the world blurred behind a panel: resume, detail level, the keys
 import type { Level } from '../config/quality';
+import { MOODS } from '../config/mood';
 import type { Settings } from '../config/settings';
 import { createVeil } from './veil';
 
@@ -42,6 +43,8 @@ export interface MenuActions {
   onToggle(open: boolean): void;
   /** another detail level was picked */
   onLevel(level: Level): void;
+  /** another light was picked: 'noon', 'dusk' or 'moon' */
+  onMood(name: string): void;
   /** a setting was changed in the panel (the settings object has the new value): apply it and remember it */
   onSettings(): void;
 }
@@ -131,6 +134,14 @@ export function createMenu(level: Level, canvas: HTMLCanvasElement, settings: Se
       const buttonLevel = (2 - i) as Level;
       if (buttonLevel === level) button.className = 'on';
       else button.onclick = () => actions.onLevel(buttonLevel);
+    });
+  // the light, in the order of config/mood.ts: the current one is lit, the others switch to theirs
+  el('light')
+    .querySelectorAll('button')
+    .forEach((button, i) => {
+      const mood = MOODS[i]!;
+      if (mood.name === settings.mood) button.className = 'on';
+      else button.onclick = () => actions.onMood(mood.name);
     });
   // ---- the settings in the pause panel: three sliders and three choices, each written straight into `settings`
   const syncs: (() => void)[] = [];

@@ -7,7 +7,7 @@ import { createFrameTimer } from '../gpu/timing';
 import type { WorldData } from '../world/data';
 import { createCullView, updateCullView } from './cull';
 import { MAX_PIXELS } from './dynres';
-import { writeFrame } from './frame';
+import { Frame, writeFrame } from './frame';
 import { createBlit } from './passes/blit';
 import { createBloom } from './passes/bloom';
 import { bakeDetail } from './passes/detail';
@@ -40,6 +40,8 @@ export interface Renderer {
   pixelBudget: number;
   /** Render this many times the canvas's device size each way (1 but for a moment, when a picture is taken). */
   supersample: number;
+  /** How far the eye opens, as a multiple of the usual exposure (a mood's: 1 at noon). */
+  exposure: number;
   /** The current targets; replaced whenever the render size changes. */
   targets: Targets;
   /** While set, the scene pass is skipped and whatever the scene target holds is composited (used by the harness). */
@@ -98,6 +100,7 @@ export async function createRenderer(
     detail: 1,
     pixelBudget: MAX_PIXELS,
     supersample: 1,
+    exposure: 1,
     targets: undefined as unknown as Targets, // set by the resize() below
     holdScene: false,
     body: createBodyParts(),
@@ -165,6 +168,7 @@ export async function createRenderer(
     render(time) {
       const { targets } = renderer;
       writeFrame(scene.frameData, renderer.camera, targets.width, targets.height, time, renderer.detail);
+      if (renderer.exposure !== 1) scene.frameData[Frame.at.exposure] *= renderer.exposure;
       queue.writeBuffer(scene.frameBuffer, 0, scene.frameData);
       const encoder = device.createCommandEncoder();
       const stamps = timer.begin();

@@ -25,6 +25,8 @@ import { FAITHFUL, TUNED } from '../config/tuning';
 import { placeJellies } from '../world/jellies';
 import { placeTurtles } from '../life/turtle';
 import { viewFromHash, viewToHash } from '../camera/share';
+import { moodNamed } from '../config/mood';
+import { setShaderMood } from '../gpu/shader';
 
 export interface BootReport {
   adapter: string;
@@ -150,6 +152,8 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
   const forced = __DEV__ || __HARNESS__ ? params.get('level') : null;
   if (forced === '0' || forced === '1' || forced === '2') settings.level = Number(forced) as Level;
   const level = settings.level;
+  // dev and harness builds can force the light with ?mood=dusk
+  if ((__DEV__ || __HARNESS__) && params.get('mood')) settings.mood = moodNamed(params.get('mood')).name;
 
   // the page's controls exist before anything can go wrong, so a failure has somewhere to be shown
   const intent = createIntent();
@@ -174,6 +178,11 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
     onLevel(next) {
       // another level is another world: remember it and start over (what the screen settled on no longer applies)
       saveSettings({ ...settings, level: next, pixels: Infinity, detail: 1 }, 0);
+      location.reload();
+    },
+    onMood(name) {
+      // the light is built into the shaders: remember it and start over
+      saveSettings({ ...settings, mood: name }, Infinity);
       location.reload();
     },
   });
@@ -217,10 +226,14 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
     let gpuMs = 0;
     // dev and harness builds can draw with the original's own distances: ?tuning=faithful
     const tuning = (__DEV__ || __HARNESS__) && params.get('tuning') === 'faithful' ? FAITHFUL : TUNED;
+    // the light the shaders are built for: what was chosen in the menu
+    const mood = moodNamed(settings.mood);
+    setShaderMood(mood);
     const renderer = await createRenderer(gpu, quality(level), tuning, (ms) => {
       gpuMs = ms;
       addGpuTime(dynres, ms);
     });
+    renderer.exposure = mood.exposure;
     performance.mark('hollowtide:renderer');
     tell('stage', 'renderer');
     renderer.pixelBudget = dynres.pixels;
