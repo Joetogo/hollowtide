@@ -16,7 +16,7 @@ export const ARM_BONES = 19;
 export const BONE = {
   upper: 0,
   fore: 1, // the elbow end of the forearm
-  twist: 2, // the wrist end of the forearm: turns with the hand
+  twist: 2, // the wrist end of the forearm (for now the two turn together, with the hand)
   hand: 3,
   finger: 4, // + 3 * finger + joint
   thumb: 16, // + joint
@@ -330,62 +330,32 @@ export function poseArm(
   ny /= hl;
   nz /= hl;
 
-  // ---- how the three parts of the arm are turned about their own length.
-  // The upper arm's -z points to the inside of the elbow's bend (there is no telling at a straight arm: then
-  // away from where the elbow would go).
-  let ix = fx - ux * (fx * ux + fy * uy + fz * uz);
-  let iy = fy - uy * (fx * ux + fy * uy + fz * uz);
-  let iz = fz - uz * (fx * ux + fy * uy + fz * uz);
-  let il = Math.hypot(ix, iy, iz);
-  if (il < 1e-4) {
-    ix = -(ex - ux * (ex * ux + ey * uy + ez * uz));
-    iy = -(ey - uy * (ex * ux + ey * uy + ez * uz));
-    iz = -(ez - uz * (ex * ux + ey * uy + ez * uz));
-    il = Math.hypot(ix, iy, iz) || 1;
-  }
-  const uzx = -ix / il;
-  const uzy = -iy / il;
-  const uzz = -iz / il;
-  fromAxes(ux, uy, uz, uzx, uzy, uzz);
-  setBone(pose, first + BONE.upper, shoulderX, shoulderY, shoulderZ);
-  // the forearm at the elbow carries the upper arm's turn on round the bend...
-  let ax = uzx - fx * (uzx * fx + uzy * fy + uzz * fz);
-  let ay = uzy - fy * (uzx * fx + uzy * fy + uzz * fz);
-  let az = uzz - fz * (uzx * fx + uzy * fy + uzz * fz);
-  let al = Math.hypot(ax, ay, az) || 1;
-  ax /= al;
-  ay /= al;
-  az /= al;
-  // ...at the wrist it is turned with the hand (the back of the hand, square to the forearm)...
+  // ---- how the arm is turned about its own length. The forearm turns with the hand: its +z is the back of
+  // the hand, made square to the forearm. (A wrist does not bend far enough for the two to line up.)
   let bx = -nx + fx * (nx * fx + ny * fy + nz * fz);
   let by = -ny + fy * (nx * fx + ny * fy + nz * fz);
   let bz = -nz + fz * (nx * fx + ny * fy + nz * fz);
-  al = Math.hypot(bx, by, bz);
-  if (al < 1e-4) {
-    bx = ax;
-    by = ay;
-    bz = az;
-    al = 1;
-  }
-  bx /= al;
-  by /= al;
-  bz /= al;
-  // ...and the elbow end goes nearly half of the way there, so that no one joint has to take the whole twist
-  const turn = Math.atan2(
-    (ay * bz - az * by) * fx + (az * bx - ax * bz) * fy + (ax * by - ay * bx) * fz,
-    ax * bx + ay * by + az * bz,
-  );
-  const half = turn * 0.45;
-  const ch = Math.cos(half);
-  const sh = Math.sin(half);
-  // (a, turned by `half` about the forearm)
-  const mx = ax * ch + (fy * az - fz * ay) * sh;
-  const my = ay * ch + (fz * ax - fx * az) * sh;
-  const mz = az * ch + (fx * ay - fy * ax) * sh;
-  fromAxes(fx, fy, fz, mx, my, mz);
-  setBone(pose, first + BONE.fore, elbowPx, elbowPy, elbowPz);
+  const bl = Math.hypot(bx, by, bz) || 1;
+  bx /= bl;
+  by /= bl;
+  bz /= bl;
   fromAxes(fx, fy, fz, bx, by, bz);
+  setBone(pose, first + BONE.fore, elbowPx, elbowPy, elbowPz);
   setBone(pose, first + BONE.twist, elbowPx, elbowPy, elbowPz);
+  // The upper arm carries that turn on round the elbow by the shortest way: the rotation that swings the
+  // forearm's direction onto the upper arm's, applied to the forearm's +z. Nothing here can jump (an arm is
+  // never folded quite flat), which a turn measured from the plane of the bend would whenever the elbow
+  // crossed from one side to the other; and the shoulder, which has to take up the difference, is out of sight.
+  const c2 = fx * ux + fy * uy + fz * uz;
+  const wx = fy * uz - fz * uy;
+  const wy = fz * ux - fx * uz;
+  const wz = fx * uy - fy * ux;
+  const k = (wx * bx + wy * by + wz * bz) / (1 + c2);
+  const uzx = bx * c2 + (wy * bz - wz * by) + wx * k;
+  const uzy = by * c2 + (wz * bx - wx * bz) + wy * k;
+  const uzz = bz * c2 + (wx * by - wy * bx) + wz * k;
+  fromAxes(ux, uy, uz, uzx, uzy, uzz);
+  setBone(pose, first + BONE.upper, shoulderX, shoulderY, shoulderZ);
   fromAxes(hx, hy, hz, -nx, -ny, -nz);
   setBone(pose, first + BONE.hand, wristX, wristY, wristZ);
 
