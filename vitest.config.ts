@@ -14,5 +14,7 @@ export default defineConfig({
       },
     },
   ],
-  test: { include: ['tests/unit/**/*.test.ts'] },
+  // Some tests sculpt meshes or fill a collision field and take a second or so. On a cold or busy machine that
+  // has been several times as long, enough for one to pass the default five seconds on a first run.
+  test: { include: ['tests/unit/**/*.test.ts'], testTimeout: 30_000 },
 });

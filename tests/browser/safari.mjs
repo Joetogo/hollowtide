@@ -1,14 +1,17 @@
 // Safari smoke test, from file://.
 // Safari can only be automated after the user switches on "Allow remote automation", so instead this builds the
 // harness build (tools/build.mjs --harness), opens it with `open -a Safari`, and waits for the page to send its
-// start-up report to a listener on 127.0.0.1. Safari is left open on the test page.
-import { execFileSync } from 'node:child_process';
+// start-up report to a listener on 127.0.0.1. Afterwards Safari is put back as it was: quit if this test started
+// it, and otherwise rid of the test's pages only (a page left open goes on drawing, and takes the processor).
+import { execFileSync, spawnSync } from 'node:child_process';
 import { readdirSync, rmSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+/** was Safari running before this test opened anything in it? */
+const safariWasOpen = spawnSync('pgrep', ['-x', 'Safari']).status === 0;
 execFileSync(process.execPath, [path.join(root, 'tools/build.mjs'), '--harness'], { stdio: 'inherit' });
 // launcher pages left by earlier runs
 for (const name of readdirSync(path.join(root, 'dist'))) {
@@ -107,5 +110,27 @@ if (moonlit.frame && result.frame) {
     `moonlight: the first viewpoint is dark and blue: mean colour ${r}, ${g}, ${b}`,
   );
 }
-console.log('Safari was left open on the test page.');
+// Safari as it was found. It is asked by AppleScript, which macOS may not allow from this terminal: then the
+// page is still open, and this says so.
+const tidy = safariWasOpen
+  ? [
+      'tell application "Safari"',
+      'repeat with each in windows',
+      'try',
+      'close (every tab of each whose URL contains "index.harness.html" or URL contains "safari-launch")',
+      'end try',
+      'end repeat',
+      'end tell',
+    ]
+  : ['tell application "Safari" to quit'];
+try {
+  execFileSync(
+    'osascript',
+    tidy.flatMap((line) => ['-e', line]),
+    { stdio: 'ignore', timeout: 20_000 },
+  );
+  console.log(safariWasOpen ? "Safari was open before: the test's pages in it were closed." : 'Safari was quit again.');
+} catch {
+  console.log('Safari could not be asked to close the test page: it is still open there, and still drawing.');
+}
 process.exitCode = failures.length ? 1 : 0;

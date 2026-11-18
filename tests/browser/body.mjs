@@ -167,7 +167,7 @@ try {
    * The swimmer's speed in m/s at every frame for `seconds`: how far the camera moved between two animation
    * frames over the time between them, measured inside the page so that it does not depend on this script's timing.
    */
-  const speeds = (seconds) =>
+  const readings = (seconds) =>
     chrome.page.evaluate(
       (seconds) =>
         new Promise((resolve) => {
@@ -192,6 +192,16 @@ try {
         }),
       seconds,
     );
+  /**
+   * Those readings without the tenth at each end. A frame that comes late and the one that hurries after it give
+   * one reading far too low and one far too high (the move seen was made over the time before the last frame,
+   * and is divided by the time since it): one such pair once read 131 m/s on a scooter that does 24.
+   */
+  const speeds = async (seconds) => {
+    const all = (await readings(seconds)).sort((a, b) => a - b);
+    const cut = Math.floor(all.length / 10);
+    return all.slice(cut, all.length - cut);
+  };
   const goTo = (n) => chrome.page.keyboard.press('Digit' + n); // open water ahead of viewpoints 1 and 4
   await chrome.page.keyboard.down('KeyW');
   await chrome.page.waitForTimeout(1500);
