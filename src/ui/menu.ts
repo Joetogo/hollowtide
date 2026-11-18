@@ -94,8 +94,10 @@ export function createMenu(
     if (state !== 'playing' && state !== 'paused') return;
     state = next ? 'paused' : 'playing';
     body.className = next ? 'menu' : captured() ? 'playing captured' : 'playing';
-    // focus the resume button so Enter works (delayed: it cannot take focus while it is still hidden)
+    // focus the resume button so Enter works (at once if the panel is still fading out from last time, and
+    // again in a moment: it cannot take focus while it is hidden)
     if (next) sync();
+    if (next) dive.focus();
     if (next) setTimeout(() => state === 'paused' && dive.focus(), 100);
     else (document.activeElement as HTMLElement | null)?.blur();
     actions.onToggle(next);

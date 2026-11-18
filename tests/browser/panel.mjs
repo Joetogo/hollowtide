@@ -89,12 +89,23 @@ try {
   check(high.y - low.y > 0.5, `Space goes up, like E (${(high.y - low.y).toFixed(1)} m in a second)`);
 
   // ---- Esc opens the panel, and closes it again
+  await chrome.page.keyboard.press('KeyH');
+  await wait(1300);
+  const lateTotal = async () =>
+    +/total (\d+)/.exec(await chrome.page.evaluate(() => document.getElementById('stats').textContent))[1];
+  const lateBefore = await lateTotal();
   await chrome.page.keyboard.press('Escape');
   await chrome.page.keyboard.press('Escape'); // the same instant: this one is not a wish to go back
   await wait(250);
   check((await state()) === 'menu', 'Esc opens the panel (and a second one in the same instant leaves it open)');
   check((await note()) === '', 'the line that was up goes when the panel opens');
-  await wait(400);
+  await wait(2200);
+  const lateInPanel = (await lateTotal()) - lateBefore;
+  check(
+    lateInPanel <= 2,
+    `the stats line does not count the panel's halved pace as late frames (${lateInPanel} in two seconds)`,
+  );
+  await chrome.page.keyboard.press('KeyH');
   await chrome.page.keyboard.press('Escape');
   await wait(250);
   check((await state()).startsWith('playing'), 'Esc closes it again');
@@ -163,6 +174,7 @@ try {
   check((await state()).startsWith('playing'), 'B closes the panel');
   await pad(START);
   check((await state()) === 'menu', 'and Start opens it');
+  check(/A presses/.test(await note()), `and a line says how a gamepad works the panel: "${await note()}"`);
   await pad(START);
   check((await state()).startsWith('playing'), 'and closes it');
   const order = await chrome.page.evaluate(() =>
@@ -191,6 +203,22 @@ try {
   check(
     Math.hypot(still.x - stopped.x, still.y - stopped.y, still.z - stopped.z) < 0.05,
     'and back in the water the tour has ended: the camera stays where it is',
+  );
+
+  // ---- a picture saved and photo mode left at once: the line says it was saved, and then goes
+  await chrome.page.keyboard.press('KeyP');
+  await wait(300);
+  const [download] = await Promise.all([
+    chrome.page.waitForEvent('download', { timeout: 20_000 }),
+    chrome.page.keyboard.press('Enter').then(() => chrome.page.keyboard.press('KeyP')),
+  ]);
+  await download.path();
+  await wait(300);
+  const savedLine = await note();
+  await wait(5200);
+  check(
+    /^Saved, \d+ × \d+, the world alone$/.test(savedLine) && (await note()) === '',
+    `a picture saved as photo mode is left is said to be saved ("${savedLine}"), and the line does not stay`,
   );
 
   // ---- a link to a view carries the light it was taken in, and the lamp

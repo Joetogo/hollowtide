@@ -29,7 +29,10 @@ export function createHud(line: HTMLElement): Hud {
       line.textContent = '';
     },
     rest() {
-      usual = 1e9;
+      // (the half second being measured starts again: a shortest frame from before the change would make every
+      // frame after it late)
+      usual = best = 1e9;
+      frames = seconds = worst = late = 0;
     },
     frame(frameMs, gpuMs, width, height, deviceWidth) {
       if (!on) return;

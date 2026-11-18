@@ -70,7 +70,8 @@ const EVEN_ABOVE = 14.5;
 const EVEN_BELOW = 11.5;
 /** Where the swimmer's place is kept while the page starts over (for this tab only, and read once). */
 const RESUME = 'hollowtide-resume';
-const THIRTY = 'Thirty frames a second is what this machine holds here: the picture is set to Sharp';
+// (it names the setting it has changed, so that it can be found and changed back)
+const THIRTY = 'Thirty frames a second is what this machine holds here: Picture is now Sharp, in the panel';
 const LINK_COPIED = 'A link to this view is copied';
 const LINK_IN_BAR = 'A link to this view is in the address bar';
 const PHOTO_KEYS = 'Photo: the moment stands still. Enter saves it, P returns';
@@ -82,7 +83,9 @@ const tourHint = () =>
   'A tour of the hollow. ' + (coarse() ? 'Hold a finger on the picture to take over' : 'Any swimming key takes over');
 const TOUR_OVER = 'The tour is over: swim on from here';
 /** Said when a gamepad is first heard from. */
-const PAD_KEYS = 'Gamepad: sticks swim and look · RT scooter · LB and RB down and up · Y lamp · Start the panel';
+const PAD_KEYS = 'Gamepad: sticks swim and look · RT scooter · LB and RB down and up · Y lamp · A or Start the panel';
+/** And when a gamepad opens the panel: how it is worked from there. */
+const PAD_PANEL = 'Gamepad: the d-pad or the left stick moves · A presses · B closes';
 /** What the six viewpoints look at (keys 1 to 6), said when a key goes to one. */
 const PLACES = ["The whale's tail", 'The wreck', 'The kelp forest', 'The sponge garden', 'The canopy', 'The meadow'];
 /** Said while the pointer or the focus is on a detail level or a light that is not the current one. */
@@ -96,7 +99,7 @@ const firstDive = (classic: boolean) =>
         '≡ opens the panel: settings, a tour, photo mode',
       ]
     : [
-        'W A S D swim · the mouse looks around',
+        'W A S D swim · the mouse or the arrow keys look around',
         `Shift ${classic ? 'goes faster' : 'brings up a scooter'} · Q and E go down and up`,
         'Esc opens the panel: settings, a tour, photo mode, all the keys',
       ];
@@ -440,7 +443,10 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       onGesture: () => sound!.wake(),
       menuOpen: () => menu.open,
       lookSpeed: () => [settings.sensitivity, settings.invertY ? -settings.sensitivity : settings.sensitivity],
-      onPadButton: () => menu.press(),
+      onPadButton() {
+        menu.press();
+        if (menu.paused) note(PAD_PANEL);
+      },
       onPadBack: () => menu.paused && menu.press(),
       onKey(code) {
         if (code === 'KeyH') hud.toggle();
@@ -456,7 +462,7 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
           menu.sync();
           note(settings.classic ? CLASSIC_ON : CLASSIC_OFF);
         } else if (code === 'KeyP') setPhoto(!photo);
-        else if (code === 'Enter' && photo) shoot = true;
+        else if (code === 'Enter' && photo) takePicture();
         else if (code === 'KeyT') setTour(tour < 0);
         else if (code === 'Escape') {
           // The panel (which ends photo mode and the tour), and out of it again. Not within half a second of its
@@ -527,6 +533,11 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
         note.hold(photoHint());
       } else note.clear();
     };
+    /** Asks for the picture, and says so at once: writing a large one out takes a moment. */
+    const takePicture = () => {
+      shoot = true;
+      note.hold('Saving the picture…');
+    };
     /** Draws the frozen moment again at a larger size, saves it as a PNG, and puts the size back. */
     const savePicture = () => {
       const [budget, detail] = [renderer.pixelBudget, renderer.detail];
@@ -544,7 +555,11 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
         link.download = `hollowtide-${new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-')}.png`;
         link.click();
         setTimeout(() => URL.revokeObjectURL(link.href), 10_000);
-        note.hold(`Saved, ${width} × ${height}. ${photoHint()}`);
+        // (what is saved is the world alone: the line and the buttons are the page's, not the picture's. And if
+        // photo mode has been left while the picture was being written out, the line does not stay)
+        const saved = `Saved, ${width} × ${height}, the world alone`;
+        if (photo) note.hold(`${saved}. ${photoHint()}`);
+        else note(saved);
       }, 'image/png');
       renderer.supersample = 1;
       renderer.pixelBudget = budget;
@@ -587,7 +602,7 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       menu.show(false);
       setPhoto(true);
     };
-    document.getElementById('save')!.onclick = () => (shoot = true);
+    document.getElementById('save')!.onclick = takePicture;
     document.getElementById('leave')!.onclick = () => setPhoto(false);
 
     sound.setVolume(settings.volume);
