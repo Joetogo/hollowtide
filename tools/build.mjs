@@ -91,7 +91,9 @@ if (!dev) {
   writeFileSync(path.join(root, name), html);
   const kb = Buffer.byteLength(html) / 1024;
   const gz = gzipSync(Buffer.from(html), { level: 9 }).length / 1024;
-  console.log(`${name}: ${kb.toFixed(1)} kB, ${gz.toFixed(1)} kB gzipped (budget ${BUDGET_KB} kB)`);
+  // the budget is for what ships: the test build carries its hooks on top and is never published
+  const limit = harness ? 'for the tests, not shipped: no budget' : `budget ${BUDGET_KB} kB`;
+  console.log(`${name}: ${kb.toFixed(1)} kB, ${gz.toFixed(1)} kB gzipped (${limit})`);
   if (kb > BUDGET_KB && !harness) {
     console.error(`over the ${BUDGET_KB} kB budget`);
     process.exitCode = 1;

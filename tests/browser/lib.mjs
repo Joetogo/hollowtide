@@ -28,6 +28,12 @@ export const finish = () => {
 export function need(file, hint) {
   if (existsSync(file)) return;
   console.error(`${path.relative(root, file)} is missing: ${hint}`);
+  // what the original's data takes is not obvious from the name of a script
+  if (hint.includes('ref:'))
+    console.error(
+      'That takes a clone of the original first: see "The reference rig" in the README. The tests that need ' +
+        'none of it are boot, shell, panel, body, life, mood and touch (for example: node tests/browser/boot.mjs).',
+    );
   process.exit(2);
 }
 
