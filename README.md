@@ -110,8 +110,8 @@ Three things to know before changing something:
   comparisons with the original (drawn with `?tuning=faithful`) still pass.
 - The shipped file has a size budget, and the build fails over it.
 
-Found a fault? An [issue](https://github.com/Richman-Tan/hollowtide/issues) with the browser, the machine and
-what the stats line says (`H`) is the quickest way to get it looked at.
+Faults reported and pull requests are both welcome: [`CONTRIBUTING.md`](CONTRIBUTING.md) says what helps in a
+report and what to run before sending a change.
 
 How it is put together:
 
