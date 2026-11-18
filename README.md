@@ -65,8 +65,9 @@ fish, on the same seabed, with the wreck, the arches and the viewpoints where th
 the authored one, to the byte.
 
 The pause panel has the settings: detail level, light, look speed, inverted look, field of view, volume, and two
-choices; and buttons for the tour and photo mode. Another detail level or light makes the world again, which
-takes a few seconds and says so beforehand; afterwards the panel is up again where you were.
+choices; and buttons for the tour and photo mode. Another light is there in a fifth of a second, where you
+are. Another detail level makes the world again, which takes a few seconds and says so beforehand; afterwards
+the panel is up again where you were.
 **Picture: smooth or sharp** says what gives when the machine cannot keep up: smooth trades resolution and draw
 distance for sixty frames a second; sharp settles for thirty and spends the difference on pixels and distance.
 **Swimming: with arms or classic** is the `C` key's switch, where it can be seen.
@@ -194,7 +195,7 @@ Not in the original, which shows a progress bar and then a menu.
 The same world at **noon** (the light it was made for), at **dusk** (red and gold near the surface, lavender
 below, the shafts pale pink) and by **moonlight** (a twentieth of the day's light, cold blue, and what lives
 here shining in it: the jellyfish, the specks among the kelp, the magenta ground cover). Pick one on the home
-view or in the pause panel; the page starts over in it, and a swimmer who was in the water comes back where
+view or in the pause panel: the world goes dark for a moment and comes up again in it, with the swimmer where
 they were.
 
 - A mood is seven numbers (`src/config/mood.ts`): a colour that scales the sun's own light, a colour that scales
@@ -208,6 +209,10 @@ they were.
 - **Noon is untouched.** The numbers live in three constants the shaders share; as written they are ones and a
   zero, and the shader compiler folds them away, so noon's frames are still the original's (the parity tests are
   unchanged). Another mood rewrites those three lines when the shaders are made.
+- **Changing it does not start the page over.** The shaders that have the light in them are made again while the
+  picture goes on (about 0.2 s on the laptop this was built on), and all of them are put to use between one
+  frame and the next. The world, the shadows and the place are untouched. A test changes the light in place and
+  starts a page in it, and the two pictures are the same to the last bit.
 - The sun does not move: the caustics and the baked shadows are made for where it is.
 
 ### A lamp

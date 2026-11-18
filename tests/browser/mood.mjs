@@ -1,5 +1,7 @@
-// Moods: the same world in another light. That picking one in the menu is remembered and takes effect, that
-// dusk and moonlight look as they are meant to against noon, and that the shaders compile in each.
+// Moods: the same world in another light. That picking one in the menu is remembered and takes effect in place
+// (the page does not start over, and the swimmer stays where they are), that dusk and moonlight look as they are
+// meant to against noon, that a light changed to gives the very picture a page started in it does, and that the
+// shaders compile in each.
 import path from 'node:path';
 import { check, finish, launch, need, root, serve } from './lib.mjs';
 
@@ -19,6 +21,19 @@ const look = (chrome) =>
     for (let i = 0; i < data.length; i += 4) for (let c = 0; c < 3; c++) sum[c] += data[i + c];
     return { mean: sum.map((v) => v / (data.length / 4)), errors: h.gpuErrors() };
   });
+/** The picture itself at that viewpoint and moment, to compare one with another to the last bit. */
+const picture = (chrome) =>
+  chrome.page.evaluate(() => {
+    const h = window.__hollowtide.harness;
+    return h.capture(h.viewpoints()[0], 2).png;
+  });
+/** Picks a light (1 noon, 2 dusk, 3 moonlit) and waits until the world is drawn in it; says how long that took. */
+const pick = async (chrome, button, name) => {
+  const from = Date.now();
+  await chrome.page.click(`#light button:nth-of-type(${button})`);
+  await chrome.page.waitForFunction((name) => window.__hollowtide.light === name, name, { timeout: 30_000 });
+  return Date.now() - from;
+};
 const say = (mean) => mean.map((v) => v.toFixed(0)).join(', ');
 
 const host = await serve(page);
@@ -32,24 +47,24 @@ try {
     'the light is noon unless another was chosen',
   );
   const noon = await look(chrome);
+  const noonPicture = await picture(chrome);
 
   const seen = {};
   for (const [button, name, label] of [
     [2, 'dusk', 'Dusk'],
     [3, 'moon', 'Moonlit'],
   ]) {
-    // picking a light starts the page over in it
-    await Promise.all([
-      chrome.page.waitForNavigation({ timeout: 30_000 }),
-      chrome.page.click(`#light button:nth-of-type(${button})`),
-    ]);
-    await chrome.page.waitForFunction(() => window.__hollowtide?.ready, null, { timeout: 60_000 });
+    // picking a light changes it in place: the page does not start over (a mark left on it is still there)
+    await chrome.page.evaluate(() => (window.__mark = true));
+    const took = await pick(chrome, button, name);
     const state = await chrome.page.evaluate(() => ({
       error: window.__hollowtide.error,
       stored: JSON.parse(localStorage.getItem('hollowtide')).mood,
       lit: document.querySelector('#light .on')?.textContent,
+      same: window.__mark === true,
     }));
-    check(!state.error, `${label}: starts${state.error ? ': ' + state.error : ''}`);
+    check(state.same, `${label}: the light changes in place, without starting the page over (${took} ms)`);
+    check(!state.error, `${label}: no failure${state.error ? ': ' + state.error : ''}`);
     check(state.stored === name && state.lit === label, `${label}: picked in the menu, remembered, and lit there`);
     seen[name] = await look(chrome);
     check(
@@ -124,19 +139,49 @@ try {
   );
 
   // and back
-  await Promise.all([
-    chrome.page.waitForNavigation({ timeout: 30_000 }),
-    chrome.page.click('#light button:nth-of-type(1)'),
-  ]);
-  await chrome.page.waitForFunction(() => window.__hollowtide?.ready, null, { timeout: 60_000 });
+  await pick(chrome, 1, 'noon');
   const again = await look(chrome);
   check(
     again.mean.every((v, i) => Math.abs(v - noon.mean[i]) < 0.5) &&
       (await chrome.page.evaluate(() => JSON.parse(localStorage.getItem('hollowtide')).mood === undefined)),
     `back at noon the picture is noon's again (${say(again.mean)})`,
   );
-  // ---- changing the light while in the water: the page starts over, and the swimmer is back where they were
+  check(
+    (await picture(chrome)) === noonPicture,
+    'to the last bit: the shaders made again for noon are the ones it started with',
+  );
+
+  // ---- a light changed to is the light a page started in it has: the same picture, to the last bit
+  await pick(chrome, 2, 'dusk');
+  const changedTo = await picture(chrome);
+  await chrome.page.reload();
+  await chrome.page.waitForFunction(() => window.__hollowtide?.ready, null, { timeout: 60_000 });
   await chrome.page.waitForFunction(() => document.body.className === 'home', null, { timeout: 30_000 });
+  const startedIn = await chrome.page.evaluate(() => ({
+    light: window.__hollowtide.light,
+    lit: document.querySelector('#light .on')?.textContent,
+  }));
+  check(
+    startedIn.light === 'dusk' && startedIn.lit === 'Dusk',
+    'the light picked is the light the page starts in next time',
+  );
+  check(
+    (await picture(chrome)) === changedTo,
+    'and dusk changed to in place is the same picture as dusk started in, to the last bit',
+  );
+  // two picked one straight after the other: the one picked last is the one that stays
+  await chrome.page.click('#light button:nth-of-type(3)');
+  await chrome.page.click('#light button:nth-of-type(1)');
+  await chrome.page.waitForFunction(() => window.__hollowtide.light === 'noon', null, { timeout: 30_000 });
+  await chrome.page.waitForTimeout(1500);
+  check(
+    (await chrome.page.evaluate(
+      () => window.__hollowtide.light === 'noon' && document.querySelector('#light .on').textContent === 'Noon',
+    )) && (await picture(chrome)) === noonPicture,
+    'two lights picked one straight after the other end at the one picked last',
+  );
+
+  // ---- changing the light while in the water: the panel stays up, the swimmer stays where they are
   await chrome.page.waitForTimeout(1500);
   await chrome.page.keyboard.press('KeyW');
   await chrome.page.waitForFunction(() => document.body.className.startsWith('playing'), null, { timeout: 10_000 });
@@ -146,28 +191,24 @@ try {
   const place = await chrome.page.evaluate(() => window.__hollowtide.harness.camera());
   await chrome.page.keyboard.press('Escape');
   await chrome.page.waitForFunction(() => document.body.className === 'menu', null, { timeout: 5000 });
-  await Promise.all([
-    chrome.page.waitForNavigation({ timeout: 30_000 }),
-    chrome.page.click('#light button:nth-of-type(2)'),
-  ]);
-  await chrome.page.waitForFunction(() => window.__hollowtide?.ready, null, { timeout: 60_000 });
-  // no key is pressed: the panel the light was picked in comes back up, over the world in its new light
-  await chrome.page.waitForFunction(() => document.body.className === 'menu', null, { timeout: 20_000 });
+  await chrome.page.evaluate(() => (window.__mark = true));
+  const took = await pick(chrome, 2, 'dusk');
   const back = await chrome.page.evaluate(() => ({
     camera: window.__hollowtide.harness.camera(),
     mood: JSON.parse(localStorage.getItem('hollowtide')).mood,
     lamp: document.getElementById('lamp').getAttribute('aria-pressed'),
-    resume: document.getElementById('dive').textContent,
+    state: document.body.className,
+    same: window.__mark === true,
+    lit: document.querySelector('#light .on')?.textContent,
   }));
   const moved = Math.hypot(back.camera.x - place.x, back.camera.y - place.y, back.camera.z - place.z);
   check(
-    // (the same heading may come back a whole turn away from the number it was)
-    back.mood === 'dusk' && moved < 0.3 && Math.abs(Math.sin((back.camera.yaw - place.yaw) / 2)) < 0.02,
-    `picking dusk while in the water: the panel comes back up where the swimmer was, at dusk (${moved.toFixed(2)} m from the place)`,
+    back.mood === 'dusk' && back.lit === 'Dusk' && back.same && back.state === 'menu',
+    `picking dusk in the panel while in the water: it is dusk ${took} ms later, the panel still up, the page not started over`,
   );
   check(
-    back.lamp === 'true' && back.resume === 'Resume',
-    'with the lamp as it was, and no second awakening to go through',
+    moved < 0.01 && back.lamp === 'true',
+    `the swimmer is where they were (${moved.toFixed(3)} m from the place), the lamp as it was`,
   );
   await chrome.page.click('#dive');
   await chrome.page.waitForTimeout(400);
@@ -175,13 +216,10 @@ try {
     await chrome.page.evaluate(() => document.body.className.startsWith('playing')),
     'and Resume goes back into the water',
   );
-  // the place is kept for that once: starting the page over by hand goes to the home view as ever
-  await chrome.page.reload();
-  await chrome.page.waitForFunction(() => window.__hollowtide?.ready, null, { timeout: 60_000 });
-  await chrome.page.waitForFunction(() => /home|playing/.test(document.body.className), null, { timeout: 20_000 });
+  const errors = await chrome.page.evaluate(() => window.__hollowtide.harness.gpuErrors());
   check(
-    (await chrome.page.evaluate(() => document.body.className)) === 'home',
-    'starting the page over by hand goes to the home view',
+    errors.length === 0,
+    `no shader or validation errors after the changes of light${errors[0] ? ': ' + errors[0] : ''}`,
   );
 
   check(chrome.errors.length === 0, `no console errors${chrome.errors.length ? ': ' + chrome.errors.join('; ') : ''}`);

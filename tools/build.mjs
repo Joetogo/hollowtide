@@ -20,7 +20,10 @@ const harness = process.argv.includes('--harness');
 // The original ships at 97 kB. This is larger for what it adds (the swimmer, the opening, new animals, moods).
 // The build strips the shaders' whitespace and comments, ships the code they share once and gives their own
 // names short ones (tools/wgsl.mjs).
-const BUDGET_KB = 200;
+// It was 200 until version 1.1, which ended 0.7 kB under it: what the page says for itself, the gamepad in the
+// panel and the rest had used what room there was. 220 from there, for changing the light in place and what
+// photo mode gained. The number is a brake, not a target: a rise is written down here with its reason.
+const BUDGET_KB = 220;
 const PORT = 5173;
 const upstream = JSON.parse(readFileSync(path.join(root, 'tools/reference/upstream.json'), 'utf8'));
 const fixtures = path.join(root, '.cache/reference', upstream.sha.slice(0, 7), 'L0/fixtures');

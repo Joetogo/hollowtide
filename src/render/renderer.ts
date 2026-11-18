@@ -62,6 +62,11 @@ export interface Renderer {
   turtles: Float32Array | null;
   /** Uploads a world and bakes the shadow map for it. */
   setWorld(data: WorldData): Promise<void>;
+  /**
+   * The light has been changed (setShaderMood): the shaders that have it in them are made again, and from the
+   * frame after this resolves everything is drawn in the new light. The world, the shadows and the place stay.
+   */
+  relight(): Promise<void>;
   /** Matches the render size to the canvas. Returns true if the targets were rebuilt. */
   resize(): boolean;
   /** Draws one frame for `time` seconds. */
@@ -125,6 +130,11 @@ export async function createRenderer(
       renderer.world = next;
       shadow.bake(next);
       void queue.onSubmittedWorkDone().then(() => performance.mark('hollowtide:shadows'));
+    },
+
+    async relight() {
+      const ready = await Promise.all([sceneDraw, shafts, bodyDraw, jellies, turtles].map((each) => each.relight()));
+      for (const use of ready) use();
     },
 
     resize() {

@@ -149,15 +149,19 @@ try {
   check(/underwater/.test(said.picture ?? ''), `the picture has a name: "${said.picture}"`);
 
   // ---- a line over a button says what it would do
-  await chrome.page.hover('#light button:not(.on)');
+  await chrome.page.hover('#detail button:not(.on)');
   await wait(200);
   const remakes = await note();
+  await chrome.page.hover('#light button:not(.on)');
+  await wait(200);
+  const light = await note();
   await chrome.page.hover('#picture button:not(.on)');
   await wait(200);
   const picture = await note();
   await chrome.page.hover('#dive');
   await wait(200);
-  check(/makes the world again/.test(remakes), `another light says that it makes the world again: "${remakes}"`);
+  check(/makes the world again/.test(remakes), `another detail level says that it makes the world again: "${remakes}"`);
+  check(light === '', 'another light says nothing: it no longer does');
   check(/frames a second/.test(picture), `smooth and sharp say what they trade: "${picture}"`);
   check((await note()) === '', 'and the line goes when the pointer does');
 
@@ -257,34 +261,43 @@ try {
   const moonLink = await chrome.page.evaluate(() => location.hash);
   check(/,moon,lamp$/.test(moonLink), `and a link made there says moonlight and the lamp: ${moonLink}`);
 
-  // ---- another light, picked in the panel: the page starts over, and the panel is up again where one was
+  // ---- another light, picked in the panel after following a link that names one: it takes over from the link
+  await chrome.page.keyboard.press('Escape');
+  await inState('menu');
+  await chrome.page.evaluate(() => (window.__mark = true));
+  await chrome.page.click('#light button:nth-of-type(1)');
+  await chrome.page.waitForFunction(() => window.__hollowtide.light === 'noon', null, { timeout: 30_000 });
+  check(
+    (await lit()) === 'Noon' &&
+      (await chrome.page.evaluate(
+        () => location.hash === '' && window.__mark === true && document.body.className === 'menu',
+      )),
+    'picking noon after following a moonlit link: it is noon, in place, and the link no longer says otherwise',
+  );
+  await wait(300); // (the light changes in less time than an Esc straight after the one that opened the panel is ignored for)
+  await chrome.page.keyboard.press('Escape');
+  await inState('playing');
+
+  // ---- another detail level is another world: the page starts over, and the panel is up again where one was
   await chrome.page.keyboard.press('KeyH');
   await chrome.page.keyboard.press('Digit3');
   await wait(400);
   const place = await camera();
   await chrome.page.keyboard.press('Escape');
   await inState('menu');
-  await Promise.all([
-    chrome.page.waitForNavigation({ timeout: 30_000 }),
-    chrome.page.click('#light button:nth-of-type(1)'),
-  ]);
+  await Promise.all([chrome.page.waitForNavigation({ timeout: 30_000 }), chrome.page.click('#detail button:not(.on)')]);
   await chrome.page.waitForFunction(() => window.__hollowtide?.ready, null, { timeout: 60_000 });
   await inState('menu', 20_000);
   await wait(1200);
   const back = await chrome.page.evaluate(() => ({
     camera: window.__hollowtide.harness.camera(),
-    hash: location.hash,
     stats: document.getElementById('stats').textContent,
     focus: document.activeElement?.id,
   }));
   check(
-    (await lit()) === 'Noon' && back.hash === '',
-    'picking noon after following a moonlit link: it is noon, and the link no longer says otherwise',
-  );
-  check(
     Math.hypot(back.camera.x - place.x, back.camera.y - place.y, back.camera.z - place.z) < 0.3 &&
       back.focus === 'dive',
-    'the panel is up again, at the place the swimmer was, with Resume in focus',
+    'after another detail level the panel is up again, at the place the swimmer was, with Resume in focus',
   );
   check(/fps/.test(back.stats), `and the stats line is still on: ${back.stats.trim().slice(0, 40)}`);
   await chrome.page.keyboard.press('Enter');

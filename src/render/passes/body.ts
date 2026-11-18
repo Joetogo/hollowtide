@@ -26,11 +26,16 @@ export interface BodyPass {
   setMeshes(meshes: BodyMeshes): void;
   /** Draws the parts into a scene pass the renderer has begun. */
   encode(pass: GPURenderPassEncoder, parts: BodyParts): void;
+  /**
+   * Makes the shaders again, in the light now set (gpu/shader.ts). Resolves when they are ready with a function
+   * that puts them to use: the renderer calls those of all its passes together, so that no frame is drawn half
+   * in one light and half in another.
+   */
+  relight(): Promise<() => void>;
 }
 
 export async function createBodyPass(gpu: Gpu, scene: Scene, quality: Quality): Promise<BodyPass> {
   const { device, queue } = gpu;
-  const module = shaderModule(device, 'body', [SceneGroup], bodySource);
   // the bones are a second bind group, declared in the shader itself: `BONES` rotations, then `BONES` offsets
   const bonesLayout = device.createBindGroupLayout({
     label: 'bones',
@@ -45,25 +50,33 @@ export async function createBodyPass(gpu: Gpu, scene: Scene, quality: Quality): 
     layout: bonesLayout,
     entries: [{ binding: 0, resource: { buffer: bones } }],
   });
-  const pipeline = await device.createRenderPipelineAsync({
-    label: 'body',
-    layout: device.createPipelineLayout({ bindGroupLayouts: [scene.layout, bonesLayout] }),
-    vertex: { module, entryPoint: 'bodyVertex', buffers: [BODY_VERTEX_LAYOUT] },
-    fragment: {
-      module,
-      entryPoint: 'bodyFragment',
-      targets: [{ format: HDR }],
-      constants: { LOW: quality.low ? 1 : 0, SHADOW_SIZE: scene.shadowSize },
-    },
-    primitive: { topology: 'triangle-list', cullMode: 'back' },
-    depthStencil: { format: DEPTH, depthWriteEnabled: true, depthCompare: 'greater' },
-    multisample: { count: quality.samples },
-  });
+  const build = () => {
+    const module = shaderModule(device, 'body', [SceneGroup], bodySource);
+    return device.createRenderPipelineAsync({
+      label: 'body',
+      layout: device.createPipelineLayout({ bindGroupLayouts: [scene.layout, bonesLayout] }),
+      vertex: { module, entryPoint: 'bodyVertex', buffers: [BODY_VERTEX_LAYOUT] },
+      fragment: {
+        module,
+        entryPoint: 'bodyFragment',
+        targets: [{ format: HDR }],
+        constants: { LOW: quality.low ? 1 : 0, SHADOW_SIZE: scene.shadowSize },
+      },
+      primitive: { topology: 'triangle-list', cullMode: 'back' },
+      depthStencil: { format: DEPTH, depthWriteEnabled: true, depthCompare: 'greater' },
+      multisample: { count: quality.samples },
+    });
+  };
+  let pipeline = await build();
   let vertices: GPUBuffer | null = null;
   let indices: GPUBuffer | null = null;
   let ranges: MeshRange[] = [];
 
   return {
+    relight: async () => {
+      const next = await build();
+      return () => void (pipeline = next);
+    },
     setMeshes(meshes) {
       vertices?.destroy();
       indices?.destroy();

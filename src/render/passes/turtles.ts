@@ -29,25 +29,34 @@ export interface Turtles {
   set(mesh: TurtleMesh, instances: Float32Array): void;
   /** Draws them into a scene pass the renderer has begun. */
   encode(pass: GPURenderPassEncoder): void;
+  /**
+   * Makes the shaders again, in the light now set (gpu/shader.ts). Resolves when they are ready with a function
+   * that puts them to use: the renderer calls those of all its passes together, so that no frame is drawn half
+   * in one light and half in another.
+   */
+  relight(): Promise<() => void>;
 }
 
 export async function createTurtles(gpu: Gpu, scene: Scene, quality: Quality): Promise<Turtles> {
   const { device, queue } = gpu;
-  const module = shaderModule(device, 'turtle', [SceneGroup], turtleSource);
-  const pipeline = await device.createRenderPipelineAsync({
-    label: 'turtles',
-    layout: scene.pipelineLayout,
-    vertex: { module, entryPoint: 'turtleVertex', buffers: [VERTEX_LAYOUT, INSTANCE_LAYOUT] },
-    fragment: {
-      module,
-      entryPoint: 'turtleFragment',
-      targets: [{ format: HDR }],
-      constants: { SHADOW_SIZE: scene.shadowSize },
-    },
-    primitive: { topology: 'triangle-list', cullMode: 'back' },
-    depthStencil: { format: DEPTH, depthWriteEnabled: true, depthCompare: 'greater' },
-    multisample: { count: quality.samples },
-  });
+  const build = () => {
+    const module = shaderModule(device, 'turtle', [SceneGroup], turtleSource);
+    return device.createRenderPipelineAsync({
+      label: 'turtles',
+      layout: scene.pipelineLayout,
+      vertex: { module, entryPoint: 'turtleVertex', buffers: [VERTEX_LAYOUT, INSTANCE_LAYOUT] },
+      fragment: {
+        module,
+        entryPoint: 'turtleFragment',
+        targets: [{ format: HDR }],
+        constants: { SHADOW_SIZE: scene.shadowSize },
+      },
+      primitive: { topology: 'triangle-list', cullMode: 'back' },
+      depthStencil: { format: DEPTH, depthWriteEnabled: true, depthCompare: 'greater' },
+      multisample: { count: quality.samples },
+    });
+  };
+  let pipeline = await build();
   let buffers: { vertices: GPUBuffer; indices: GPUBuffer; instances: GPUBuffer } | null = null;
   let indexCount = 0;
   let count = 0;
@@ -61,6 +70,10 @@ export async function createTurtles(gpu: Gpu, scene: Scene, quality: Quality): P
     return buffer;
   };
   return {
+    relight: async () => {
+      const next = await build();
+      return () => void (pipeline = next);
+    },
     set(mesh, instances) {
       if (buffers) for (const buffer of Object.values(buffers)) buffer.destroy();
       buffers = {

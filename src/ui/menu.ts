@@ -33,6 +33,8 @@ export interface Menu {
   show(open: boolean): void;
   /** Shows the settings as they are now (after something other than the panel has changed one). */
   sync(): void;
+  /** Lights the button of the light the world is now seen in ('noon', 'dusk' or 'moon'). */
+  setMood(name: string): void;
   /** The picture comes up out of black over a second and a half: for a cut from one place to another. */
   fade(): void;
   /** The one button of a gamepad: dives from the home view, pauses while swimming, resumes from the pause. */
@@ -48,7 +50,7 @@ export interface MenuActions {
   onToggle(open: boolean): void;
   /** another detail level was picked */
   onLevel(level: Level): void;
-  /** another light was picked: 'noon', 'dusk' or 'moon' */
+  /** a light was picked: 'noon', 'dusk' or 'moon' (it may be the one that is on already) */
   onMood(name: string): void;
   /** a setting was changed in the panel (the settings object has the new value): apply it and remember it */
   onSettings(): void;
@@ -148,14 +150,11 @@ export function createMenu(
       lit(button, buttonLevel === level);
       if (buttonLevel !== level) button.onclick = () => actions.onLevel(buttonLevel);
     });
-  // the light, in the order of config/mood.ts: the current one is lit, the others switch to theirs
-  el('light')
-    .querySelectorAll('button')
-    .forEach((button, i) => {
-      const each = MOODS[i]!;
-      lit(button, each.name === mood);
-      if (each.name !== mood) button.onclick = () => actions.onMood(each.name);
-    });
+  // the light, in the order of config/mood.ts: the current one is lit, and each switches to its own
+  const lights = [...el('light').querySelectorAll('button')];
+  lights.forEach((button, i) => (button.onclick = () => actions.onMood(MOODS[i]!.name)));
+  const setMood = (name: string) => lights.forEach((button, i) => lit(button, MOODS[i]!.name === name));
+  setMood(mood);
   // ---- the settings in the pause panel: three sliders and three choices, each written straight into `settings`
   const syncs: (() => void)[] = [];
   const slider = (id: string, key: 'sensitivity' | 'fov' | 'volume') => {
@@ -237,6 +236,7 @@ export function createMenu(
     },
     show,
     sync,
+    setMood,
     fade: () => veil.reveal(),
     press() {
       if (state === 'home') wake();

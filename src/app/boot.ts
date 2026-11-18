@@ -52,6 +52,8 @@ declare global {
       harness?: Harness;
       /** frames drawn by the loop so far */
       frames?: number;
+      /** the light the world is drawn in, once the shaders for it are in use: 'noon', 'dusk' or 'moon' */
+      light?: string;
       /** set by a test to stop the loop drawing, so that only the frames it asks for exist */
       paused?: boolean;
       /** harness builds: how many of the swimmer's own bubbles are in the water */
@@ -88,7 +90,7 @@ const PAD_KEYS = 'Gamepad: sticks swim and look · RT scooter · LB and RB down 
 const PAD_PANEL = 'Gamepad: the d-pad or the left stick moves · A presses · B closes';
 /** What the six viewpoints look at (keys 1 to 6), said when a key goes to one. */
 const PLACES = ["The whale's tail", 'The wreck', 'The kelp forest', 'The sponge garden', 'The canopy', 'The meadow'];
-/** Said while the pointer or the focus is on a detail level or a light that is not the current one. */
+/** Said while the pointer or the focus is on a detail level that is not the current one. */
 const REMAKES = 'Changing this makes the world again: a few seconds';
 /** What a first dive is told once the eyes are open, a line at a time: for hands on keys, and for fingers. */
 const firstDive = (classic: boolean) =>
@@ -234,14 +236,7 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       keepPlace();
       location.reload();
     },
-    onMood(name) {
-      // the light is built into the shaders: remember it and start over
-      saveSettings({ ...settings, mood: name }, Infinity);
-      keepPlace();
-      // (a link this page was opened by names a light of its own: it has been followed, and now gives way)
-      history.replaceState(null, '', location.href.replace(/#.*$/, ''));
-      location.reload();
-    },
+    onMood: (name) => relight(name),
   });
   let sound: ReturnType<typeof createSoundscape> | null = null;
   /** Puts the swimmer where they wake (set once there is a world to wake in). */
@@ -256,6 +251,8 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
   let input: ReturnType<typeof bindInput> | null = null;
   /** when the panel last opened (performance.now()) */
   let pausedAt = 0;
+  /** changes the light, once there is a renderer to change it in */
+  let relight: (name: string) => void = () => undefined;
   /** takes down the line at the bottom of the picture, once there is one */
   let hush: () => void = () => undefined;
 
@@ -295,13 +292,40 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
     // (for measuring: ?coarseShafts=0 marches the shafts at half size whatever the size of the picture)
     if (__HARNESS__ && params.get('coarseShafts') === '0') tuning = { ...tuning, coarseShafts: false };
     // the light the shaders are built for: what was chosen in the menu
-    const mood = moodNamed(moodName);
+    let mood = moodNamed(moodName);
     setShaderMood(mood);
     const renderer = await createRenderer(gpu, quality(level), tuning, (ms) => {
       gpuMs = ms;
       addGpuTime(dynres, ms);
     });
     renderer.exposure = mood.exposure;
+    hook.light = mood.name;
+    // ---- another light, picked in the panel or on the home view. The light is built into the shaders, so those
+    // that have it in them are made again, while the picture goes on as it was; then the world comes up out of
+    // black in the new light. The world itself, the shadows and the swimmer's place are untouched. One change at
+    // a time, and always towards the light picked last.
+    let wanted: string = mood.name;
+    let turn = Promise.resolve();
+    relight = (name) => {
+      wanted = name;
+      settings.mood = name;
+      saveSettings(settings, fullPixels());
+      // (a link this page was opened by names a light of its own: it has been followed, and now gives way)
+      history.replaceState(null, '', location.href.replace(/#.*$/, ''));
+      menu.setMood(name);
+      turn = turn
+        .then(async () => {
+          if (mood.name === wanted) return;
+          mood = moodNamed(wanted);
+          setShaderMood(mood);
+          await renderer.relight();
+          renderer.exposure = mood.exposure;
+          hook.light = mood.name;
+          menu.fade();
+          settle(dynres);
+        })
+        .catch(() => undefined); // (a device that is lost says so by itself)
+    };
     performance.mark('hollowtide:renderer');
     tell('stage', 'renderer');
     renderer.pixelBudget = dynres.pixels;
@@ -581,10 +605,10 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
         note(tourHint());
       }
     };
-    // The detail level and the light are built into the world: picking another starts the page over, which is
-    // said while the pointer or the focus is on one. Other buttons have a line of their own to say (data-tip).
-    // Not for fingers: there is no pointing without pressing, and on a phone the line would lie over the panel.
-    const tipped = '#detail button:not(.on), #light button:not(.on), [data-tip]';
+    // The detail level is built into the world: picking another starts the page over, which is said while the
+    // pointer or the focus is on one. Other buttons have a line of their own to say (data-tip). Not for
+    // fingers: there is no pointing without pressing, and on a phone the line would lie over the panel.
+    const tipped = '#detail button:not(.on), [data-tip]';
     for (const button of coarse() ? [] : document.querySelectorAll<HTMLElement>(tipped)) {
       const tip = button.dataset.tip ?? REMAKES;
       button.onpointerenter = button.onfocus = () => note.hold(tip);

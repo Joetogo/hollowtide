@@ -70,6 +70,12 @@ export interface ScenePass {
   encode(pass: GPURenderPassEncoder, world: WorldBuffers, view: CullView): void;
   /** The swimmer's own bubbles (body/breath.ts: BREATH_BUBBLES of them, eight floats each), when they change. */
   setOwnBubbles(data: Float32Array): void;
+  /**
+   * Makes the shaders again, in the light now set (gpu/shader.ts). Resolves when they are ready with a function
+   * that puts them to use: the renderer calls those of all its passes together, so that no frame is drawn half
+   * in one light and half in another.
+   */
+  relight(): Promise<() => void>;
 }
 
 export async function createScenePass(gpu: Gpu, scene: Scene, quality: Quality, tuning: Tuning): Promise<ScenePass> {
@@ -78,46 +84,95 @@ export async function createScenePass(gpu: Gpu, scene: Scene, quality: Quality, 
   const rockFade = tuning.rockFade;
   const SMOOTH_BEND = tuning.smoothBend ? 1 : 0;
   const { device } = gpu;
-  const solidModule = shaderModule(device, 'solid', [SceneGroup], solidSource);
-  const surfaceModule = shaderModule(device, 'surface', [SceneGroup], surfaceSource);
-  const creaturesModule = shaderModule(device, 'creatures', [SceneGroup], creaturesSource);
-  const leafModule = shaderModule(device, 'leaf', [SceneGroup], leafSource);
-  const spritesModule = shaderModule(device, 'sprites', [SceneGroup], spritesSource);
-  const shadowConstants = { LOW: quality.low ? 1 : 0, SHADOW_SIZE: scene.shadowSize };
+  // (all of the pipelines, made from the shaders as they are in the light now set)
+  const build = () => {
+    const solidModule = shaderModule(device, 'solid', [SceneGroup], solidSource);
+    const surfaceModule = shaderModule(device, 'surface', [SceneGroup], surfaceSource);
+    const creaturesModule = shaderModule(device, 'creatures', [SceneGroup], creaturesSource);
+    const leafModule = shaderModule(device, 'leaf', [SceneGroup], leafSource);
+    const spritesModule = shaderModule(device, 'sprites', [SceneGroup], spritesSource);
+    const shadowConstants = { LOW: quality.low ? 1 : 0, SHADOW_SIZE: scene.shadowSize };
 
-  const pipeline = (
-    label: string,
-    module: GPUShaderModule,
-    vertex: string,
-    fragment: string,
-    options: PipelineOptions,
-  ) =>
-    device.createRenderPipelineAsync({
-      label,
-      layout: scene.pipelineLayout,
-      vertex: { module, entryPoint: vertex, buffers: options.buffers ?? [], constants: options.vertexConstants },
-      fragment: {
-        module,
-        entryPoint: fragment,
-        targets: [{ format: HDR, blend: options.blend }],
-        constants: options.constants,
-      },
-      primitive: { topology: options.strip ? 'triangle-strip' : 'triangle-list', cullMode: options.cullMode ?? 'none' },
-      // reversed depth: nearer is greater
-      depthStencil: { format: DEPTH, depthWriteEnabled: !options.blend, depthCompare: 'greater' },
-      multisample: { count: quality.samples },
-    });
-  const solidBuffers = [MESH_VERTEX_LAYOUT, SOLID_INSTANCE_LAYOUT];
-  const creatureBuffers = [MESH_VERTEX_LAYOUT, CREATURE_INSTANCE_LAYOUT];
-  const sprite = { buffers: [SPRITE_INSTANCE_LAYOUT], strip: true };
-  const leaf = (label: string, vertexConstants: Record<string, number>) =>
-    pipeline(label, leafModule, 'leafVertex', 'leafFragment', {
-      buffers: [LEAF_INSTANCE_LAYOUT],
-      strip: true,
-      vertexConstants,
-    });
+    const pipeline = (
+      label: string,
+      module: GPUShaderModule,
+      vertex: string,
+      fragment: string,
+      options: PipelineOptions,
+    ) =>
+      device.createRenderPipelineAsync({
+        label,
+        layout: scene.pipelineLayout,
+        vertex: { module, entryPoint: vertex, buffers: options.buffers ?? [], constants: options.vertexConstants },
+        fragment: {
+          module,
+          entryPoint: fragment,
+          targets: [{ format: HDR, blend: options.blend }],
+          constants: options.constants,
+        },
+        primitive: {
+          topology: options.strip ? 'triangle-strip' : 'triangle-list',
+          cullMode: options.cullMode ?? 'none',
+        },
+        // reversed depth: nearer is greater
+        depthStencil: { format: DEPTH, depthWriteEnabled: !options.blend, depthCompare: 'greater' },
+        multisample: { count: quality.samples },
+      });
+    const solidBuffers = [MESH_VERTEX_LAYOUT, SOLID_INSTANCE_LAYOUT];
+    const creatureBuffers = [MESH_VERTEX_LAYOUT, CREATURE_INSTANCE_LAYOUT];
+    const sprite = { buffers: [SPRITE_INSTANCE_LAYOUT], strip: true };
+    const leaf = (label: string, vertexConstants: Record<string, number>) =>
+      pipeline(label, leafModule, 'leafVertex', 'leafFragment', {
+        buffers: [LEAF_INSTANCE_LAYOUT],
+        strip: true,
+        vertexConstants,
+      });
 
-  const [
+    return Promise.all([
+      pipeline('terrain', solidModule, 'solidVertex', 'solidFragment', {
+        buffers: solidBuffers,
+        cullMode: 'back',
+        constants: shadowConstants,
+      }),
+      pipeline('solid', solidModule, 'solidVertex', 'solidFragment', {
+        buffers: solidBuffers,
+        vertexConstants: { ROCK_FADE: rockFade },
+        constants: shadowConstants,
+      }),
+      pipeline('surface', surfaceModule, 'surfaceVertex', 'surfaceFragment', { strip: true }),
+      pipeline('backdrop', surfaceModule, 'backdropVertex', 'backdropFragment', { strip: true }),
+      pipeline('manta', creaturesModule, 'mantaVertex', 'mantaFragment', {
+        buffers: creatureBuffers,
+        constants: { SHADOW_SIZE: scene.shadowSize },
+      }),
+      pipeline('fish', creaturesModule, 'fishVertex', 'fishFragment', {
+        buffers: creatureBuffers,
+        vertexConstants: { PART: tuning.fishPart },
+      }),
+      leaf('leaf near', { ROWS: 9, FAR: LEAF_FAR, SMOOTH_BEND }),
+      leaf('leaf mid', { ROWS: 5, FAR: LEAF_FAR, SMOOTH_BEND }),
+      leaf('leaf far', { ROWS: 3, FAR: LEAF_FAR, SMOOTH_BEND }),
+      leaf('leaf small', { ROWS: 3, FAR: SMALL_LEAF_DISTANCE, SMOOTH_BEND }),
+      pipeline('bubbles', spritesModule, 'bubbleVertex', 'bubbleFragment', { ...sprite, blend: PREMULTIPLIED }),
+      pipeline('glints', leafModule, 'glintVertex', 'glintFragment', {
+        ...sprite,
+        blend: ADDITIVE,
+        vertexConstants: { GLINT_FAR: tuning.glintDistance },
+      }),
+      pipeline('snow', spritesModule, 'snowVertex', 'snowFragment', {
+        buffers: [SNOW_INSTANCE_LAYOUT],
+        strip: true,
+        blend: ADDITIVE,
+      }),
+      pipeline('own bubbles', spritesModule, 'bubbleVertex', 'bubbleFragment', {
+        ...sprite,
+        blend: PREMULTIPLIED,
+        vertexConstants: { OWN: 1 },
+        constants: { OWN: 1 },
+      }),
+    ]);
+  };
+  let [
     terrain,
     solid,
     surface,
@@ -132,49 +187,7 @@ export async function createScenePass(gpu: Gpu, scene: Scene, quality: Quality, 
     glints,
     snow,
     ownBubbles,
-  ] = await Promise.all([
-    pipeline('terrain', solidModule, 'solidVertex', 'solidFragment', {
-      buffers: solidBuffers,
-      cullMode: 'back',
-      constants: shadowConstants,
-    }),
-    pipeline('solid', solidModule, 'solidVertex', 'solidFragment', {
-      buffers: solidBuffers,
-      vertexConstants: { ROCK_FADE: rockFade },
-      constants: shadowConstants,
-    }),
-    pipeline('surface', surfaceModule, 'surfaceVertex', 'surfaceFragment', { strip: true }),
-    pipeline('backdrop', surfaceModule, 'backdropVertex', 'backdropFragment', { strip: true }),
-    pipeline('manta', creaturesModule, 'mantaVertex', 'mantaFragment', {
-      buffers: creatureBuffers,
-      constants: { SHADOW_SIZE: scene.shadowSize },
-    }),
-    pipeline('fish', creaturesModule, 'fishVertex', 'fishFragment', {
-      buffers: creatureBuffers,
-      vertexConstants: { PART: tuning.fishPart },
-    }),
-    leaf('leaf near', { ROWS: 9, FAR: LEAF_FAR, SMOOTH_BEND }),
-    leaf('leaf mid', { ROWS: 5, FAR: LEAF_FAR, SMOOTH_BEND }),
-    leaf('leaf far', { ROWS: 3, FAR: LEAF_FAR, SMOOTH_BEND }),
-    leaf('leaf small', { ROWS: 3, FAR: SMALL_LEAF_DISTANCE, SMOOTH_BEND }),
-    pipeline('bubbles', spritesModule, 'bubbleVertex', 'bubbleFragment', { ...sprite, blend: PREMULTIPLIED }),
-    pipeline('glints', leafModule, 'glintVertex', 'glintFragment', {
-      ...sprite,
-      blend: ADDITIVE,
-      vertexConstants: { GLINT_FAR: tuning.glintDistance },
-    }),
-    pipeline('snow', spritesModule, 'snowVertex', 'snowFragment', {
-      buffers: [SNOW_INSTANCE_LAYOUT],
-      strip: true,
-      blend: ADDITIVE,
-    }),
-    pipeline('own bubbles', spritesModule, 'bubbleVertex', 'bubbleFragment', {
-      ...sprite,
-      blend: PREMULTIPLIED,
-      vertexConstants: { OWN: 1 },
-      constants: { OWN: 1 },
-    }),
-  ]);
+  ] = await build();
 
   const ownBuffer = device.createBuffer({
     label: 'own bubbles',
@@ -182,6 +195,26 @@ export async function createScenePass(gpu: Gpu, scene: Scene, quality: Quality, 
     usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
   });
   return {
+    relight: async () => {
+      const next = await build();
+      return () =>
+        void ([
+          terrain,
+          solid,
+          surface,
+          backdrop,
+          manta,
+          fish,
+          leafNear,
+          leafMid,
+          leafFar,
+          leafSmall,
+          bubbles,
+          glints,
+          snow,
+          ownBubbles,
+        ] = next);
+    },
     setOwnBubbles: (data) => gpu.queue.writeBuffer(ownBuffer, 0, data),
     encode(pass, world, view) {
       const runs = view.runs;
