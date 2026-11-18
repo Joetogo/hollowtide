@@ -73,9 +73,11 @@ distance for sixty frames a second; sharp settles for thirty and spends the diff
 **Swimming: with arms or classic** is the `C` key's switch, where it can be seen.
 
 **Photo mode** (`P`) stops the moment, clears the screen of everything but the world, and lets you still move
-to frame it; `Enter` draws it again at twice the screen's size each way (up to 4K) and saves a PNG.
+to frame it; `Z` runs the moment back and `X` runs it on while held, to have the manta where you want it;
+`Enter` draws it again at twice the screen's size each way (up to 4K) and saves a PNG.
 **The tour** (`T`) flies the camera along a scripted route through the wreck, the kelp forest and the grotto for a
-minute; any swimming key takes over wherever it has got to.
+minute; any swimming key takes over wherever it has got to. Where the system asks for reduced motion it flies at
+half its pace, and says beforehand that the view moves by itself.
 
 ## Running it and working on it
 
@@ -225,8 +227,8 @@ headlamp while the scooter is out and a torch by the head otherwise, and by moon
   `src/shaders/common/scene.wgsl`): where it is, which way it points, how bright. Each shader adds it to what it
   drew: rock that fluoresces answers with more than it is given, a fish flashes silver, a blade of kelp is lit
   through from behind.
-- It fades with the square of the distance and with the water in between, which takes its red first: three times
-  the noon sun at three metres, a third of it at ten.
+- It fades with the square of the distance and with the water in between, which takes its red first: about four
+  times the noon sun at three metres, and still more than half of it at ten, which is where one points it.
 - It is not at the eye. Light from exactly where one looks from shows no shape.
 - Off, the shaders skip it: the picture is what it was to the last bit (checked in the test).
 

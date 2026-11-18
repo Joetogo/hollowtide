@@ -11,8 +11,12 @@ export const Lamp = struct('Lamp', {
   cone: 'f32', // cosine of the angle from its axis at which the light has gone
 });
 
-/** Full power: about three times the noon sun on something three metres away, a third of it at ten. */
-export const LAMP_POWER = 2.2;
+/**
+ * Full power: about four times the noon sun on something three metres away, and still more than half of the
+ * noon sun at ten. (It was 2.2, falling off faster: bright at arm's length and all but gone on what one swims
+ * towards, eight or ten metres off, which is where one points it.)
+ */
+export const LAMP_POWER = 2.6;
 /** The light is gone 31 degrees off the axis. */
 export const LAMP_CONE = Math.cos((31 * Math.PI) / 180);
 

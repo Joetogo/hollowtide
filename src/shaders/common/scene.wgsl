@@ -59,7 +59,7 @@ fn lampGlow(p: vec3f) -> vec3f {
   let to = p - lamp.pos; let d2 = dot(to, to); let d = sqrt(d2);
   // bright in the middle, a soft wide rim; fading with the square of the distance and with the water in between
   let across = smoothRamp(lamp.cone, 1., dot(to / d, lamp.dir));
-  return vec3f(1., .93, .78) * (lamp.power * across * (.3 + .7 * across) / (1. + .035 * d2)) * exp(-EXTINCTION * d);
+  return vec3f(1., .93, .78) * (lamp.power * across * (.3 + .7 * across) / (1. + .022 * d2)) * exp(-EXTINCTION * d);
 }
 // and what a surface at `p` facing `n` gets of it
 fn lampLight(p: vec3f, n: vec3f) -> vec3f {
