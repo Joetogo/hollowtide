@@ -25,76 +25,131 @@ The world itself (its design, layout and shading) is ported from
 from-scratch rebuild of that scene in a typed, modular, tested codebase; the original is kept as a reference, and
 Hollowtide's world and frames are checked against it, to the checksum and to the pixel. What Hollowtide adds is
 on top: an opening, loading in half the time without freezing the page, a swimmer with a body, a scooter and a
-lamp, three lights, turtles and jellyfish, photo mode and a tour. Both are MIT-licensed; see `LICENSE`. `PLAN.md`
-has the plan and the milestone list. The pictures here are frames of the page itself (`npm run shots:readme`).
+lamp, three lights, turtles and jellyfish, photo mode and a tour. Both are MIT-licensed; see `LICENSE`. [`PLAN.md`](PLAN.md)
+has the plan, and [`docs/milestones.md`](docs/milestones.md) what was built in which order and how each step was
+checked. The pictures here are frames of the page itself (`npm run shots:readme`).
 
-## Status
+**In this file:** [Controls](#controls) · [Running it and working on it](#running-it-and-working-on-it) · [The reference rig](#the-reference-rig) ·
+[What is in it](#what-is-in-it) · [Against the original](#against-the-original) · [Known issues](#known-issues)
 
-Done so far:
+## Controls
 
-| Milestone | What exists | How it was checked |
-|---|---|---|
-| 0. Reference rig | The original, driven and measured on this machine | Two separate loads give byte-identical frames and hashes |
-| 1. Scaffold | TypeScript modules, single-file build with its worker, WGSL files, generated uniform layouts, tests, CI | Starts from `file://` in Chrome and Safari; layouts agree with an independent WGSL parser |
-| 2. Engine core | Device, camera, frame uniforms, render targets, bloom and composite passes, capture hooks | Frame uniforms equal the original's bit for bit (18 frames); bloom is bit-identical and the composited frame differs in 0 of 921,600 pixels at all six viewpoints |
-
-| 3. Bakes | Rock detail texture, animated water texture, sun shadow map; the world-data contract and its GPU buffers | All three equal the original's value for value (4.2M, 1.0M and 16.8M values), the shadow map baked from the original's dumped world |
-
-| 4. Opaque scene | Rock and seabed shader, set pieces, sponges, corals, water surface, backdrop, cell culling and level of detail | Drawing the original's dumped world, all six viewpoints match its frames: at most 2 of 921,600 pixels differ, by 1/255 |
-
-| 5. Plants and life | Kelp, plants and their glints, fish, manta rays, bubbles, drifting particles | With only the light shafts off on both sides, six viewpoints at three times each: at most 4 of 921,600 pixels differ, by 1/255 |
-
-| 6. Light shafts, detail levels | Volumetric light shafts and their blur; Medium and Low variants; the scripted camera path | Whole frames against the original at High, Medium and Low: six viewpoints at three times each, plus 30 frames along the fly-through at High. At High and Medium at most 11 of 921,600 pixels differ, by 1/255 |
-
-| 7. Generator, part 1 | In the worker: speck removal, collision bricks, terrain mesh, ground map, all 26 procedural meshes; on the GPU: the density field | Each output has the same SHA-256 as the original's, at all three detail levels (13 outputs, from 21 million voxels of density to the ship's planks) |
-
-| 8. Generator, part 2 | The 14 scatter systems (kelp, plants, glints, sponges, corals, rocks, set pieces, bubbles, fish, mantas, particles), the skylight volume, packing; the page now builds its own world | All 84 outputs have the same SHA-256 as the original's at all three levels; frames drawn from the generated world pass the same comparison as milestone 6 |
-
-| 9. Shell | Loading bar, menu, keyboard / mouse / touch, collision, dynamic resolution, detail levels and crash fallback, stats line, sound | A scripted swim of 536 frames (easing, turning, sprinting into rock and sliding along it) traces the original's path bit for bit; no main-thread task over 50 ms while loading; starts and draws in Safari 27 from `file://` |
-| 10. Speed-ups that do not change a pixel | The world is built by two workers side by side and starts alongside shader compilation; the generator itself is about twice as fast; boulders outside the view are not drawn | 48 frames at High and 48 at Medium are bit-identical before and after (`tests/browser/same.mjs`); all 84 generator outputs still have the original's checksums; loading takes about 40 % less |
-| 11. In the water | Your own arms in first person, swimming a breaststroke; a hand-held scooter on `Shift`; the original's glide on `C` | Frames without the body are unchanged to the bit; 18 unit tests of the skeleton and the stroke; a browser test swims, rides the scooter and switches to the glide and back |
-| 12. Speed-ups that change pixels | A tuned set of draw distances beside the original's faithful one: ground cover, rock chips and pebbles and the far kelp end sooner behind the fades they already had, glints and bubbles are sorted into cells and only drawn where they can be seen, kelp blades no longer flick as their curl passes through zero; half the frames behind the pause panel; a picture controller that finds out whether the machine is short of pixels or of geometry, settles for thirty even frames a second where sixty is out of reach, and says so | A frame takes 13–16 % less at 1280×720 and 2560×1440 (6 % at 640×360), two pages taking turns; 0–6 % of pixels differ at the six viewpoints; the tests against the original draw with the faithful set and still pass |
-| 13. Features | Settings in the pause panel (look speed, inverted look, field of view, volume, a smooth or a sharp picture, swimming with arms or the classic glide), photo mode, a guided tour; arrow-key look, drag-to-look, a gamepad, a sound button, a link to a view, `?seed=` | Each is driven in the shell test: the tour flies and hands over, a photo is saved larger than the screen, settings are remembered, a made-up gamepad swims and pauses, a link is followed and one into rock is not; with a seed the seabed's checksums are the authored ones and the plants' are not |
-| 14. New life and new light | Jellyfish: a hundred or so, in groups along the tour's route and ahead of where you wake, pulsing and drifting, glowing by themselves in the dark of the grotto. Three sea turtles rowing round loops of open water. Schools of fish open to let the swimmer through. Three lights: noon, dusk, moonlight | Jellyfish only ever add light (no pixel darker with them than without); each turtle is found where its loop says; none placed in rock or kelp; in the faithful tuning there are none of them and the frames are the original's; each mood is picked in the menu, remembered and compiled, dusk measures violet and moonlight dark and blue against noon |
-| 15. Its own name | Hollowtide: title, menu, package, storage keys (settings saved under the old key are read once), test hook, docs | The old name appears only where the original is meant: the credit, the licence, the reference rig and the tests against it |
-
-**Parity gate: passed.** At that point Hollowtide was the original, from scratch: `dist/index.html` builds the same world (all
-84 generator outputs have the original's checksums), draws the same frames (at High and Medium at most 11 of
-921,600 pixels differ, by 1/255; three of four spot-checked frames are byte-identical PNG files), and swims the
-same way. Everything after it goes beyond the original: milestones 10 to 15.
-
-```bash
-npm run build && open dist/index.html     # or: npm run dev
-```
-
-Controls: any of `W A S D` dives from the home view; then `W A S D` swim, `Q` / `E` down / up, `Shift` brings up
-the scooter and rides it, the mouse or the arrow keys look around, `1`–`6` viewpoints, `P` photo mode (`Enter`
-saves a picture), `T` a guided tour, `F` the lamp, `L` a link to the view, `Esc` pauses, `M` mute, `H` stats,
-`C` switches between swimming with a body and the original's steady glide.
+Any of `W A S D` dives from the home view; then `W A S D` swim, `Q` / `E` down / up (`Space` is up as well),
+`Shift` brings up the scooter and rides it, the mouse or the arrow keys look around, `1`–`6` go to the six
+viewpoints, `P` photo mode (`Enter` saves a picture), `T` a guided tour, `F` the lamp, `L` a link to the view,
+`Esc` opens the panel and closes it again, `M` mute, `H` stats, `C` switches between swimming with a body and
+the original's steady glide. A first dive is told the few that matter, a line at a time, once the eyes are open;
+the panel has the whole list.
 
 - **Touchscreen:** hold to swim forward, slide to steer, a second finger for the scooter. Buttons in the corner
   for the lamp, the sound and the menu; the tour and photo mode are in the pause panel, and photo mode has its
-  own buttons to save and to go back. A phone held upright gets the page turned on its side; the pause panel is
-  laid out to fit either way. (Tried on a touchscreen the size of a phone in Chrome's emulation, not yet on one.)
+  own buttons to save and to go back. A phone held upright gets the page turned on its side, and a line along
+  the bottom, the right way up, says to turn the phone; the pause panel is laid out to fit either way, with rows
+  a finger can hit. (Tried on a touchscreen the size of a phone in Chrome's emulation, not yet on one.)
 - **Gamepad:** left stick swims, right stick looks, the bumpers go down and up, the right trigger is the scooter,
-  `A` or `Start` dives, pauses and resumes, `Y` is the lamp.
+  `A` or `Start` dives, pauses and resumes, `Y` is the lamp. In the panel the d-pad or the left stick goes from
+  one control to the next and moves the sliders, `A` presses, `B` closes the panel.
+- **Keyboard alone:** everything is a button or a slider that `Tab` reaches, with its state said to whatever
+  reads the page aloud; `Esc` opens and closes the panel.
 - **Where the mouse cannot be captured** (some embeds refuse it): hold the button down on the picture and drag.
 - **Where there is no WebGPU** (an older phone, a browser that has not got it yet) the page says so over a picture
   of the place, with a link to these pictures.
 
 **A link to a view** (`L`) puts where you are and which way you look after the `#` of the address
-(`#at=x,y,z,turn,tilt`, metres and degrees) and copies it; whoever opens it wakes there. A link to a place
-inside the rock is not followed.
+(`#at=x,y,z,turn,tilt`, metres and degrees, then `,dusk` or `,moon` if that is the light, and `,lamp` if the
+lamp is on) and copies it; whoever opens it wakes there, in that light. A link to a place inside the rock is not
+followed. (The animals will be somewhere else: they do not stop for a link.)
 
 **Another garden:** `?seed=7` (any whole number) grows other kelp, plants, corals and rocks, and other schools of
 fish, on the same seabed, with the wreck, the arches and the viewpoints where they are. Without it the world is
 the authored one, to the byte.
 
 The pause panel has the settings: detail level, light, look speed, inverted look, field of view, volume, and two
-choices; and buttons for the tour and photo mode.
+choices; and buttons for the tour and photo mode. Another detail level or light makes the world again, which
+takes a few seconds and says so beforehand; afterwards the panel is up again where you were.
 **Picture: smooth or sharp** says what gives when the machine cannot keep up: smooth trades resolution and draw
 distance for sixty frames a second; sharp settles for thirty and spends the difference on pixels and distance.
 **Swimming: with arms or classic** is the `C` key's switch, where it can be seen.
+
+**Photo mode** (`P`) stops the moment, clears the screen of everything but the world, and lets you still move
+to frame it; `Enter` draws it again at twice the screen's size each way (up to 4K) and saves a PNG.
+**The tour** (`T`) flies the camera along a scripted route through the wreck, the kelp forest and the grotto for a
+minute; any swimming key takes over wherever it has got to.
+
+## Running it and working on it
+
+It takes [Node](https://nodejs.org) 20 or later; the tests in a browser drive the installed Google Chrome.
+
+```bash
+npm install
+npm run dev            # http://127.0.0.1:5173, rebuilds and reloads on save
+npm run check          # typecheck, lint, unit tests: about 20 s, no browser
+npm run build          # dist/index.html: one self-contained file, size printed, 200 kB budget enforced
+open dist/index.html   # it runs from file://
+```
+
+A fresh clone can run all of that. The other scripts, and what each needs first:
+
+| Script | What it does | Needs |
+|---|---|---|
+| `node tests/browser/boot.mjs` | The quickest test in a browser: both builds start and draw. About 15 s | `npm run build && npm run build:harness` |
+| `node tests/browser/shell.mjs` (and `panel`, `body`, `life`, `mood`, `touch`) | Loading, keys, settings, photo mode and tour; the panel, its hints and a gamepad in it; the swimmer; turtles, jellyfish and fish; the three lights; a touchscreen | `npm run build:harness` |
+| `npm run test:browser` | All of the browser tests: the ones above, and frames, checksums and swimming compared with the original. About twenty minutes, a Chrome window in view throughout | The original's data: `npm run ref:capture` and `npm run ref:dump` at each detail level (see the reference rig) |
+| `npm run test:safari` | The build starts from `file://` in Safari and draws (Safari is left open on the test page) | macOS |
+| `npm run shots:readme` | The pictures in this file | Nothing more |
+| `npm run shots`, `npm run bench` | Frames of the original's world; the original and Hollowtide timed taking turns | The original's data; `bench` its clone as well |
+| `npm run ref:build`, `ref:verify`, `ref:capture`, `ref:dump`, `ref:bench` | The reference rig, below | A clone of the original |
+
+Three things to know before changing something:
+
+- `npm run check` opens no browser. What the page says and does (a label, a key, a setting) is covered by the
+  browser tests: after changing any of it, run `node tests/browser/shell.mjs` and `panel.mjs`, and `touch.mjs`,
+  `mood.mjs`, `body.mjs` or `life.mjs` for what they cover.
+- There are two sets of numbers in `src/config/tuning.ts`: the faithful one, with which the frames are the
+  original's, and the tuned one, which ships. Anything new is zero or absent in the faithful set, so that the
+  comparisons with the original (drawn with `?tuning=faithful`) still pass.
+- The shipped file has a size budget, and the build fails over it.
+
+Found a fault? An [issue](https://github.com/Richman-Tan/hollowtide/issues) with the browser, the machine and
+what the stats line says (`H`) is the quickest way to get it looked at.
+
+How it is put together:
+
+- `src/main.ts` is one bundle with two roles: the page runs it as the main thread, and the main thread starts the
+  world-generation worker from a Blob of the same script. That keeps the build to a single file that also runs
+  from `file://`.
+- `src/gpu/struct.ts` and `src/gpu/bindings.ts` define uniform structs and bind groups once and generate both the
+  WGSL declarations and the typed offsets, so shaders and the code that feeds them cannot drift apart.
+- `src/shaders/*.wgsl` are real files with `#include "…"`; `tools/wgsl.mjs` resolves the includes and minifies
+  them for the shipped build.
+- `src/app/harness.ts` holds the hooks the browser tests use (capture a frame, feed in a dumped scene of the
+  original, compare). It is compiled into `dist/index.harness.html` and the dev server only, never into
+  `dist/index.html`.
+
+For development the page can also draw a dump of the original's world instead of its own: `npm run ref:dump`
+once, then `http://127.0.0.1:5173/?world=reference` (add `&level=1` or `2` for Medium or Low). `npm run shots`
+saves frames to `test-results/shots/`.
+
+## The reference rig
+
+The original runs beside Hollowtide as an oracle. It is never edited: `tools/reference/` reads a pristine clone,
+pinned to one commit in `upstream.json`, and concatenates its sources with two hook files into a local page.
+
+```bash
+git clone https://github.com/Noniv/abyssal-garden ../oss/abyssal-garden   # once; the path is in upstream.json
+git -C ../oss/abyssal-garden checkout a596354eff400d458bc2aeb9bdf5e0a9734b2bcf   # the commit it is compared with
+npm install
+npm run ref:verify    # frozen frames + hashes, then a second load that must match byte for byte
+npm run ref:dump      # the generated world and a few textures, as fixtures (about 460 MB, not committed)
+npm run ref:bench     # load time, memory and frame cost on this machine
+```
+
+These drive the installed Google Chrome in a visible window (WebGPU needs the real GPU) and write to
+`.cache/reference/<commit>/L<detail level>/`. Add `-- --level 1` or `-- --level 2` for Medium or Low.
+
+## What is in it
+
+### A picture that fits the machine
 
 The page finds out what the machine is short of. The original's controller (and this one until now) gives up
 pixels first, on the assumption that pixels are what a slow frame is made of. On the laptop this was built on
@@ -115,11 +170,6 @@ at 2560×1440, marched at half the picture's size each way. Above 1920×1080 the
 (they are blurred afterwards in any case): 3 to 5 % off the frame, and a difference that shows only when the two
 pictures are subtracted. Two things that did not survive being measured are in `PLAN.md`: fewer shadow taps for
 distant rock (slower, not faster), and a cheaper water texture (it costs nothing as it is).
-
-**Photo mode** (`P`) stops the moment, clears the screen of everything but the world, and lets you still move
-to frame it; `Enter` draws it again at twice the screen's size each way (up to 4K) and saves a PNG.
-**The tour** (`T`) flies the camera along a scripted route through the wreck, the kelp forest and the grotto for a
-minute; any swimming key takes over wherever it has got to.
 
 ### The opening
 
@@ -271,6 +321,8 @@ you look.
 Not there yet: a wash behind the propeller; the kick of a breaststroke (the legs are out of sight while
 swimming, so there is none).
 
+## Against the original
+
 What already differs from the original, on an Apple M3 with 8 GB at High detail. `npm run bench` opens both
 side by side and lets them take turns, a few dozen frames each: a laptop slows by half as it warms up, so timings
 taken minutes apart cannot be compared.
@@ -299,7 +351,7 @@ Where the loading time went (milestone 10), each step checked against the origin
 - `node tools/profile-generator.mjs --cpu` shows where the time goes now.
 
 With the original's own draw distances (the faithful set, `?tuning=faithful` in a dev build) the frame costs
-are still the original's; what ships is the tuned set, 13–16 % cheaper (see the status table). Both submitted exactly the same geometry (35,034,683 vertices and
+are still the original's; what ships is the tuned set, 13–16 % cheaper (see [the milestones](docs/milestones.md)). Both submitted exactly the same geometry (35,034,683 vertices and
 indices at the first viewpoint), and that geometry, not the pixel count, is what a frame costs on this GPU. Hollowtide
 now leaves out the boulders that are outside the view (they were 5.7 million of those indices, drawn
 wherever the camera looked), which is worth a few per cent. `node tests/browser/profile.mjs` times a frame with
@@ -312,60 +364,7 @@ load, on a hot machine with the original open in a second browser, had a single 
 happen again in six attempts to reproduce it, three of them under the same conditions. The benchmark now records
 when a long task starts and which loading message was up, so the next one can be placed.
 
-For development the page can also draw a dump of the original's world instead of its own: `npm run ref:dump`
-once, then `http://127.0.0.1:5173/?world=reference` (add `&level=1` or `2` for Medium or Low). `npm run shots`
-saves frames to `test-results/shots/`.
-
-Known issue, inherited from the original: at Low detail (no anti-aliasing), and now and then at Medium, the scene
-is not exactly repeatable from one render to the next on this Apple GPU. A few hundred isolated pixels on the
-plants change while the depth buffer stays identical. Two loads of the original differ by up to 722 pixels in a
-frame (`tests/browser/noise.mjs` measures it), and Hollowtide behaves the same way, so the Low comparison allows
-0.2 % of pixels to differ. Ruled out so far: the blended draws, the fish, shadow sampling in vertex shaders, the
-sine hash, and the timing of the shadow bake. Finding the cause is on the list for milestone 11.
-
-## Working on it
-
-```bash
-npm install
-npm run dev            # http://127.0.0.1:5173, rebuilds and reloads on save
-npm run check          # typecheck, lint, unit tests
-npm run build          # dist/index.html: one self-contained file, size printed, 200 kB budget enforced
-npm run test:browser   # Chrome: 519 checks against the original (frames, checksums, swimming) and of the shell
-npm run test:safari    # Safari: the build starts from file:// and draws (Safari is left open on the test page)
-```
-
-How it is put together:
-
-- `src/main.ts` is one bundle with two roles: the page runs it as the main thread, and the main thread starts the
-  world-generation worker from a Blob of the same script. That keeps the build to a single file that also runs
-  from `file://`.
-- `src/gpu/struct.ts` and `src/gpu/bindings.ts` define uniform structs and bind groups once and generate both the
-  WGSL declarations and the typed offsets, so shaders and the code that feeds them cannot drift apart.
-- `src/shaders/*.wgsl` are real files with `#include "…"`; `tools/wgsl.mjs` resolves the includes and minifies
-  them for the shipped build.
-- `src/app/harness.ts` holds the hooks the browser tests use (capture a frame, feed in a dumped scene of the
-  original, compare). It is compiled into `dist/index.harness.html` and the dev server only, never into
-  `dist/index.html`.
-
-The browser tests that compare against the original need its fixtures: run `npm run ref:dump` once.
-
-## The reference rig
-
-The original runs beside Hollowtide as an oracle. It is never edited: `tools/reference/` reads a pristine clone,
-pinned to one commit in `upstream.json`, and concatenates its sources with two hook files into a local page.
-
-```bash
-git clone https://github.com/Noniv/abyssal-garden ../oss/abyssal-garden   # once; the path is in upstream.json
-npm install
-npm run ref:verify    # frozen frames + hashes, then a second load that must match byte for byte
-npm run ref:dump      # the generated world and a few textures, as fixtures (about 460 MB, not committed)
-npm run ref:bench     # load time, memory and frame cost on this machine
-```
-
-These drive the installed Google Chrome in a visible window (WebGPU needs the real GPU) and write to
-`.cache/reference/<commit>/L<detail level>/`. Add `-- --level 1` or `-- --level 2` for Medium or Low.
-
-## Baseline: the original on an Apple M3, 8 GB (High detail, Chrome 157)
+### Baseline: the original on an Apple M3, 8 GB (High detail, Chrome 157)
 
 | | |
 |---|---|
@@ -382,3 +381,12 @@ the resolution cannot reach 60 fps. Hollowtide's controller now finds that out f
 
 The reference world at High: 808k terrain vertices, 2.17M leaves and plants, 629k glints, 68k rocks and pebbles,
 18k sponges and corals, 18k bubbles, 4,240 fish, 6 mantas.
+
+## Known issues
+
+Known issue, inherited from the original: at Low detail (no anti-aliasing), and now and then at Medium, the scene
+is not exactly repeatable from one render to the next on this Apple GPU. A few hundred isolated pixels on the
+plants change while the depth buffer stays identical. Two loads of the original differ by up to 722 pixels in a
+frame (`tests/browser/noise.mjs` measures it), and Hollowtide behaves the same way, so the Low comparison allows
+0.2 % of pixels to differ. Ruled out so far: the blended draws, the fish, shadow sampling in vertex shaders, the
+sine hash, and the timing of the shadow bake. The cause has not been found.
