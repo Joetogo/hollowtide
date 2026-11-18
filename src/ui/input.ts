@@ -12,6 +12,8 @@ export interface InputActions {
   lookSpeed(): [x: number, y: number];
   /** the main button of a gamepad (A, or Start) went down: dive, pause or resume, whichever applies */
   onPadButton(): void;
+  /** B went down: out of the panel, if it is up */
+  onPadBack(): void;
 }
 
 export interface Input {
@@ -48,6 +50,32 @@ export function bindInput(canvas: HTMLCanvasElement, intent: Intent, actions: In
   };
   /** what a gamepad is asking for: sticks -1..1 */
   const pad = { forward: 0, right: 0, up: 0, fast: false, turnX: 0, turnY: 0, button: false, lamp: false, on: false };
+  /** for how many readings in a row the gamepad has pointed the same way in the panel, and whether B is down */
+  let pointing = 0;
+  let back = false;
+  /**
+   * The gamepad in the panel: up and down (d-pad or left stick) go from one control to the next, left and right
+   * too, except on a slider, which they move. Held, it repeats.
+   */
+  const point = (across: number, along: number) => {
+    pointing = across || along ? pointing + 1 : 0;
+    if (pointing !== 1 && (pointing < 14 || pointing % 4)) return;
+    const focus = document.activeElement;
+    if (across && focus instanceof HTMLInputElement) {
+      if (across > 0) focus.stepUp();
+      else focus.stepDown();
+      focus.dispatchEvent(new Event('input'));
+      return;
+    }
+    // the controls that are on screen, without the choices already made: there is nothing to press on those
+    const controls = [...document.querySelectorAll<HTMLElement>('#menu button:not(.on), #menu input')].filter(
+      (each) => each.offsetParent,
+    );
+    const next = controls[controls.indexOf(focus as HTMLElement) + (across || along)] ?? controls[0];
+    // (a ring is drawn round what has the focus only for the keyboard; this asks for it too)
+    document.documentElement.className = 'pad';
+    next?.focus();
+  };
   /** the left button is down on the picture: dragging looks around (for when the mouse cannot be captured) */
   let dragging = false;
   let touchId = -1; // the finger that steers
@@ -93,6 +121,7 @@ export function bindInput(canvas: HTMLCanvasElement, intent: Intent, actions: In
         keys.right = down;
         break;
       case 'KeyE':
+      case 'Space':
         keys.up = down;
         break;
       case 'KeyQ':
@@ -120,7 +149,10 @@ export function bindInput(canvas: HTMLCanvasElement, intent: Intent, actions: In
     apply();
   };
   addEventListener('keydown', (event) => {
-    if (actions.menuOpen() && event.code !== 'KeyH' && event.code !== 'KeyM') return;
+    // (with the panel up only the keys that mean something there: stats, sound, and Esc to close it again)
+    if (actions.menuOpen() && event.code !== 'KeyH' && event.code !== 'KeyM' && event.code !== 'Escape') return;
+    // (Space on a button that has the focus presses that button, as it does anywhere)
+    if (event.code === 'Space' && event.target instanceof HTMLButtonElement) return;
     actions.onGesture();
     if (event.code.startsWith('Arrow')) event.preventDefault(); // or the page would try to scroll
     key(event, 1);
@@ -206,22 +238,34 @@ export function bindInput(canvas: HTMLCanvasElement, intent: Intent, actions: In
       apply();
       return;
     }
+    // (said once, when a gamepad is first heard from: what its sticks and buttons do)
+    if (!pad.on) actions.onKey('Pad');
     pad.on = true;
     const { axes, buttons } = found;
     const pressed = (i: number) => buttons[i]?.pressed ?? false;
-    // A or Start: dive, pause, resume
+    // A or Start: dive, pause, resume. In the panel A presses the button the pad has gone to instead
     const button = pressed(0) || pressed(9);
     if (button && !pad.button) {
       actions.onGesture();
-      actions.onPadButton();
+      const focus = document.activeElement;
+      if (pressed(0) && actions.menuOpen() && focus instanceof HTMLButtonElement && focus.closest('#menu'))
+        focus.click();
+      else actions.onPadButton();
     }
     pad.button = button;
+    // B: out of the panel
+    if (pressed(1) && !back) actions.onPadBack();
+    back = pressed(1);
     // Y: the lamp
     if (pressed(3) && !pad.lamp && !actions.menuOpen()) actions.onKey('KeyF');
     pad.lamp = pressed(3);
     if (actions.menuOpen()) {
       pad.forward = pad.right = pad.up = pad.turnX = pad.turnY = 0;
       pad.fast = false;
+      point(
+        (pressed(15) ? 1 : 0) - (pressed(14) ? 1 : 0) || Math.round(stick(axes[0] ?? 0)),
+        (pressed(13) ? 1 : 0) - (pressed(12) ? 1 : 0) || Math.round(stick(axes[1] ?? 0)),
+      );
     } else {
       // left stick swims, right stick looks, the bumpers go down and up, the right trigger is the scooter
       pad.right = stick(axes[0] ?? 0);

@@ -73,10 +73,36 @@ const RESUME = 'hollowtide-resume';
 const THIRTY = 'Thirty frames a second is what this machine holds here: the picture is set to Sharp';
 const LINK_COPIED = 'A link to this view is copied';
 const LINK_IN_BAR = 'A link to this view is in the address bar';
-const PHOTO_KEYS = 'Photo: Enter saves a picture, P returns';
+const PHOTO_KEYS = 'Photo: the moment stands still. Enter saves it, P returns';
+const coarse = () => matchMedia('(pointer: coarse)').matches;
 /** What photo mode says of itself: the keys, or for fingers (which have the two buttons) only what it is. */
-const photoHint = () => (matchMedia('(pointer: coarse)').matches ? 'Photo: the moment stands still' : PHOTO_KEYS);
-const TOUR_KEYS = 'A tour of the hollow. Any swimming key takes over';
+const photoHint = () => (coarse() ? 'Photo: the moment stands still' : PHOTO_KEYS);
+/** What the tour says as it begins: how to take over, with keys or with a finger. */
+const tourHint = () =>
+  'A tour of the hollow. ' + (coarse() ? 'Hold a finger on the picture to take over' : 'Any swimming key takes over');
+const TOUR_OVER = 'The tour is over: swim on from here';
+/** Said when a gamepad is first heard from. */
+const PAD_KEYS = 'Gamepad: sticks swim and look · RT scooter · LB and RB down and up · Y lamp · Start the panel';
+/** What the six viewpoints look at (keys 1 to 6), said when a key goes to one. */
+const PLACES = ["The whale's tail", 'The wreck', 'The kelp forest', 'The sponge garden', 'The canopy', 'The meadow'];
+/** Said while the pointer or the focus is on a detail level or a light that is not the current one. */
+const REMAKES = 'Changing this makes the world again: a few seconds';
+/** What a first dive is told once the eyes are open, a line at a time: for hands on keys, and for fingers. */
+const firstDive = (classic: boolean) =>
+  coarse()
+    ? [
+        'Hold a finger down to swim · slide it to look around',
+        `A second finger ${classic ? 'goes faster' : 'brings up a scooter'}`,
+        '≡ opens the panel: settings, a tour, photo mode',
+      ]
+    : [
+        'W A S D swim · the mouse looks around',
+        `Shift ${classic ? 'goes faster' : 'brings up a scooter'} · Q and E go down and up`,
+        'Esc opens the panel: settings, a tour, photo mode, all the keys',
+      ];
+/** Seconds after the dive at which the first of those lines comes up, and from one line to the next. */
+const HINT_AT = 3;
+const HINT_EVERY = 5.5;
 /** The most pixels a saved picture has: a 4K frame. */
 const PHOTO_PIXELS = 3840 * 2160;
 const CLASSIC_ON = 'Classic glide: no arms, steady speed. C brings the arms back';
@@ -173,7 +199,9 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
   const level = settings.level;
   // dev and harness builds can force the light with ?mood=dusk
   // (beside the settings, not in them: what a test asks for is not to be remembered)
-  const moodName = ((__DEV__ || __HARNESS__) && params.get('mood')) || settings.mood;
+  // ...and a link to a view is followed in the light it was taken in (noon, if it names none), for this visit
+  const linked = viewFromHash(location.hash);
+  const moodName = ((__DEV__ || __HARNESS__) && params.get('mood')) || linked?.[5] || settings.mood;
 
   // the page's controls exist before anything can go wrong, so a failure has somewhere to be shown
   const intent = createIntent();
@@ -193,6 +221,8 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       } else input?.capture();
     },
     onToggle(open) {
+      if (open) pausedAt = performance.now();
+      if (open) hush();
       if (open) input?.release();
     },
     onLevel(next) {
@@ -205,6 +235,8 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       // the light is built into the shaders: remember it and start over
       saveSettings({ ...settings, mood: name }, Infinity);
       keepPlace();
+      // (a link this page was opened by names a light of its own: it has been followed, and now gives way)
+      history.replaceState(null, '', location.href.replace(/#.*$/, ''));
       location.reload();
     },
   });
@@ -219,6 +251,10 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
    */
   let keepPlace: () => void = () => undefined;
   let input: ReturnType<typeof bindInput> | null = null;
+  /** when the panel last opened (performance.now()) */
+  let pausedAt = 0;
+  /** takes down the line at the bottom of the picture, once there is one */
+  let hush: () => void = () => undefined;
 
   try {
     menu.progress('Diving…', 0.02);
@@ -339,8 +375,11 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
     let dived = false;
     let kept: ReturnType<typeof viewFromHash> = null;
     let keptLamp: boolean | null = null;
+    let keptStats = false;
     try {
-      const record = JSON.parse(sessionStorage.getItem(RESUME) ?? 'null') as { at?: string; lamp?: boolean } | null;
+      type Kept = { at?: string; lamp?: boolean; stats?: boolean };
+      const record = JSON.parse(sessionStorage.getItem(RESUME) ?? 'null') as Kept | null;
+      keptStats = !!record?.stats;
       sessionStorage.removeItem(RESUME); // once: a reload by hand goes to the home view as ever
       kept = record ? viewFromHash(record.at ?? '') : null;
       keptLamp = kept ? !!record!.lamp : null;
@@ -348,10 +387,13 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       // storage can be blocked: then the page simply starts at the home view
     }
     const resuming = kept !== null;
+    // (harness builds give the first dive's hints only when asked with ?hints: a test waits for lines of its own)
+    const hinting = !__HARNESS__ || params.has('hints');
     keepPlace = () => {
-      if (!dived) return;
       try {
-        sessionStorage.setItem(RESUME, JSON.stringify({ at: viewToHash(camera), lamp: lampOn }));
+        // (the stats line is kept as well, and that also for someone who has not dived yet)
+        const record = { at: dived ? viewToHash(camera) : '', lamp: lampOn, stats: hud.on };
+        sessionStorage.setItem(RESUME, JSON.stringify(record));
       } catch {
         // as above
       }
@@ -361,7 +403,7 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       // still, at the first viewpoint, arms down; or where a link to a view says, if this page was opened by
       // one; or where the swimmer was (a place they had swum to: it is not asked whether it is in the rock)
       goTo(0);
-      const view = viewFromHash(location.hash);
+      const view = linked;
       if (kept) [camera.x, camera.y, camera.z, camera.yaw, camera.pitch] = kept;
       else if (view && collision && rockDistance(collision, view[0], view[1], view[2]) < -CAMERA_RADIUS) {
         [camera.x, camera.y, camera.z, camera.yaw, camera.pitch] = view;
@@ -371,19 +413,38 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       body = createBodyState();
       breath = createBreath();
       breath.dirty = true;
-      // (a reminder, once the eyes are open, for whoever chose the glide on an earlier visit)
-      if (settings.classic) setTimeout(() => note(CLASSIC_ON), 3000);
+      // Once the eyes are open: a reminder for whoever chose the glide on an earlier visit, and on the first dive
+      // in this browser the few things worth knowing, a line at a time. They stop for the panel or a mode, and
+      // are not said again once the last has been.
+      const first = hinting && !settings.hinted && !resuming;
+      const lines = [...(settings.classic ? [CLASSIC_ON] : []), ...(first ? firstDive(settings.classic) : [])];
+      const say = (i: number) => {
+        if (i >= lines.length || menu.open || photo || tour >= 0) return;
+        // (a line that is up is left its time: the one about thirty frames a second may be)
+        if (note.showing()) return void setTimeout(say, 1000, i);
+        note(lines[i]!);
+        if (first && i === lines.length - 1) {
+          settings.hinted = true;
+          saveSettings(settings, fullPixels());
+        }
+        setTimeout(say, HINT_EVERY * 1000, i + 1);
+      };
+      setTimeout(say, HINT_AT * 1000, 0);
     };
     const hud = createHud(document.getElementById('stats')!);
+    if (keptStats) hud.toggle();
     const note = createNote(document.getElementById('note')!);
+    hush = note.clear;
     sound = createSoundscape(camera, settings.muted);
     input = bindInput(canvas, intent, {
       onGesture: () => sound!.wake(),
       menuOpen: () => menu.open,
       lookSpeed: () => [settings.sensitivity, settings.invertY ? -settings.sensitivity : settings.sensitivity],
       onPadButton: () => menu.press(),
+      onPadBack: () => menu.paused && menu.press(),
       onKey(code) {
         if (code === 'KeyH') hud.toggle();
+        else if (code === 'Pad') note(PAD_KEYS);
         else if (code === 'KeyM') toggleMute();
         else if (code === 'KeyL') shareView();
         else if (code === 'KeyF') toggleLamp();
@@ -398,15 +459,19 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
         else if (code === 'Enter' && photo) shoot = true;
         else if (code === 'KeyT') setTour(tour < 0);
         else if (code === 'Escape') {
-          // out of a mode first; the panel is one more Esc away
-          if (photo) setPhoto(false);
-          else if (tour >= 0) setTour(false);
-          else menu.show(true);
-        } else if (code >= 'Digit1' && code <= 'Digit6') goTo(code.charCodeAt(5) - 49);
+          // The panel (which ends photo mode and the tour), and out of it again. Not within half a second of its
+          // opening: the Esc that gives the mouse back opens it, and the same press may still arrive here.
+          if (!menu.paused) menu.show(true);
+          else if (performance.now() - pausedAt > 500) menu.press();
+        } else if (code >= 'Digit1' && code <= 'Digit6') {
+          const index = code.charCodeAt(5) - 49;
+          goTo(index);
+          note(`${index + 1} · ${PLACES[index]!}`);
+        }
       },
     });
     // ---- the lamp: F switches it, and so does a button. By moonlight it starts switched on
-    let lampOn = keptLamp ?? mood.name === 'moon';
+    let lampOn = keptLamp ?? (linked ? linked[6] : mood.name === 'moon');
     let lampLevel = 0;
     const lampButton = document.getElementById('lamp')!;
     const toggleLamp = () => {
@@ -425,6 +490,7 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       sound!.setMuted(settings.muted);
       saveSettings(settings, fullPixels());
       showMuted();
+      note(settings.muted ? 'Sound off' : 'Sound on');
     };
     muteButton.onclick = () => {
       sound!.wake();
@@ -434,7 +500,7 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
 
     // ---- a link to this view: where the swimmer is and which way they look, in the address after the #
     const shareView = () => {
-      const link = location.href.replace(/#.*$/, '') + viewToHash(camera);
+      const link = location.href.replace(/#.*$/, '') + viewToHash(camera, mood.name, lampOn);
       history.replaceState(null, '', link);
       const copied = navigator.clipboard?.writeText(link);
       if (copied)
@@ -496,12 +562,22 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
         setPhoto(false);
         Object.assign(swimmer, createSwimmer());
         menu.fade();
-        note(TOUR_KEYS);
+        note(tourHint());
       }
     };
+    // The detail level and the light are built into the world: picking another starts the page over, which is
+    // said while the pointer or the focus is on one. Other buttons have a line of their own to say (data-tip).
+    // Not for fingers: there is no pointing without pressing, and on a phone the line would lie over the panel.
+    const tipped = '#detail button:not(.on), #light button:not(.on), [data-tip]';
+    for (const button of coarse() ? [] : document.querySelectorAll<HTMLElement>(tipped)) {
+      const tip = button.dataset.tip ?? REMAKES;
+      button.onpointerenter = button.onfocus = () => note.hold(tip);
+      button.onpointerleave = button.onblur = () => note.clear();
+    }
 
     /** the picture has been set to sharp in this visit because sixty frames a second was out of reach */
     let settledForThirty = false;
+    let wasPaused = false;
     // the tour and photo mode from the pause panel, and photo mode's own two buttons: for where there are no keys
     document.getElementById('tour')!.onclick = () => {
       menu.show(false);
@@ -571,7 +647,8 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
         dynres.stuck = 0;
         saveSettings(settings, fullPixels());
         menu.sync();
-        if (!note.showing()) note(THIRTY);
+        // (over whatever line is up, but not over photo mode's, which stays while the mode does)
+        if (!photo) note(THIRTY);
       }
       renderer.pixelBudget = dynres.pixels;
       renderer.detail = dynres.detail;
@@ -583,7 +660,10 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
         tour += dt;
         flyPoint(tour, flight);
         lookAt(camera, flight[0]!, flight[1]!, flight[2]!, flight[3]!, flight[4]!, flight[5]!);
-        if (tour >= FLY_SECONDS || intent.forward || intent.right || intent.up || intent.fast) setTour(false);
+        if (tour >= FLY_SECONDS) {
+          setTour(false);
+          note(TOUR_OVER);
+        } else if (intent.forward || intent.right || intent.up || intent.fast) setTour(false);
       } else if (menu.home) {
         homeClock += dt * HOME_SPEED;
         const there = homeClock % (HOME_SPAN * 2);
@@ -648,6 +728,9 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       camera.pitch = pitch;
       camera.wide = 1;
       updateBasis(camera);
+      // (the panel halves the pace on purpose: those frames are not late)
+      if (menu.paused !== wasPaused) hud.rest();
+      wasPaused = menu.paused;
       hud.frame(frameMs, gpuMs, renderer.targets.width, renderer.targets.height, deviceWidth());
       hook.frames = (hook.frames ?? 0) + 1;
     };

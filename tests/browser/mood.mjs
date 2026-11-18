@@ -151,8 +151,8 @@ try {
     chrome.page.click('#light button:nth-of-type(2)'),
   ]);
   await chrome.page.waitForFunction(() => window.__hollowtide?.ready, null, { timeout: 60_000 });
-  // no key is pressed: the water comes back by itself
-  await chrome.page.waitForFunction(() => document.body.className.startsWith('playing'), null, { timeout: 20_000 });
+  // no key is pressed: the panel the light was picked in comes back up, over the world in its new light
+  await chrome.page.waitForFunction(() => document.body.className === 'menu', null, { timeout: 20_000 });
   const back = await chrome.page.evaluate(() => ({
     camera: window.__hollowtide.harness.camera(),
     mood: JSON.parse(localStorage.getItem('hollowtide')).mood,
@@ -163,11 +163,17 @@ try {
   check(
     // (the same heading may come back a whole turn away from the number it was)
     back.mood === 'dusk' && moved < 0.3 && Math.abs(Math.sin((back.camera.yaw - place.yaw) / 2)) < 0.02,
-    `picking dusk while in the water: the swimmer comes back where they were, at dusk (${moved.toFixed(2)} m from the place)`,
+    `picking dusk while in the water: the panel comes back up where the swimmer was, at dusk (${moved.toFixed(2)} m from the place)`,
   );
   check(
     back.lamp === 'true' && back.resume === 'Resume',
     'with the lamp as it was, and no second awakening to go through',
+  );
+  await chrome.page.click('#dive');
+  await chrome.page.waitForTimeout(400);
+  check(
+    await chrome.page.evaluate(() => document.body.className.startsWith('playing')),
+    'and Resume goes back into the water',
   );
   // the place is kept for that once: starting the page over by hand goes to the home view as ever
   await chrome.page.reload();

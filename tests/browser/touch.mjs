@@ -27,6 +27,18 @@ for (const [name, viewport] of [
       keys: getComputedStyle(document.getElementById('press')).display !== 'none',
     }));
     check(home.tap && !home.keys, `${name}: the home view says "tap to dive", not which keys`);
+    // held upright the page lies on its side, and a line that is the right way up for the hand says to turn it
+    const turn = await chrome.page.evaluate(() => {
+      const line = document.getElementById('turn');
+      const box = line.getBoundingClientRect();
+      return { shown: getComputedStyle(line).display !== 'none', wide: box.width > box.height, bottom: box.bottom };
+    });
+    check(
+      name === 'upright' ? turn.shown && turn.wide && turn.bottom > viewport.height - 60 : !turn.shown,
+      name === 'upright'
+        ? `${name}: a line along the bottom of the phone, the right way up, says to turn it`
+        : `${name}: nothing says to turn a phone that is already on its side`,
+    );
 
     // ---- a tap dives
     await chrome.page.touchscreen.tap(viewport.width * 0.5, viewport.height * 0.3);
@@ -84,6 +96,21 @@ for (const [name, viewport] of [
       await chrome.page.touchscreen.tap(box[0], box[1]);
       await chrome.page.waitForTimeout(350);
     };
+    // the three buttons in the corner are large enough for a finger, and apart
+    const corners = await chrome.page.evaluate(() =>
+      ['lamp', 'mute', 'open-menu'].map((id) => {
+        const r = document.getElementById(id).getBoundingClientRect();
+        return [r.left, r.top, r.right, r.bottom];
+      }),
+    );
+    const apart = corners.every((a, i) =>
+      corners.every((b, j) => i === j || a[2] <= b[0] || b[2] <= a[0] || a[3] <= b[1] || b[3] <= a[1]),
+    );
+    const smallest = Math.min(...corners.flatMap(([left, top, right, bottom]) => [right - left, bottom - top]));
+    check(
+      smallest >= 44 && apart,
+      `${name}: the corner buttons are at least 44 px each way and do not touch (${smallest} px)`,
+    );
     await tap('#lamp');
     check(
       await chrome.page.evaluate(
@@ -119,10 +146,46 @@ for (const [name, viewport] of [
       `${name}: the whole pause panel is on the screen${panel.outside.length ? ' (not: ' + panel.outside.join(', ') + ')' : ''}`,
     );
     check(panel.keys === 'none', `${name}: and has a hint for fingers in place of the list of keys`);
+    // its rows are tall enough for a finger and nothing in it is in smaller letters than 12 px
+    const rows = await chrome.page.evaluate(() => {
+      const sizes = [...document.querySelectorAll('#actions button')]
+        .filter((button) => button.offsetParent)
+        .map((button) => Math.min(button.getBoundingClientRect().width, button.getBoundingClientRect().height));
+      const letters = [...document.querySelectorAll('#actions button, #actions span, #touch-hint')]
+        .filter((each) => each.offsetParent)
+        .map((each) => parseFloat(getComputedStyle(each).fontSize));
+      return { row: Math.min(...sizes), letters: Math.min(...letters) };
+    });
+    check(
+      rows.row >= 38 && rows.letters >= 12,
+      `${name}: its buttons are at least 38 px tall (${rows.row.toFixed(0)}) and its letters 12 px (${rows.letters.toFixed(1)})`,
+    );
+    // the look-speed slider is there, and a slider answers a finger (a tap a fifth of the way along it)
+    const slider = await chrome.page.evaluate(() => {
+      const look = document.getElementById('look').getBoundingClientRect();
+      const r = document.getElementById('fov').getBoundingClientRect();
+      const along = r.width > r.height;
+      return {
+        look: Math.max(look.width, look.height),
+        at: along ? [r.left + r.width * 0.2, r.top + r.height / 2] : [r.left + r.width / 2, r.top + r.height * 0.2],
+      };
+    });
+    await chrome.page.touchscreen.tap(slider.at[0], slider.at[1]);
+    await chrome.page.waitForTimeout(200);
+    const fov = await chrome.page.evaluate(() => [
+      +document.getElementById('fov').value,
+      JSON.parse(localStorage.getItem('hollowtide')).fov,
+    ]);
+    check(
+      slider.look > 100 && fov[0] > 0.85 && fov[0] < 0.97 && fov[1] === fov[0],
+      `${name}: look speed has its slider, and a tap on a slider moves it (field of view ${fov[0]})`,
+    );
 
     // ---- a tour and a photo, from the panel
     await tap('#tour');
     check((await state(chrome)).startsWith('playing'), `${name}: "a tour" closes the panel`);
+    const tourLine = await chrome.page.evaluate(() => document.getElementById('note').textContent);
+    check(/Hold a finger/.test(tourLine), `${name}: and says how a finger takes over: "${tourLine}"`);
     const [t0, t1] = [await camera(chrome), await chrome.page.waitForTimeout(700).then(() => camera(chrome))];
     check(Math.hypot(t1.x - t0.x, t1.y - t0.y, t1.z - t0.z) > 0.5, `${name}: and the tour flies`);
     await chrome.page.touchscreen.tap(cx, cy); // any touch takes over

@@ -10,6 +10,11 @@ import type { Settings } from '../config/settings';
 import { createVeil } from './veil';
 
 const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+/** Marks a button as the current choice or not: lit for the eye, and said for whatever reads the page aloud. */
+const lit = (button: HTMLElement, on: boolean) => {
+  button.className = on ? 'on' : '';
+  button.setAttribute('aria-pressed', String(on));
+};
 
 export interface Menu {
   /** true while the scene is not being played: loading, the home view, eyes still shut, or paused */
@@ -138,16 +143,16 @@ export function createMenu(
     .querySelectorAll('button')
     .forEach((button, i) => {
       const buttonLevel = (2 - i) as Level;
-      if (buttonLevel === level) button.className = 'on';
-      else button.onclick = () => actions.onLevel(buttonLevel);
+      lit(button, buttonLevel === level);
+      if (buttonLevel !== level) button.onclick = () => actions.onLevel(buttonLevel);
     });
   // the light, in the order of config/mood.ts: the current one is lit, the others switch to theirs
   el('light')
     .querySelectorAll('button')
     .forEach((button, i) => {
       const each = MOODS[i]!;
-      if (each.name === mood) button.className = 'on';
-      else button.onclick = () => actions.onMood(each.name);
+      lit(button, each.name === mood);
+      if (each.name !== mood) button.onclick = () => actions.onMood(each.name);
     });
   // ---- the settings in the pause panel: three sliders and three choices, each written straight into `settings`
   const syncs: (() => void)[] = [];
@@ -169,7 +174,7 @@ export function createMenu(
         actions.onSettings();
       };
     });
-    syncs.push(() => buttons.forEach((button, i) => (button.className = (i === 1) === settings[key] ? 'on' : '')));
+    syncs.push(() => buttons.forEach((button, i) => lit(button, (i === 1) === settings[key])));
   };
   slider('look', 'sensitivity');
   slider('fov', 'fov');
@@ -205,15 +210,16 @@ export function createMenu(
       void veil.sink().then(() => {
         onBlack?.();
         // black for a moment, then the home view; or, for a swimmer who was in the water before the page
-        // started over (to change the light, or the detail), the water again, where they were
+        // started over (to change the light, or the detail), the place they were, paused
         setTimeout(() => {
           if (state !== 'loading') return;
           if (resume) {
+            // back in the panel the change was made in, the world in its new light behind it; resuming from
+            // there is a click, which is what taking the mouse, the whole screen and the sound each need
             state = 'playing';
-            body.className = 'playing';
             dive.textContent = 'Resume';
             actions.onWake();
-            actions.onToggle(false);
+            show(true);
           } else {
             state = 'home';
             body.className = 'home';

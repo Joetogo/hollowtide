@@ -1,7 +1,10 @@
 // The stats line (key H): frame rate, the worst frame, late frames, GPU time and the render size.
 
 export interface Hud {
+  readonly on: boolean;
   toggle(): void;
+  /** The pace is about to change on purpose (the panel halves it): frames are not late against the old one. */
+  rest(): void;
   /** Call once a frame with the time since the last one, in milliseconds. */
   frame(frameMs: number, gpuMs: number, width: number, height: number, deviceWidth: number): void;
 }
@@ -16,11 +19,17 @@ export function createHud(line: HTMLElement): Hud {
     late = 0,
     lateTotal = 0;
   return {
+    get on() {
+      return on;
+    },
     toggle() {
       on = !on;
       lateTotal = 0;
       usual = 1e9;
       line.textContent = '';
+    },
+    rest() {
+      usual = 1e9;
     },
     frame(frameMs, gpuMs, width, height, deviceWidth) {
       if (!on) return;

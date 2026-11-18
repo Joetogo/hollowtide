@@ -31,6 +31,16 @@ body {
   body { width: 100dvh; height: 100dvw; transform-origin: 0 0; transform: rotate(90deg) translateY(-100%); }
 }
 
+/* ...and a line along the bottom of the phone as it is held, the right way up for that, says so (#turn) */
+#turn { display: none; }
+@media (orientation: portrait) and (pointer: coarse) {
+  .home #turn, .loading:not(.failed) #turn {
+    position: absolute; top: 50%; right: 2.2em; display: block; transform: translate(50%, -50%) rotate(-90deg);
+    font-size: .8em; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; white-space: nowrap;
+    text-shadow: 0 .05em .4em #000; opacity: .8;
+  }
+}
+
 /* the scene, and over it the veil: the descent, the black, the eyelids (src/ui/veil.ts) */
 canvas { position: absolute; width: 100%; height: 100%; }
 #scene { touch-action: none; cursor: crosshair; transition: filter 1s, transform 1s; }
@@ -73,8 +83,8 @@ h1 {
    of the place, where the page is published with one beside it, and under it a way to see more. */
 .failed #veil { display: none; }
 .failed #menu { background: linear-gradient(#03131c80, #03131ce6 70%), url(preview.jpg) center / cover #03131c; }
-#look { display: none; width: max-content; margin: 1.6em auto 0; font-size: .85em; }
-.failed #look { display: flex; }
+#see { display: none; width: max-content; margin: 1.6em auto 0; font-size: .85em; }
+.failed #see { display: flex; }
 
 /* ---- buttons */
 button, a {
@@ -85,7 +95,7 @@ button, a {
 }
 button:hover, a:hover { transform: translateY(-.12em); filter: brightness(1.15); }
 button:active, a:active { transform: translateY(.1em); filter: brightness(.9); }
-:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+:focus-visible, .pad :focus { outline: 3px solid #fff; outline-offset: 3px; }
 #actions { display: grid; justify-items: center; gap: min(1.2em, 3.5vmin); }
 #keys b, #dive b {
   min-width: 1.1em; padding: .2em .5em; border-radius: .35em; background: #e8fbff;
@@ -100,8 +110,8 @@ button:active, a:active { transform: translateY(.1em); filter: brightness(.9); }
 .home h1 { animation: surface 2.4s ease-out both; }
 @keyframes surface { from { opacity: 0; letter-spacing: .6em; margin-right: -.6em; filter: blur(.25em); } }
 .home #dive {
-  padding: .9em 1.2em; background: none; box-shadow: none; color: #e8fbff; font-weight: 500; letter-spacing: .3em;
-  text-shadow: 0 .05em .4em #000; animation: surface 2.4s 1s ease-out both, breathe 2.6s 3.4s ease-in-out infinite;
+  padding: .9em 1.2em; background: none; box-shadow: none; color: #e8fbff; font-weight: 600; letter-spacing: .3em;
+  text-shadow: 0 .05em .4em #000, 0 0 .15em #000; animation: surface 2.4s 1s ease-out both, breathe 2.6s 3.4s ease-in-out infinite;
 }
 .home #dive i { display: flex; gap: .3em; font-style: normal; letter-spacing: 0; text-shadow: none; }
 .home #dive b { font-weight: 800; box-shadow: inset 0 -.15em #0004, 0 0 1em #7ff3ff99; }
@@ -169,22 +179,16 @@ button:active, a:active { transform: translateY(.1em); filter: brightness(.9); }
 @media (pointer: coarse) { .menu #touch-hint { display: block; } }
 
 /* ---- in the scene: a small menu button (hidden while the mouse is captured, Esc does the same) and the stats line */
-#open-menu {
+#open-menu, #mute, #lamp {
   position: absolute; top: .6em; right: .6em; display: none; padding: .3em .6em; background: #03222dd9;
   box-shadow: inset 0 0 0 2px #7ff3ff, 0 .3em 1em #0009; font-size: 1.3em; color: #e8fbff; opacity: .8;
 }
 .playing #open-menu, .playing #mute, .playing #lamp { display: flex; }
 .captured #open-menu, .captured #mute, .captured #lamp { display: none; }
 /* the sound button beside it: struck through when the sound is off */
-#mute {
-  position: absolute; top: .6em; right: 3.4em; display: none; padding: .3em .7em; background: #03222dd9;
-  box-shadow: inset 0 0 0 2px #7ff3ff, 0 .3em 1em #0009; font-size: 1.3em; color: #e8fbff; opacity: .8;
-}
+#mute { right: 3.4em; padding: .3em .7em; }
 /* and the lamp's, lit when the lamp is */
-#lamp {
-  position: absolute; top: .6em; right: 6.2em; display: none; padding: .3em .6em; background: #03222dd9;
-  box-shadow: inset 0 0 0 2px #7ff3ff, 0 .3em 1em #0009; font-size: 1.3em; color: #e8fbff; opacity: .8;
-}
+#lamp { right: 6.2em; }
 #lamp[aria-pressed=true] { color: #ffe9a8; box-shadow: inset 0 0 0 2px #ffe9a8, 0 0 1em #ffe9a880; }
 /* photo mode's two buttons, for where there are no keys */
 #photo-bar { position: absolute; left: 50%; bottom: 3vh; transform: translateX(-50%); display: none; gap: .8em; font-size: .75em; opacity: .85; }
@@ -206,14 +210,22 @@ button:active, a:active { transform: translateY(.1em); filter: brightness(.9); }
 .photo #stats, .photo #open-menu, .photo #mute, .photo #lamp { display: none; }
 .photo #note { bottom: 12vh; }
 .photo #note { opacity: .55; }
-#note b { padding: .1em .45em; border-radius: .3em; background: #e8fbff; color: #03222d; font-weight: 800; }
+/* for fingers: no text under 12 px, rows of the panel some 40 px tall, the corner buttons 44 px */
+@media (pointer: coarse) {
+  body { font-size: clamp(15px, .7vw + .9vh, 36px); }
+  .choice button, #settings .choice button { padding: 1.05em .8em; }
+  #settings label { padding: .85em 0; }
+  #open-menu, #mute, #lamp { min-width: 44px; min-height: 44px; padding: 0; }
+  #mute { right: 3.6em; }
+  #lamp { right: 6.6em; }
+}
 @media (prefers-reduced-motion: reduce) {
   .waking #scene, .home h1, .home #dive { animation: none; }
 }
 </style>
 </head>
 <body class=loading>
-<canvas id=scene></canvas>
+<canvas id=scene role=img aria-label="The underwater world. W A S D swim, the arrow keys look around, Escape opens the panel"></canvas>
 <canvas id=veil></canvas>
 <div id=menu>
   <h1>Hollowtide</h1>
@@ -221,7 +233,7 @@ button:active, a:active { transform: translateY(.1em); filter: brightness(.9); }
     <p id=depth>0.0 m</p>
     <div id=track><i id=bar></i></div>
     <p id=status aria-live=polite>Diving…</p>
-    <a id=look href="https://github.com/Richman-Tan/hollowtide#readme">See what it looks like</a>
+    <a id=see href="https://github.com/Richman-Tan/hollowtide/blob/main/README.md">See what it looks like</a>
   </div>
   <div id=actions>
     <button id=dive><i><b>W</b><b>A</b><b>S</b><b>D</b></i><span id=press>to dive</span><span id=tap>Tap to dive</span></button>
@@ -229,11 +241,11 @@ button:active, a:active { transform: translateY(.1em); filter: brightness(.9); }
     <p id=light class=choice><span>Light</span><button>Noon</button><button>Dusk</button><button>Moonlit</button></p>
     <p id=extras class=choice><span>Take</span><button id=tour>A tour</button><button id=photo>A photo</button></p>
     <div id=settings>
-      <label><span>Look speed</span><input id=look type=range min=0.3 max=2.5 step=0.05></label>
-      <label><span>Field of view</span><input id=fov type=range min=0.85 max=1.2 step=0.01></label>
-      <label><span>Volume</span><input id=volume type=range min=0 max=1 step=0.02></label>
+      <label><span>Look speed</span><input id=look type=range min=0.3 max=2.5 step=0.1></label>
+      <label><span>Field of view</span><input id=fov type=range min=0.85 max=1.2 step=0.025></label>
+      <label><span>Volume</span><input id=volume type=range min=0 max=1 step=0.05></label>
       <p id=invert class=choice><span>Up and down</span><button>Normal</button><button>Inverted</button></p>
-      <p id=picture class=choice><span>Picture</span><button>Smooth</button><button>Sharp</button></p>
+      <p id=picture class=choice><span>Picture</span><button data-tip="Smooth: sixty frames a second, at the cost of sharpness and distance where the machine is short">Smooth</button><button data-tip="Sharp: all the sharpness and distance, at thirty frames a second where the machine is short">Sharp</button></p>
       <p id=swim class=choice><span>Swimming</span><button>With arms</button><button>Classic</button></p>
     </div>
     <div id=keys>
@@ -257,12 +269,13 @@ button:active, a:active { transform: translateY(.1em); filter: brightness(.9); }
     <p id=touch-hint>Hold to swim forward · slide to steer · second finger for the scooter</p>
   </div>
 </div>
-<button id=open-menu aria-label=Menu>≡</button>
-<button id=mute aria-label=Sound aria-pressed=false>♪</button>
 <button id=lamp aria-label=Lamp aria-pressed=false>☼</button>
+<button id=mute aria-label=Sound aria-pressed=false>♪</button>
+<button id=open-menu aria-label=Menu>≡</button>
 <p id=photo-bar><button id=save>Save a picture</button><button id=leave>Back</button></p>
 <pre id=stats></pre>
 <p id=note aria-live=polite></p>
+<p id=turn>Turn your phone on its side ↻</p>
 <script>
 /*SCRIPT*/
 </script>

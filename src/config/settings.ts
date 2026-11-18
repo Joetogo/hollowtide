@@ -41,6 +41,8 @@ export interface Settings {
    * smooth. true: smoothness, down to thirty frames a second, to stay sharp and far-seeing.
    */
   sharp: boolean;
+  /** the first dive's few lines about the controls have been shown in this browser */
+  hinted: boolean;
   /** a phone or tablet: touch is the main input */
   readonly mobile: boolean;
 }
@@ -58,6 +60,7 @@ interface Stored {
   sharp?: boolean;
   mood?: string;
   keepSmooth?: boolean;
+  hinted?: boolean;
 }
 
 /** A stored number if it is one and within its range, else the default. */
@@ -124,6 +127,7 @@ export function loadSettings(): Settings {
     sharp: !!stored.sharp,
     mood: moodNamed(stored.mood).name,
     keepSmooth: !!stored.keepSmooth,
+    hinted: !!stored.hinted,
     mobile,
   };
 }
@@ -142,6 +146,7 @@ export function saveSettings(settings: Settings, fullPixels: number): void {
   const { level, detail, muted, sensitivity, invertY, volume, fov, sharp } = settings;
   const mood = settings.mood === 'noon' ? undefined : settings.mood;
   const keepSmooth = settings.keepSmooth || undefined;
+  const hinted = settings.hinted || undefined;
   write(
     KEY,
     JSON.stringify({
@@ -157,6 +162,7 @@ export function saveSettings(settings: Settings, fullPixels: number): void {
       sharp,
       mood,
       keepSmooth,
+      hinted,
     }),
   );
 }
