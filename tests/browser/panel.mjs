@@ -109,6 +109,12 @@ try {
   await chrome.page.keyboard.press('Escape');
   await wait(250);
   check((await state()).startsWith('playing'), 'Esc closes it again');
+  // (and a press a third of a second after the one that opened it is a press of its own)
+  await chrome.page.keyboard.press('Escape');
+  await wait(330);
+  await chrome.page.keyboard.press('Escape');
+  await wait(250);
+  check((await state()).startsWith('playing'), 'a second Esc a third of a second after the first closes it too');
   await chrome.page.keyboard.press('Escape');
   await inState('menu');
 

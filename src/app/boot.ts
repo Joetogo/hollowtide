@@ -465,10 +465,11 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
         else if (code === 'Enter' && photo) takePicture();
         else if (code === 'KeyT') setTour(tour < 0);
         else if (code === 'Escape') {
-          // The panel (which ends photo mode and the tour), and out of it again. Not within half a second of its
-          // opening: the Esc that gives the mouse back opens it, and the same press may still arrive here.
+          // The panel (which ends photo mode and the tour), and out of it again. Not within a fifth of a second
+          // of its opening: the Esc that gives the mouse back opens it, and the same press may still arrive here.
+          // (No longer than that: a second press half a second after the first is meant, and was being lost.)
           if (!menu.paused) menu.show(true);
-          else if (performance.now() - pausedAt > 500) menu.press();
+          else if (performance.now() - pausedAt > 200) menu.press();
         } else if (code >= 'Digit1' && code <= 'Digit6') {
           const index = code.charCodeAt(5) - 49;
           goTo(index);
