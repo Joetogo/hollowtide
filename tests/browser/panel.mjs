@@ -215,6 +215,73 @@ try {
     'and back in the water the tour has ended: the camera stays where it is',
   );
 
+  // ---- in photo mode the moment stands still, and can be run back and on to choose it
+  const moment = () => chrome.page.evaluate(() => window.__hollowtide.moment);
+  const held = async (key, ms) => {
+    await chrome.page.keyboard.down(key);
+    await wait(ms);
+    await chrome.page.keyboard.up(key);
+    await wait(120);
+  };
+  await chrome.page.keyboard.press('KeyP');
+  await wait(300);
+  const m0 = await moment();
+  await wait(500);
+  const m1 = await moment();
+  await held('KeyX', 700);
+  const m2 = await moment();
+  await wait(400);
+  const m3 = await moment();
+  await held('KeyZ', 700);
+  const m4 = await moment();
+  check(m1 === m0, 'in photo mode the moment stands still');
+  check(
+    m2 - m1 > 0.25 && m2 - m1 < 0.65 && m3 === m2,
+    `X runs it on while held (${(m2 - m1).toFixed(2)} s of the world in 0.7 s), and let go it stands again`,
+  );
+  check(m2 - m4 > 0.25, `Z runs it back (${(m2 - m4).toFixed(2)} s)`);
+  const later = await chrome.page.locator('#later').boundingBox();
+  await chrome.page.mouse.move(later.x + later.width / 2, later.y + later.height / 2);
+  await chrome.page.mouse.down();
+  await wait(600);
+  await chrome.page.mouse.up();
+  await wait(120);
+  const m5 = await moment();
+  check(m5 - m4 > 0.2, `and so does its button, while it is pressed (${(m5 - m4).toFixed(2)} s)`);
+  await chrome.page.keyboard.press('KeyP');
+  await wait(200);
+  check(
+    /Its moment: back/.test(await chrome.page.evaluate(() => document.getElementById('keys').textContent)),
+    'the list of keys has them',
+  );
+
+  // ---- asked for less motion, the tour flies the same way at half its pace, and says that the view moves
+  const stretch = async (from, to) => {
+    await chrome.page.keyboard.press('KeyT');
+    const line = await chrome.page.evaluate(() => document.getElementById('note').textContent);
+    await wait(from);
+    const a = await camera();
+    await wait(to - from);
+    const b = await camera();
+    await chrome.page.keyboard.press('Escape');
+    await wait(450);
+    await chrome.page.keyboard.press('Escape');
+    await wait(450);
+    return [Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z), line];
+  };
+  const [usual, usualLine] = await stretch(1500, 3000);
+  await chrome.page.emulateMedia({ reducedMotion: 'reduce' });
+  const [slow, slowLine] = await stretch(3000, 6000);
+  await chrome.page.emulateMedia({ reducedMotion: null });
+  check(
+    Math.abs(slow / usual - 1) < 0.2,
+    `with less motion asked for, the tour covers the same stretch in twice the time (${usual.toFixed(1)} m in 1.5 s, ${slow.toFixed(1)} m in 3 s)`,
+  );
+  check(
+    /slow tour.*moves by itself/.test(slowLine) && !/slow/.test(usualLine),
+    `and says so beforehand: "${slowLine}"`,
+  );
+
   // ---- a picture saved and photo mode left at once: the line says it was saved, and then goes
   await chrome.page.keyboard.press('KeyP');
   await wait(300);

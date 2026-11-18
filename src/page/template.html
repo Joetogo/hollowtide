@@ -191,7 +191,8 @@ button:active, a:active { transform: translateY(.1em); filter: brightness(.9); }
 #lamp { right: 6.2em; }
 #lamp[aria-pressed=true] { color: #ffe9a8; box-shadow: inset 0 0 0 2px #ffe9a8, 0 0 1em #ffe9a880; }
 /* photo mode's two buttons, for where there are no keys */
-#photo-bar { position: absolute; left: 50%; bottom: 3vh; transform: translateX(-50%); display: none; gap: .8em; font-size: .75em; opacity: .85; }
+#photo-bar { position: absolute; left: 50%; bottom: 3vh; transform: translateX(-50%); display: none; gap: .8em; font-size: .75em; opacity: .85; white-space: nowrap; }
+#photo-bar button { touch-action: none; }
 .photo.playing #photo-bar { display: flex; }
 .captured #photo-bar { display: none; }
 #mute[aria-pressed=true] { color: #7ff3ff80; text-decoration: line-through; box-shadow: inset 0 0 0 2px #7ff3ff60, 0 .3em 1em #0009; }
@@ -263,6 +264,7 @@ button:active, a:active { transform: translateY(.1em); filter: brightness(.9); }
         <i><b>C</b></i>Classic glide
         <i><b>L</b></i>Link to this view
         <i><b>P</b></i>Photo
+        <i><b>Z</b><b>X</b></i>Its moment: back / on
         <i><b>T</b></i>Tour
       </p>
     </div>
@@ -272,7 +274,7 @@ button:active, a:active { transform: translateY(.1em); filter: brightness(.9); }
 <button id=lamp aria-label=Lamp aria-pressed=false>☼</button>
 <button id=mute aria-label=Sound aria-pressed=false>♪</button>
 <button id=open-menu aria-label=Menu>≡</button>
-<p id=photo-bar><button id=save>Save a picture</button><button id=leave>Back</button></p>
+<p id=photo-bar><button id=earlier aria-label="Run the moment back">◀</button><button id=later aria-label="Run the moment on">▶</button><button id=save>Save a picture</button><button id=leave>Back</button></p>
 <pre id=stats></pre>
 <p id=note aria-live=polite></p>
 <p id=turn>Turn your phone on its side ↻</p>

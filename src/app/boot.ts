@@ -52,6 +52,8 @@ declare global {
       harness?: Harness;
       /** frames drawn by the loop so far */
       frames?: number;
+      /** harness builds: the moment the world is drawn at, in seconds */
+      moment?: number;
       /** the light the world is drawn in, once the shaders for it are in use: 'noon', 'dusk' or 'moon' */
       light?: string;
       /** set by a test to stop the loop drawing, so that only the frames it asks for exist */
@@ -76,13 +78,18 @@ const RESUME = 'hollowtide-resume';
 const THIRTY = 'Thirty frames a second is what this machine holds here: Picture is now Sharp, in the panel';
 const LINK_COPIED = 'A link to this view is copied';
 const LINK_IN_BAR = 'A link to this view is in the address bar';
-const PHOTO_KEYS = 'Photo: the moment stands still. Enter saves it, P returns';
+const PHOTO_KEYS = 'Photo: the moment stands still. Z and X run it back and on, Enter saves it, P returns';
+/** How fast the moment runs while Z or X is held in photo mode, as a share of the world's own pace. */
+const SCRUB_SPEED = 0.6;
 const coarse = () => matchMedia('(pointer: coarse)').matches;
-/** What photo mode says of itself: the keys, or for fingers (which have the two buttons) only what it is. */
-const photoHint = () => (coarse() ? 'Photo: the moment stands still' : PHOTO_KEYS);
+/** What photo mode says of itself: the keys, or for fingers (which have buttons for them) what the arrows do. */
+const photoHint = () => (coarse() ? 'Photo: the moment stands still. ◀ and ▶ run it back and on' : PHOTO_KEYS);
 /** What the tour says as it begins: how to take over, with keys or with a finger. */
 const tourHint = () =>
-  'A tour of the hollow. ' + (coarse() ? 'Hold a finger on the picture to take over' : 'Any swimming key takes over');
+  (calm() ? 'A slow tour of the hollow: the view moves by itself. ' : 'A tour of the hollow. ') +
+  (coarse() ? 'Hold a finger on the picture to take over' : 'Any swimming key takes over');
+/** Has the system been asked for less motion? Then the tour flies at half its pace, and says that it moves. */
+const calm = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const TOUR_OVER = 'The tour is over: swim on from here';
 /** Said when a gamepad is first heard from. */
 const PAD_KEYS = 'Gamepad: sticks swim and look · RT scooter · LB and RB down and up · Y lamp · A or Start the panel';
@@ -549,8 +556,11 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
     // ---- photo mode: the moment stands still, nothing but the world is on screen, and Enter saves a picture
     let photo = false;
     let shoot = false;
+    /** which way the moment is being run in photo mode: -1 back, 1 on, 0 still */
+    let scrub = 0;
     const setPhoto = (on: boolean) => {
       photo = on;
+      scrub = 0;
       document.body.classList.toggle('photo', on);
       if (on) {
         setTour(false);
@@ -628,6 +638,23 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       setPhoto(true);
     };
     document.getElementById('save')!.onclick = takePicture;
+    // ---- in photo mode the moment can be chosen: Z runs it back and X on while held, and so do two buttons
+    const run = (which: number) => () => void (scrub = which);
+    for (const [id, which] of [
+      ['earlier', -1],
+      ['later', 1],
+    ] as const) {
+      const button = document.getElementById(id)!;
+      button.onpointerdown = run(which);
+      button.onpointerup = button.onpointerleave = button.onpointercancel = run(0);
+    }
+    addEventListener('keydown', (event) => {
+      if (event.code === 'KeyZ') scrub = -1;
+      else if (event.code === 'KeyX') scrub = 1;
+    });
+    addEventListener('keyup', (event) => {
+      if (event.code === 'KeyZ' || event.code === 'KeyX') scrub = 0;
+    });
     document.getElementById('leave')!.onclick = () => setPhoto(false);
 
     sound.setVolume(settings.volume);
@@ -693,11 +720,13 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       renderer.pixelBudget = dynres.pixels;
       renderer.detail = dynres.detail;
       if (renderer.resize()) settle(dynres);
-      if (!photo) time += dt; // a photograph is of one moment
+      // a photograph is of one moment, which can be run back and on to choose it
+      time = photo ? Math.max(0, time + dt * scrub * SCRUB_SPEED) : time + dt;
+      if (__HARNESS__) hook.moment = time;
       // the swimmer's body: in view while in the water, unless the classic glide is chosen
       const [yawBefore, pitchBefore] = [camera.yaw, camera.pitch];
       if (tour >= 0) {
-        tour += dt;
+        tour += calm() ? dt / 2 : dt;
         flyPoint(tour, flight);
         lookAt(camera, flight[0]!, flight[1]!, flight[2]!, flight[3]!, flight[4]!, flight[5]!);
         if (tour >= FLY_SECONDS) {
