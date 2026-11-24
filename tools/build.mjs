@@ -17,13 +17,16 @@ import { wgslPlugin } from './wgsl.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dev = process.argv.includes('--dev');
 const harness = process.argv.includes('--harness');
-// The original ships at 97 kB. This is larger for what it adds (the swimmer, the opening, new animals, moods).
+// Sizes here are in KiB (1024 bytes). The original ships at 97. This is larger for what it adds (the swimmer,
+// the opening, new animals, moods).
 // The build strips the shaders' whitespace and comments, ships the code they share once and gives their own
 // names short ones (tools/wgsl.mjs).
-// It was 200 until version 1.1, which ended 0.7 kB under it: what the page says for itself, the gamepad in the
+// It was 200 until version 1.1, which ended 0.7 under it: what the page says for itself, the gamepad in the
 // panel and the rest had used what room there was. 220 from there, for changing the light in place and what
-// photo mode gained. The number is a brake, not a target: a rise is written down here with its reason.
-const BUDGET_KB = 220;
+// photo mode gained; version 1.3 (keys that can be chosen, a photograph's depth of field, the frame rate and
+// the resolution in the panel) used ten of that. The number is a brake, not a target: a rise is written down
+// here with its reason.
+const BUDGET_KIB = 220;
 const PORT = 5173;
 const upstream = JSON.parse(readFileSync(path.join(root, 'tools/reference/upstream.json'), 'utf8'));
 const fixtures = path.join(root, '.cache/reference', upstream.sha.slice(0, 7), 'L0/fixtures');
@@ -92,13 +95,13 @@ if (!dev) {
   mkdirSync(path.join(root, 'dist'), { recursive: true });
   const name = harness ? 'dist/index.harness.html' : 'dist/index.html';
   writeFileSync(path.join(root, name), html);
-  const kb = Buffer.byteLength(html) / 1024;
+  const kib = Buffer.byteLength(html) / 1024;
   const gz = gzipSync(Buffer.from(html), { level: 9 }).length / 1024;
   // the budget is for what ships: the test build carries its hooks on top and is never published
-  const limit = harness ? 'for the tests, not shipped: no budget' : `budget ${BUDGET_KB} kB`;
-  console.log(`${name}: ${kb.toFixed(1)} kB, ${gz.toFixed(1)} kB gzipped (${limit})`);
-  if (kb > BUDGET_KB && !harness) {
-    console.error(`over the ${BUDGET_KB} kB budget`);
+  const limit = harness ? 'for the tests, not shipped: no budget' : `budget ${BUDGET_KIB} KiB`;
+  console.log(`${name}: ${kib.toFixed(1)} KiB, ${gz.toFixed(1)} KiB gzipped (${limit})`);
+  if (kib > BUDGET_KIB && !harness) {
+    console.error(`over the ${BUDGET_KIB} KiB budget`);
     process.exitCode = 1;
   }
 } else {
@@ -115,7 +118,7 @@ if (!dev) {
             if (result.errors.length) return; // esbuild has printed them; keep serving the last good page
             html = await page(result.outputFiles[0].text, false);
             for (const res of clients) res.write('data: reload\n\n');
-            console.log(`${new Date().toLocaleTimeString()} built, ${(Buffer.byteLength(html) / 1024).toFixed(1)} kB`);
+            console.log(`${new Date().toLocaleTimeString()} built, ${(Buffer.byteLength(html) / 1024).toFixed(1)} KiB`);
           });
         },
       },

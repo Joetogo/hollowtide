@@ -14,6 +14,8 @@ export interface InputActions {
   onPadButton(): void;
   /** B went down: out of the panel, if it is up */
   onPadBack(): void;
+  /** what a key stands for, by its KeyboardEvent.code: keys can be chosen (config/keys.ts) */
+  bound(code: string): string;
 }
 
 export interface Input {
@@ -68,9 +70,9 @@ export function bindInput(canvas: HTMLCanvasElement, intent: Intent, actions: In
       return;
     }
     // the controls that are on screen, without the choices already made: there is nothing to press on those
-    const controls = [...document.querySelectorAll<HTMLElement>('#menu button:not(.on), #menu input')].filter(
-      (each) => each.offsetParent,
-    );
+    const controls = [
+      ...document.querySelectorAll<HTMLElement>('#menu button:not(.on, [data-k], #usual):enabled, #menu input'),
+    ].filter((each) => each.offsetParent);
     const next = controls[controls.indexOf(focus as HTMLElement) + (across || along)] ?? controls[0];
     // (a ring is drawn round what has the focus only for the keyboard; this asks for it too)
     document.documentElement.className = 'pad';
@@ -107,7 +109,8 @@ export function bindInput(canvas: HTMLCanvasElement, intent: Intent, actions: In
   };
 
   const key = (event: KeyboardEvent, down: 0 | 1) => {
-    switch (event.code) {
+    const code = actions.bound(event.code);
+    switch (code) {
       case 'KeyW':
         keys.forward = down;
         break;
@@ -144,13 +147,13 @@ export function bindInput(canvas: HTMLCanvasElement, intent: Intent, actions: In
         keys.turnDown = down;
         break;
       default:
-        if (down && !event.repeat) actions.onKey(event.code);
+        if (down && !event.repeat) actions.onKey(code);
     }
     apply();
   };
   addEventListener('keydown', (event) => {
     // (with the panel up only the keys that mean something there: stats, sound, and Esc to close it again)
-    if (actions.menuOpen() && event.code !== 'KeyH' && event.code !== 'KeyM' && event.code !== 'Escape') return;
+    if (actions.menuOpen() && !/^(KeyH|KeyM|Escape)$/.test(actions.bound(event.code))) return;
     // (Space on a button that has the focus presses that button, as it does anywhere)
     if (event.code === 'Space' && event.target instanceof HTMLButtonElement) return;
     actions.onGesture();

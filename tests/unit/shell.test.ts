@@ -5,6 +5,7 @@ import {
   addFrame,
   addGpuTime,
   createDynRes,
+  fixPixels,
   hold,
   MAX_PIXELS,
   MIN_DETAIL,
@@ -238,6 +239,30 @@ describe('dynamic resolution', () => {
     expect(state.pixels).toBe(MAX_PIXELS);
     expect(state.detail).toBe(1);
     expect(SHARP).toBeGreaterThan(SMOOTH * 2);
+  });
+
+  it('a pixel count that was asked for is kept: too slow or fast, only the draw distance is traded', () => {
+    const state = createDynRes(1e6, 1, false);
+    fixPixels(state, 1, FULL);
+    expect(state.pixels).toBe(MAX_PIXELS); // at once, not a measuring period later
+    for (let i = 0; i < 12; i++) period(state, 33, 30);
+    expect(state.pixels).toBe(MAX_PIXELS);
+    expect(state.detail).toBe(MIN_DETAIL);
+    expect(state.stuck).toBeGreaterThan(0); // and it says when that is not enough
+    for (let i = 0; i < 12; i++) period(state, 16.7, 4);
+    expect([state.pixels, state.detail]).toEqual([MAX_PIXELS, 1]);
+    // half of them: half the full count, whatever there is time for
+    fixPixels(state, 0.5, FULL);
+    expect(state.pixels).toBe(MAX_PIXELS / 2);
+    for (let i = 0; i < 12; i++) period(state, 16.7, 2);
+    expect([state.pixels, state.detail]).toEqual([MAX_PIXELS / 2, 1]);
+    // in another window the same share of what that one has, from the next measuring period
+    for (let i = 0; i < 80; i++) addFrame(state, 16.7, false, 1e6);
+    expect(state.pixels).toBe(5e5);
+    // and given back, the count is the controller's again
+    fixPixels(state, 0, FULL);
+    for (let i = 0; i < 12; i++) period(state, 16.7, 4);
+    expect(state.pixels).toBe(MAX_PIXELS);
   });
 
   it('never goes below fewer pixels on a phone than its own floor', () => {

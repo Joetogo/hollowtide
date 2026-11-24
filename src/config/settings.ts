@@ -2,6 +2,7 @@
 import { MAX_PIXELS } from '../render/dynres';
 import type { Level } from './quality';
 import { moodNamed } from './mood';
+import { saneKeys, type Keys } from './keys';
 
 const KEY = 'hollowtide';
 /** Set while a world is being built. Still set on the next visit, it means that load took the tab down. */
@@ -43,6 +44,15 @@ export interface Settings {
   sharp: boolean;
   /** the first dive's few lines about the controls have been shown in this browser */
   hinted: boolean;
+  /** the actions that have been given another key than their own (config/keys.ts) */
+  keys: Keys;
+  /** the most frames a second that are drawn: 60 or 30, or 0 for as many as the screen shows */
+  fps: number;
+  /**
+   * The share of the full pixel count the picture is drawn at, whatever that costs: 0.5 or 1. Or 0: it is given
+   * up and taken back as the machine can afford (render/dynres.ts).
+   */
+  resolution: number;
   /** a phone or tablet: touch is the main input */
   readonly mobile: boolean;
 }
@@ -61,6 +71,9 @@ interface Stored {
   mood?: string;
   keepSmooth?: boolean;
   hinted?: boolean;
+  fps?: number;
+  resolution?: number;
+  keys?: unknown;
 }
 
 /** A stored number if it is one and within its range, else the default. */
@@ -128,6 +141,9 @@ export function loadSettings(): Settings {
     mood: moodNamed(stored.mood).name,
     keepSmooth: !!stored.keepSmooth,
     hinted: !!stored.hinted,
+    fps: stored.fps === 60 || stored.fps === 30 ? stored.fps : 0,
+    resolution: stored.resolution === 0.5 || stored.resolution === 1 ? stored.resolution : 0,
+    keys: saneKeys(stored.keys),
     mobile,
   };
 }
@@ -147,6 +163,9 @@ export function saveSettings(settings: Settings, fullPixels: number): void {
   const mood = settings.mood === 'noon' ? undefined : settings.mood;
   const keepSmooth = settings.keepSmooth || undefined;
   const hinted = settings.hinted || undefined;
+  const fps = settings.fps || undefined;
+  const resolution = settings.resolution || undefined;
+  const keys = Object.keys(settings.keys).length ? settings.keys : undefined;
   write(
     KEY,
     JSON.stringify({
@@ -163,6 +182,9 @@ export function saveSettings(settings: Settings, fullPixels: number): void {
       mood,
       keepSmooth,
       hinted,
+      fps,
+      resolution,
+      keys,
     }),
   );
 }

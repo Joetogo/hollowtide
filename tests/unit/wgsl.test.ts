@@ -12,6 +12,7 @@ import {
 } from '../../tools/wgsl.mjs';
 import { declarations } from '../../src/gpu/bindings';
 import { BlitGroup } from '../../src/render/passes/blit';
+import { focusGroup } from '../../src/render/passes/focus';
 import { postGroup } from '../../src/render/passes/post';
 import { ShaftsBlurGroup, shaftsGroup } from '../../src/render/passes/shafts';
 import { WaterGroup } from '../../src/render/passes/water';
@@ -19,6 +20,7 @@ import { SceneGroup } from '../../src/render/scene';
 import blit from '../../src/shaders/blit.wgsl';
 import creatures from '../../src/shaders/creatures.wgsl';
 import detail from '../../src/shaders/detail.wgsl';
+import focus from '../../src/shaders/focus.wgsl';
 import leaf from '../../src/shaders/leaf.wgsl';
 import post from '../../src/shaders/post.wgsl';
 import shaftsBlur from '../../src/shaders/shafts-blur.wgsl';
@@ -96,6 +98,18 @@ describe('loadWgsl', () => {
       header: declarations(postGroup(false)),
       vertex: ['fullscreenVertex'],
       fragment: ['composite'],
+    },
+    'focus (multisampled depth)': {
+      source: focus,
+      header: declarations(focusGroup(true)),
+      vertex: ['fullscreenVertex'],
+      fragment: ['latch', 'soften'],
+    },
+    'focus (plain depth)': {
+      source: focus,
+      header: declarations(focusGroup(false)),
+      vertex: ['fullscreenVertex'],
+      fragment: ['latch', 'soften'],
     },
     detail: { source: detail, header: '', vertex: ['fullscreenVertex'], fragment: ['bakeDetail'] },
     water: { source: water, header: declarations(WaterGroup), vertex: ['fullscreenVertex'], fragment: ['drawWater'] },

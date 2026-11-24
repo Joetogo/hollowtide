@@ -23,7 +23,7 @@
 html { background: #000; }
 body {
   position: fixed; top: 0; left: 0; width: 100%; height: 100%; margin: 0; overflow: hidden; background: #000;
-  font: 700 clamp(13px, .7vw + .9vh, 36px)/1.4 system-ui, sans-serif; color: #e8fbff;
+  font: 700 clamp(15px, .7vw + .9vh, 36px)/1.4 system-ui, sans-serif; color: #e8fbff;
   -webkit-user-select: none; user-select: none;
 }
 /* a phone held upright gets the whole page turned on its side, so the scene is always landscape */
@@ -97,10 +97,12 @@ button:hover, a:hover { transform: translateY(-.12em); filter: brightness(1.15);
 button:active, a:active { transform: translateY(.1em); filter: brightness(.9); }
 :focus-visible, .pad :focus { outline: 3px solid #fff; outline-offset: 3px; }
 #actions { display: grid; justify-items: center; gap: min(1.2em, 3.5vmin); }
-#keys b, #dive b {
+#keys b, #dive b, #keys p button {
   min-width: 1.1em; padding: .2em .5em; border-radius: .35em; background: #e8fbff;
   box-shadow: inset 0 -.15em #0004; color: #03222d; text-align: center;
 }
+/* a key cap that can be pressed, to choose another key for what it does: it looks like the caps that cannot */
+#keys p button { box-sizing: content-box; font: inherit; font-weight: 900; letter-spacing: inherit; }
 
 /* ---- home: the world itself is the picture; a title, one thing to do, the rest kept small at the bottom */
 .home #menu {
@@ -125,8 +127,11 @@ button:active, a:active { transform: translateY(.1em); filter: brightness(.9); }
 /* ---- paused: a panel over the blurred world */
 .menu #menu { background: radial-gradient(#03131c00 30%, #03131ccc); }
 .menu h1 { font-size: 3em; }
+.menu #menu { place-content: safe center; overflow-y: auto; }
+/* two columns under the resume button: what is chosen once on the left, and on the right (#side) the keys with
+   what the picture is made of under them */
 .menu #actions {
-  grid-template: "dive dive" auto "detail keys" auto "light keys" auto "extras keys" auto "settings keys" 1fr / 27em auto; align-items: start;
+  grid-template: "dive dive" auto "detail side" auto "light side" auto "extras side" auto "settings side" 1fr / 27em auto; align-items: start;
   max-width: 100%; justify-items: stretch;
 }
 .menu #dive { grid-area: dive; }
@@ -134,27 +139,38 @@ button:active, a:active { transform: translateY(.1em); filter: brightness(.9); }
 .menu #light { grid-area: light; }
 .menu #extras { grid-area: extras; }
 .menu #settings { grid-area: settings; }
-.menu #keys, .menu #touch-hint { grid-area: keys; }
-/* A phone, or a small window: the list of keys is gone (below), and the panel is two columns of equal width,
-   the settings beside the rest, so that it is no taller than a phone lying on its side. Without its title
-   where there is no room for one; and if it is still too tall, it scrolls. */
-@media (pointer: coarse), (max-height: 30em), (max-width: 60em) {
+.menu #side { grid-area: side; display: grid; align-content: start; gap: min(1.2em, 3.5vmin); }
+.menu #touch-hint { grid-area: hint; }
+.home #side { display: none; }
+/* A phone, or a small window: two columns of equal width, the settings beside the rest (and what the picture
+   is made of joined on under them), so that the panel is no taller than a phone lying on its side; the keys,
+   where there are any, below both. Without its title where there is no room for one; and if it is still too
+   tall, it scrolls. */
+@media (pointer: coarse), (max-height: 40em), (max-width: 60em) {
   .menu #actions {
-    grid-template: "dive dive" auto "detail settings" auto "light settings" auto "extras settings" auto "keys settings" 1fr / 1fr 1fr;
+    grid-template: "dive dive" auto "detail settings" auto "light settings" auto "extras settings" auto "hint settings" 1fr ". display" auto "keys keys" auto / 1fr 1fr;
     width: min(54em, 100%); gap: .7em;
   }
-  .menu #menu { place-content: safe center; gap: .8em; padding: .8em; overflow-y: auto; }
+  .menu #side { display: contents; }
+  .menu #keys { grid-area: keys; }
+  .menu #display { grid-area: display; }
+  .menu #settings { padding-bottom: 0; border-radius: .7em .7em 0 0; }
+  .menu #display { margin-top: -.7em; padding-top: .35em; border-radius: 0 0 .7em .7em; }
+  .menu #keys { justify-self: center; }
+  .menu #menu { gap: .8em; padding: .8em; }
   .menu #dive { padding: .6em; }
 }
-@media (max-height: 30em), (orientation: portrait) and (pointer: coarse) { .menu h1 { display: none; } }
+@media (max-height: 44em), (orientation: portrait) and (pointer: coarse) { .menu h1 { display: none; } }
 @media (max-width: 36em) and (orientation: landscape), (max-height: 36em) and (orientation: portrait) and (pointer: coarse) {
-  /* too narrow for two columns: one, scrolling */
+  /* too narrow for two columns: one, scrolling, with the keys in one list */
   .menu #actions { grid-template: none; width: min(27em, 100%); }
-  .menu #actions > * { grid-area: auto; }
+  .menu #actions > *, .menu #side > * { grid-area: auto; }
+  .menu #keys { grid-template-columns: auto; }
+  .menu #keys p + p { padding: 1.2em 0 0; border-left: 0; border-top: 2px solid #7ff3ff40; }
 }
 .menu #dive { padding: .9em; background: linear-gradient(#9ff6ff, #19c3d6); font-size: 1.3em; box-shadow: inset 0 -.2em #0003, 0 0 2em #19c3d6b3; }
 /* dark plates under the resume button: detail level, settings, list of controls, touch hint */
-#detail, #light, #extras, #settings, #keys, #touch-hint { padding: 1em 1.6em; border-radius: .7em; background: #03131cb3; }
+#detail, #light, #extras, #settings, #display, #keys, #touch-hint { padding: 1em 1.6em; border-radius: .7em; background: #03131cb3; }
 /* a choice: a label and its options in a row, the current one lit */
 .choice { display: flex; align-items: center; gap: .4em; }
 #detail, #light, #extras { padding: .4em; }
@@ -162,20 +178,26 @@ button:active, a:active { transform: translateY(.1em); filter: brightness(.9); }
 .choice button { flex: 1.2; padding: .7em 1em; background: none; box-shadow: none; color: #e8fbff; white-space: nowrap; }
 .choice button:hover { background: #7ff3ff33; }
 .choice .on { background: linear-gradient(#9ff6ff, #19c3d6); box-shadow: inset 0 -.2em #0003; color: #03222d; pointer-events: none; }
+/* a choice that is not open for now (what is chosen elsewhere has settled it) */
+.off { opacity: .35; pointer-events: none; }
 /* settings: sliders and choices, one to a row */
-#settings { display: grid; gap: .35em; padding: .6em .4em; font-size: .85em; letter-spacing: .12em; text-transform: uppercase; }
+#settings, #display { display: grid; gap: .35em; padding: .6em .4em; font-size: .85em; letter-spacing: .12em; text-transform: uppercase; }
 #settings label { display: flex; align-items: center; gap: .4em; padding: .35em 0; }
 #settings label span { flex: 1; padding: 0 .8em; color: #7ff3ff; text-align: left; }
 #settings input { flex: 2.4; margin: 0 .8em 0 0; accent-color: #19c3d6; cursor: pointer; }
-#settings .choice button { padding: .7em .8em; }
+#settings .choice button, #display .choice button { padding: .7em .8em; }
 .home #settings, .home #extras { display: none; }
-/* list of controls: two groups, key caps right-aligned against their labels */
-#keys { display: grid; gap: 1.2em; text-align: left; }
+/* list of controls: two groups side by side, key caps right-aligned against their labels; under them how a key
+   is changed, and (once one has been) the way back */
+#keys { display: grid; grid-template-columns: auto auto; gap: 1em 1.6em; text-align: left; }
 #keys p { display: grid; grid-template-columns: auto auto; align-content: start; align-items: center; gap: .55em .9em; }
-#keys p + p { padding-top: 1.2em; border-top: 2px solid #7ff3ff40; }
+#keys p + p { padding-left: 1.6em; border-left: 2px solid #7ff3ff40; }
 #keys i { display: flex; justify-self: end; align-items: center; gap: .25em; font-style: normal; }
+#keys small { grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; gap: 1em; font-size: .9em; font-weight: 500; opacity: .75; }
+#usual { padding: .3em .8em; background: none; box-shadow: inset 0 0 0 1px #7ff3ff; color: #e8fbff; }
+#usual[hidden] { display: none; }
 #touch-hint { display: none; }
-@media (pointer: coarse), (max-height: 30em) { #keys { display: none; } }
+@media (pointer: coarse) { #keys, #rate, #pixels { display: none; } }
 @media (pointer: coarse) { .menu #touch-hint { display: block; } }
 
 /* ---- in the scene: a small menu button (hidden while the mouse is captured, Esc does the same) and the stats line */
@@ -193,6 +215,8 @@ button:active, a:active { transform: translateY(.1em); filter: brightness(.9); }
 /* photo mode's two buttons, for where there are no keys */
 #photo-bar { position: absolute; left: 50%; bottom: 3vh; transform: translateX(-50%); display: none; gap: .8em; font-size: .75em; opacity: .85; white-space: nowrap; }
 #photo-bar button { touch-action: none; }
+/* (those that are a sign and not a word: the sign a little larger, the button no taller) */
+#photo-bar [aria-label] { padding: .45em 1em; font-size: 1.3em; }
 .photo.playing #photo-bar { display: flex; }
 .captured #photo-bar { display: none; }
 #mute[aria-pressed=true] { color: #7ff3ff80; text-decoration: line-through; box-shadow: inset 0 0 0 2px #7ff3ff60, 0 .3em 1em #0009; }
@@ -207,14 +231,21 @@ button:active, a:active { transform: translateY(.1em); filter: brightness(.9); }
   white-space: nowrap; opacity: 0; transition: opacity .5s; pointer-events: none;
 }
 #note.on { opacity: 1; }
+/* (over the panel it stands lower: clear of the panel's last row) */
+.menu #note { bottom: 4vh; }
+/* photo mode's grid: the thirds, drawn over the picture and not in it */
+.thirds::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(#fff6, #fff6) 33.33% 0 / 1px 100% no-repeat, linear-gradient(#fff6, #fff6) 66.67% 0 / 1px 100% no-repeat,
+    linear-gradient(#fff6, #fff6) 0 33.33% / 100% 1px no-repeat, linear-gradient(#fff6, #fff6) 0 66.67% / 100% 1px no-repeat;
+}
 /* photo mode: nothing on the picture but its one line of keys, and that faint */
 .photo #stats, .photo #open-menu, .photo #mute, .photo #lamp { display: none; }
 .photo #note { bottom: 12vh; }
 .photo #note { opacity: .55; }
-/* for fingers: no text under 12 px, rows of the panel some 40 px tall, the corner buttons 44 px */
+/* for fingers: rows of the panel some 40 px tall, the corner buttons 44 px */
 @media (pointer: coarse) {
-  body { font-size: clamp(15px, .7vw + .9vh, 36px); }
-  .choice button, #settings .choice button { padding: 1.05em .8em; }
+  .choice button, #settings .choice button, #display .choice button { padding: 1.05em .8em; }
   #settings label { padding: .85em 0; }
   #open-menu, #mute, #lamp { min-width: 44px; min-height: 44px; padding: 0; }
   #mute { right: 3.6em; }
@@ -237,7 +268,7 @@ button:active, a:active { transform: translateY(.1em); filter: brightness(.9); }
     <a id=see href="https://github.com/Richman-Tan/hollowtide/blob/main/README.md">See what it looks like</a>
   </div>
   <div id=actions>
-    <button id=dive><i><b>W</b><b>A</b><b>S</b><b>D</b></i><span id=press>to dive</span><span id=tap>Tap to dive</span></button>
+    <button id=dive><i><b data-k=KeyW>W</b><b data-k=KeyA>A</b><b data-k=KeyS>S</b><b data-k=KeyD>D</b></i><span id=press>to dive</span><span id=tap>Tap to dive</span></button>
     <p id=detail class=choice><span>Detail</span><button>Low</button><button>Medium</button><button>High</button></p>
     <p id=light class=choice><span>Light</span><button>Noon</button><button>Dusk</button><button>Moonlit</button></p>
     <p id=extras class=choice><span>Take</span><button id=tour>A tour</button><button id=photo>A photo</button></p>
@@ -246,27 +277,37 @@ button:active, a:active { transform: translateY(.1em); filter: brightness(.9); }
       <label><span>Field of view</span><input id=fov type=range min=0.85 max=1.2 step=0.025></label>
       <label><span>Volume</span><input id=volume type=range min=0 max=1 step=0.05></label>
       <p id=invert class=choice><span>Up and down</span><button>Normal</button><button>Inverted</button></p>
-      <p id=picture class=choice><span>Picture</span><button data-tip="Smooth: sixty frames a second, at the cost of sharpness and distance where the machine is short">Smooth</button><button data-tip="Sharp: all the sharpness and distance, at thirty frames a second where the machine is short">Sharp</button></p>
       <p id=swim class=choice><span>Swimming</span><button>With arms</button><button>Classic</button></p>
     </div>
+    <div id=side>
     <div id=keys>
       <p>
-        <i><b>W</b><b>A</b><b>S</b><b>D</b></i>Swim
-        <i><b>Q</b><b>E</b></i>Down / up
-        <i><b>Shift</b></i>Scooter
+        <i><button data-k=KeyW>W</button><button data-k=KeyA>A</button><button data-k=KeyS>S</button><button data-k=KeyD>D</button></i>Swim
+        <i><button data-k=KeyQ>Q</button><button data-k=KeyE>E</button></i>Down / up
+        <i><button data-k=ShiftLeft>Shift</button></i>Scooter
         <i><b>1</b>–<b>6</b></i>Viewpoints
+        <i><b>Esc</b></i>Menu
+        <i><button data-k=KeyM>M</button></i>Mute
+        <i><button data-k=KeyH>H</button></i>Stats
+        <i><button data-k=KeyF>F</button></i>Lamp
       </p>
       <p>
-        <i><b>Esc</b></i>Menu
-        <i><b>M</b></i>Mute
-        <i><b>H</b></i>Stats
-        <i><b>F</b></i>Lamp
-        <i><b>C</b></i>Classic glide
-        <i><b>L</b></i>Link to this view
-        <i><b>P</b></i>Photo
-        <i><b>Z</b><b>X</b></i>Its moment: back / on
-        <i><b>T</b></i>Tour
+        <i><button data-k=KeyC>C</button></i>Classic glide
+        <i><button data-k=KeyL>L</button></i>Link to this view
+        <i><button data-k=KeyT>T</button></i>Tour
+        <i><button data-k=KeyP>P</button></i>Photo
+        <i><button data-k=KeyZ>Z</button><button data-k=KeyX>X</button></i>Its moment: back / on
+        <i><button data-k=KeyV>V</button><button data-k=KeyB>B</button></i>Its light: less / more
+        <i><button data-k=KeyG>G</button></i>Its grid
+        <i><button data-k=KeyO>O</button></i>Its focus
       </p>
+      <small>Press a key here to choose another<button id=usual hidden>The usual keys</button></small>
+    </div>
+    <div id=display>
+      <p id=picture class=choice><span>Picture</span><button data-tip="Smooth: sixty frames a second, at the cost of sharpness and distance where the machine is short">Smooth</button><button data-tip="Sharp: all the sharpness and distance, at thirty frames a second where the machine is short">Sharp</button></p>
+      <p id=rate class=choice><span>Frames</span><button data-tip="Screen: as many frames a second as the screen shows">Screen</button><button data-tip="No more than sixty frames a second">60</button><button data-tip="No more than thirty frames a second: a cooler machine, and the picture as sharp as it can be">30</button></p>
+      <p id=pixels class=choice><span>Resolution</span><button data-tip="Auto: sharpness is given up where the machine is short, and comes back where it is not">Auto</button><button data-tip="Half: half the pixels, always. A cooler machine">Half</button><button data-tip="Full: every pixel, always. Where the machine is short, it is distance that goes">Full</button></p>
+    </div>
     </div>
     <p id=touch-hint>Hold to swim forward · slide to steer · second finger for the scooter</p>
   </div>
@@ -274,7 +315,7 @@ button:active, a:active { transform: translateY(.1em); filter: brightness(.9); }
 <button id=lamp aria-label=Lamp aria-pressed=false>☼</button>
 <button id=mute aria-label=Sound aria-pressed=false>♪</button>
 <button id=open-menu aria-label=Menu>≡</button>
-<p id=photo-bar><button id=earlier aria-label="Run the moment back">◀</button><button id=later aria-label="Run the moment on">▶</button><button id=save>Save a picture</button><button id=leave>Back</button></p>
+<p id=photo-bar><button id=earlier aria-label="Run the moment back">◀</button><button id=later aria-label="Run the moment on">▶</button><button id=darker aria-label=Darker>☼−</button><button id=brighter aria-label=Brighter>☼+</button><button id=grid aria-label=Grid>#</button><button id=focus aria-label="Focus on the middle of the picture">◎</button><button id=save>Save a picture</button><button id=leave>Back</button></p>
 <pre id=stats></pre>
 <p id=note aria-live=polite></p>
 <p id=turn>Turn your phone on its side ↻</p>

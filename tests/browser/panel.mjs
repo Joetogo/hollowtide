@@ -1,6 +1,7 @@
 // What the page says for itself, and how its panel is worked: the lines a first dive is told, Esc into the panel
 // and out of it, the line that comes up over a button, the gamepad in the panel, names for the viewpoints, a
-// link that carries its light, and what a change of light leaves behind. Needs only the harness build.
+// link that carries its light, what a change of light leaves behind, the frame rate and the resolution fixed, what
+// a photograph can be given, and keys chosen. Needs only the harness build.
 import path from 'node:path';
 import { check, finish, launch, need, root, serve } from './lib.mjs';
 
@@ -370,6 +371,290 @@ try {
   await chrome.page.keyboard.press('Enter');
   await wait(400);
   check((await state()).startsWith('playing'), 'Resume goes back into the water');
+
+  // ---- how many frames a second are drawn, and how many pixels, can be fixed in the panel
+  const frames = () => chrome.page.evaluate(() => window.__hollowtide.frames);
+  const pace = async (ms) => {
+    const [from, start] = [await frames(), Date.now()];
+    await wait(ms);
+    return (((await frames()) - from) * 1000) / (Date.now() - start);
+  };
+  /** opens the panel, presses the nth button of a row, closes it; says whether smooth or sharp could be pressed */
+  const choose = async (row, nth) => {
+    await chrome.page.keyboard.press('Escape');
+    await inState('menu');
+    await chrome.page.click(`#${row} button:nth-of-type(${nth})`);
+    await wait(300);
+    const open = await chrome.page.evaluate(() =>
+      [...document.querySelectorAll('#picture button')].every((button) => !button.disabled),
+    );
+    await chrome.page.keyboard.press('Escape');
+    await inState('playing');
+    await wait(500);
+    return open;
+  };
+  const free = await pace(1500);
+  const openAtThirty = await choose('rate', 3);
+  const thirty = await pace(2500);
+  check(
+    thirty < 31.5 && thirty > Math.min(24, free * 0.7),
+    `asked for thirty frames a second, thirty are drawn (${thirty.toFixed(1)}; ${free.toFixed(0)} before)`,
+  );
+  check(
+    !openAtThirty && (await stored()).fps === 30,
+    'smooth or sharp is no question then (that row cannot be pressed), and the thirty are remembered',
+  );
+  const openAtSixty = await choose('rate', 2);
+  const sixty = await pace(2000);
+  check(sixty < 62.5 && openAtSixty, `asked for sixty, no more than sixty (${sixty.toFixed(1)})`);
+  await choose('rate', 1);
+  check((await stored()).fps === undefined, "and the screen's own pace again is nothing to remember");
+  const size = async () => {
+    await wait(1400); // (the stats line is written twice a second)
+    return chrome.page.evaluate(() =>
+      /(\d+)x(\d+) \((\d+)%\)/.exec(document.getElementById('stats').textContent)?.slice(1).map(Number),
+    );
+  };
+  if (!(await size())) await chrome.page.keyboard.press('KeyH');
+  await choose('pixels', 2);
+  const half = await size();
+  check(
+    half?.[2] > 66 && half?.[2] < 78 && (await stored()).resolution === 0.5,
+    `half the pixels asked for: the picture is drawn at ${half?.[0]}x${half?.[1]}, whatever there is time for`,
+  );
+  await choose('pixels', 3);
+  const full = await size();
+  check(
+    full?.[2] === 100 && (await stored()).resolution === 1,
+    `all of them asked for: ${full?.[0]}x${full?.[1]} (${full?.[2]} %)`,
+  );
+  await choose('pixels', 1);
+  check((await stored()).resolution === undefined, 'and left to the page again, nothing is remembered for it');
+
+  // ---- a photograph can be given a depth of field, made lighter or darker, and set out by a grid
+  await chrome.page.keyboard.press('Digit4');
+  await wait(500);
+  await chrome.page.keyboard.press('KeyP');
+  await wait(500);
+  const fourth = await chrome.page.evaluate(() => window.__hollowtide.harness.viewpoints()[3]);
+  const frozen = await moment();
+  const shot = () =>
+    chrome.page.evaluate(([view, time]) => window.__hollowtide.harness.capture(view, time).png, [fourth, frozen]);
+  /** how many edges a part of a picture has (the mean step in brightness from a pixel to the next), and how light it is */
+  const look = (png) =>
+    chrome.page.evaluate(async (png) => {
+      const bitmap = await createImageBitmap(await (await fetch(png)).blob());
+      const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+      const context = canvas.getContext('2d');
+      context.drawImage(bitmap, 0, 0);
+      const { data, width, height } = context.getImageData(0, 0, bitmap.width, bitmap.height);
+      const luma = (i) => data[i] * 0.2126 + data[i + 1] * 0.7152 + data[i + 2] * 0.0722;
+      const part = (x0, y0, x1, y1) => {
+        let [edges, light, n] = [0, 0, 0];
+        for (let y = Math.floor(y0 * height); y < Math.floor(y1 * height) - 1; y++)
+          for (let x = Math.floor(x0 * width); x < Math.floor(x1 * width) - 1; x++) {
+            const i = (y * width + x) * 4;
+            edges += Math.abs(luma(i) - luma(i + 4)) + Math.abs(luma(i) - luma(i + width * 4));
+            light += luma(i);
+            n++;
+          }
+        return { edges: edges / n, light: light / n };
+      };
+      return { middle: part(0.42, 0.4, 0.58, 0.6), near: part(0.55, 0.72, 1, 0.98), all: part(0, 0, 1, 1) };
+    }, png);
+  const plain = await shot();
+  const sharp = await look(plain);
+  await chrome.page.keyboard.press('KeyO');
+  await wait(500);
+  const focusLine = await note();
+  const soft = await look(await shot());
+  check(/^Focus held on the middle of the picture.*O lets go$/.test(focusLine), `O holds the focus: "${focusLine}"`);
+  check(
+    soft.near.edges < sharp.near.edges * 0.8 && soft.middle.edges > sharp.middle.edges * 0.9,
+    `what is far in the middle of the picture stays sharp (edges ${sharp.middle.edges.toFixed(2)} → ${soft.middle.edges.toFixed(2)}) ` +
+      `and the seabed close by goes soft (${sharp.near.edges.toFixed(2)} → ${soft.near.edges.toFixed(2)})`,
+  );
+  const [kept] = await Promise.all([
+    chrome.page.waitForEvent('download', { timeout: 40_000 }),
+    chrome.page.keyboard.press('Enter'),
+  ]);
+  await kept.path();
+  await wait(300);
+  check(/^Saved, \d+ × \d+, the world alone$/.test(await note()), `and a picture is saved so: "${await note()}"`);
+  await chrome.page.keyboard.press('KeyO');
+  await wait(400);
+  const letGo = await note();
+  check((await shot()) === plain && /let go/.test(letGo), 'let go again, the picture is what it was to the last pixel');
+  await chrome.page.keyboard.press('KeyB');
+  await chrome.page.keyboard.press('KeyB');
+  await wait(300);
+  const brighterLine = await note();
+  const brighter = await look(await shot());
+  for (let i = 0; i < 3; i++) await chrome.page.keyboard.press('KeyV');
+  await wait(300);
+  const darkerLine = await note();
+  const darker = await look(await shot());
+  check(
+    brighterLine === 'Exposure +1 stop' && darkerLine === 'Exposure −0.5 stops',
+    `B and V move the exposure by half a stop, and say where it is: "${brighterLine}", "${darkerLine}"`,
+  );
+  check(
+    brighter.all.light > sharp.all.light * 1.15 && darker.all.light < sharp.all.light * 0.95,
+    `and the picture is lighter, then darker (${sharp.all.light.toFixed(0)}: ${brighter.all.light.toFixed(0)}, ${darker.all.light.toFixed(0)})`,
+  );
+  const thirds = () =>
+    chrome.page.evaluate(
+      () =>
+        document.body.classList.contains('thirds') &&
+        getComputedStyle(document.body, '::after').backgroundImage.includes('gradient'),
+    );
+  await chrome.page.keyboard.press('KeyG');
+  await wait(200);
+  const gridLine = await note();
+  const gridOn = await thirds();
+  await chrome.page.keyboard.press('KeyP');
+  await wait(300);
+  const gridOutside = await thirds();
+  await chrome.page.keyboard.press('KeyP');
+  await wait(400);
+  const gridAgain = await thirds();
+  const again = await look(await shot());
+  check(
+    gridOn && !gridOutside && gridAgain && /^Grid on/.test(gridLine),
+    'G lays a grid of thirds over the picture; it goes with photo mode and is there again in the next photograph',
+  );
+  check(
+    Math.abs(again.all.light / sharp.all.light - 1) < 0.02 && Math.abs(again.near.edges / sharp.near.edges - 1) < 0.1,
+    'the exposure and the focus are for one photograph: the next begins as the eye has it, all sharp',
+  );
+  await chrome.page.keyboard.press('KeyG');
+  await chrome.page.keyboard.press('KeyP');
+  await wait(300);
+
+  // ---- keys can be chosen: a cap in the panel's list is pressed, and then the key that is to do its job
+  const cap = (action) =>
+    chrome.page.evaluate((action) => document.querySelector(`#keys [data-k=${action}]`).textContent, action);
+  const far = (a, b) => Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
+  await chrome.page.keyboard.press('Escape');
+  await inState('menu');
+  await chrome.page.click('#keys [data-k=KeyW]');
+  await wait(150);
+  const asked = await note();
+  await chrome.page.keyboard.press('Escape');
+  await wait(300);
+  check(
+    /^Press the key for swimming forward/.test(asked) && (await state()) === 'menu' && (await cap('KeyW')) === 'W',
+    `a key cap pressed asks for a key ("${asked}"); Esc leaves the key as it was, and the panel open`,
+  );
+  await chrome.page.click('#keys [data-k=KeyW]');
+  await chrome.page.keyboard.press('Enter');
+  await wait(150);
+  const refused = await note();
+  await chrome.page.click('#keys [data-k=KeyW]');
+  await chrome.page.keyboard.press('KeyI');
+  await wait(150);
+  const given = await note();
+  check(/^Enter is not a key/.test(refused), `a key the panel needs is not to be had: "${refused}"`);
+  check(
+    given === 'I is now the key for swimming forward' &&
+      (await cap('KeyW')) === 'I' &&
+      (await stored()).keys?.KeyW === 'KeyI',
+    `another key is: "${given}", on the cap, and remembered`,
+  );
+  await chrome.page.click('#keys [data-k=KeyM]');
+  await chrome.page.keyboard.press('KeyH');
+  await wait(150);
+  const swapped = await note();
+  check(
+    swapped === 'H is now the key for the sound · and M for the stats line' &&
+      (await cap('KeyM')) === 'H' &&
+      (await cap('KeyH')) === 'M',
+    `a key that had a job swaps with it: "${swapped}"`,
+  );
+  await chrome.page.click('#keys [data-k=KeyC]');
+  await chrome.page.keyboard.press('KeyK');
+  // (and with the keyboard alone: the cap in focus, Space to press it, and then Space as the key)
+  await chrome.page.focus('#keys [data-k=KeyF]');
+  await chrome.page.keyboard.press('Space');
+  await wait(150);
+  const askedByKey = await note();
+  await chrome.page.keyboard.press('Space');
+  await wait(400);
+  const space = await note();
+  check(
+    /^Press the key for the lamp/.test(askedByKey) && space === 'Space is now the key for the lamp',
+    `a cap can be pressed with the keyboard, and Space chosen with it: "${space}"`,
+  );
+  // the gamepad goes through the panel's settings and not through the twenty key caps
+  const visited = [];
+  for (let i = 0; i < 16; i++) {
+    await pad(DOWN);
+    visited.push(await chrome.page.evaluate(() => document.activeElement?.dataset.k ?? document.activeElement?.id));
+  }
+  check(
+    !visited.some((id) => /^(Key|Shift)|usual/.test(id ?? '')) && visited.includes('look'),
+    'the gamepad still goes from setting to setting: the key caps are not in its way',
+  );
+  await chrome.page.keyboard.press('Escape');
+  await inState('playing');
+  await wait(1500);
+  const rest = await camera();
+  await held('KeyW', 800);
+  await wait(300);
+  const stillThere = await camera();
+  await held('KeyI', 800);
+  const swum = await camera();
+  check(
+    far(rest, stillThere) < 0.05 && far(stillThere, swum) > 0.3,
+    `in the water I swims forward (${far(stillThere, swum).toFixed(1)} m) and W no longer does (${far(rest, stillThere).toFixed(2)} m)`,
+  );
+  await chrome.page.keyboard.press('KeyH');
+  await wait(200);
+  const soundOff = await note();
+  await chrome.page.keyboard.press('KeyH');
+  await chrome.page.keyboard.press('KeyK');
+  await wait(200);
+  const glide = await note();
+  await chrome.page.keyboard.press('KeyK');
+  await chrome.page.keyboard.press('Space');
+  await wait(200);
+  const lampLine = await note();
+  await chrome.page.keyboard.press('Space');
+  check(
+    soundOff === 'Sound off' && /K brings the arms back$/.test(glide) && /^Lamp o/.test(lampLine),
+    `H is the sound, Space the lamp, and what the page says names the keys as they are: "${glide}"`,
+  );
+  // on the next visit they are as they were left, on the home view too
+  await chrome.open(host.origin + '/', { tuning: 'tuned' });
+  await inState('home', 30_000);
+  const home = await chrome.page.evaluate(() => [
+    document.querySelector('#dive i').textContent,
+    document.getElementById('scene').getAttribute('aria-label'),
+  ]);
+  await wait(1200);
+  await chrome.page.keyboard.press('KeyW');
+  await wait(700);
+  const stayed = await state();
+  await chrome.page.keyboard.press('KeyI');
+  await inState('playing');
+  check(
+    home[0] === 'IASD' && /I A S D swim/.test(home[1]) && stayed === 'home',
+    `the next visit has them: the home view says ${home[0].split('').join(' ')} to dive, and I dives where W does not`,
+  );
+  await chrome.page.keyboard.press('Escape');
+  await inState('menu');
+  const offered = await chrome.page.evaluate(() => !document.getElementById('usual').hidden);
+  await chrome.page.click('#usual');
+  await wait(150);
+  check(
+    offered &&
+      (await note()) === 'The usual keys are back' &&
+      (await cap('KeyW')) === 'W' &&
+      (await cap('KeyF')) === 'F' &&
+      (await stored()).keys === undefined &&
+      (await chrome.page.evaluate(() => document.getElementById('usual').hidden)),
+    'and one button puts the usual keys back, and is gone when they are',
+  );
 
   const gpuErrors = await chrome.page.evaluate(() => window.__hollowtide.harness.gpuErrors());
   check(gpuErrors.length === 0, `no shader or validation errors${gpuErrors.length ? ': ' + gpuErrors.join('; ') : ''}`);

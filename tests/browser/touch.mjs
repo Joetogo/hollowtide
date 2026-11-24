@@ -134,18 +134,23 @@ for (const [name, viewport] of [
     await chrome.page.waitForTimeout(700);
     const panel = await chrome.page.evaluate(() => {
       const outside = [];
-      for (const id of ['dive', 'detail', 'light', 'extras', 'settings', 'touch-hint']) {
+      for (const id of ['dive', 'detail', 'light', 'extras', 'settings', 'display', 'touch-hint']) {
         const r = document.getElementById(id).getBoundingClientRect();
         if (r.width < 10 || r.left < -1 || r.top < -1 || r.right > innerWidth + 1 || r.bottom > innerHeight + 1)
           outside.push(id);
       }
-      return { outside, keys: getComputedStyle(document.getElementById('keys')).display };
+      const shown = (id) => getComputedStyle(document.getElementById(id)).display;
+      return { outside, keys: shown('keys'), fixed: [shown('rate'), shown('pixels'), shown('picture')] };
     });
     check(
       panel.outside.length === 0,
       `${name}: the whole pause panel is on the screen${panel.outside.length ? ' (not: ' + panel.outside.join(', ') + ')' : ''}`,
     );
     check(panel.keys === 'none', `${name}: and has a hint for fingers in place of the list of keys`);
+    check(
+      panel.fixed.join() === 'none,none,flex',
+      `${name}: of what the picture is made of it has smooth or sharp, and leaves the frame rate and the resolution to the phone`,
+    );
     // its rows are tall enough for a finger and nothing in it is in smaller letters than 12 px
     const rows = await chrome.page.evaluate(() => {
       const sizes = [...document.querySelectorAll('#actions button')]
@@ -200,6 +205,26 @@ for (const [name, viewport] of [
           getComputedStyle(document.getElementById('photo-bar')).display === 'flex',
       ),
       `${name}: "a photo" is photo mode, with buttons to save and to go back`,
+    );
+    // what a photograph can be given has a button each, and all of them are on the screen
+    const bar = await chrome.page.evaluate(() =>
+      [...document.querySelectorAll('#photo-bar button')].every((button) => {
+        const r = button.getBoundingClientRect();
+        return r.width > 20 && r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight;
+      }),
+    );
+    const line = () => chrome.page.evaluate(() => document.getElementById('note').textContent);
+    await tap('#brighter');
+    const brighter = await line();
+    await tap('#grid');
+    const grid = await chrome.page.evaluate(() => document.body.classList.contains('thirds'));
+    await tap('#focus');
+    await chrome.page.waitForTimeout(300);
+    const focus = await line();
+    check(bar, `${name}: photo mode's buttons are all on the screen`);
+    check(
+      brighter === 'Exposure +0.5 stops' && grid && /^Focus held on the middle.*◎ lets go$/.test(focus),
+      `${name}: they make the photograph brighter, lay a grid over it, and hold the focus ("${focus}")`,
     );
     const [download] = await Promise.all([chrome.page.waitForEvent('download', { timeout: 20_000 }), tap('#save')]);
     check(

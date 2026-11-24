@@ -116,7 +116,7 @@ for (const [mood, shots] of process.argv.includes('--icon') ? [] : Object.entrie
       const file = path.join(out, `${shot.name}.jpg`);
       const bytes = Buffer.from(jpeg.slice(jpeg.indexOf(',') + 1), 'base64');
       writeFileSync(file, bytes);
-      console.log(`${path.relative(root, file)}  ${(bytes.length / 1024).toFixed(0)} kB`);
+      console.log(`${path.relative(root, file)}  ${(bytes.length / 1024).toFixed(0)} KiB`);
     }
   } finally {
     await chrome.close();

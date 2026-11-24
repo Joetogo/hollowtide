@@ -7,6 +7,7 @@
 import type { Level } from '../config/quality';
 import { MOODS } from '../config/mood';
 import type { Settings } from '../config/settings';
+import { actionOf } from '../config/keys';
 import { createVeil } from './veil';
 
 const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -133,7 +134,7 @@ export function createMenu(
   };
   // on the home view any of the swimming keys dives, and so does a tap anywhere that is not a control
   addEventListener('keydown', (event) => {
-    if (state !== 'home' || event.repeat || !START.has(event.code)) return;
+    if (state !== 'home' || event.repeat || !START.has(actionOf(settings.keys, event.code))) return;
     if ((event.code === 'Enter' || event.code === 'Space') && event.target instanceof HTMLButtonElement) return;
     event.preventDefault();
     wake();
@@ -165,24 +166,36 @@ export function createMenu(
     };
     syncs.push(() => (input.value = String(settings[key])));
   };
-  /** A row of two buttons for a yes-or-no setting: the first is "no". */
-  const choice = (id: string, key: 'invertY' | 'sharp' | 'classic') => {
+  /** A row of buttons for a setting that is one of a few values: each button sets the value it stands for. */
+  const choice = <K extends 'invertY' | 'sharp' | 'classic' | 'fps' | 'resolution'>(
+    id: string,
+    key: K,
+    values: Settings[K][],
+  ) => {
     const buttons = el(id).querySelectorAll('button');
     buttons.forEach((button, i) => {
       button.onclick = () => {
-        settings[key] = i === 1;
+        settings[key] = values[i]!;
         sync();
         actions.onSettings();
       };
     });
-    syncs.push(() => buttons.forEach((button, i) => lit(button, (i === 1) === settings[key])));
+    syncs.push(() => buttons.forEach((button, i) => lit(button, values[i] === settings[key])));
   };
+  const picture = el('picture');
   slider('look', 'sensitivity');
   slider('fov', 'fov');
   slider('volume', 'volume');
-  choice('invert', 'invertY');
-  choice('picture', 'sharp');
-  choice('swim', 'classic');
+  choice('invert', 'invertY', [false, true]);
+  choice('swim', 'classic', [false, true]);
+  choice('picture', 'sharp', [false, true]);
+  choice('rate', 'fps', [0, 60, 30]);
+  choice('pixels', 'resolution', [0, 0.5, 1]);
+  // at thirty frames a second there is time for all the sharpness there is: smooth or sharp is no question then
+  syncs.push(() => {
+    picture.className = settings.fps === 30 ? 'choice off' : 'choice';
+    picture.querySelectorAll('button').forEach((button) => (button.disabled = settings.fps === 30));
+  });
   const sync = () => syncs.forEach((each) => each());
   sync();
 

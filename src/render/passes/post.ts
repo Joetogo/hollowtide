@@ -19,8 +19,16 @@ export const postGroup = (multisampled: boolean) =>
 
 export interface Post {
   resize(targets: Targets): void;
-  /** The frame's last pass, so it can carry the closing timestamp. */
-  encode(encoder: GPUCommandEncoder, canvasView: GPUTextureView, timestamp?: GPURenderPassTimestampWrites): void;
+  /**
+   * The frame's last pass, so it can carry the closing timestamp. With `instead`, that is composited in place of
+   * the scene (a photograph's softened one: see passes/focus.ts).
+   */
+  encode(
+    encoder: GPUCommandEncoder,
+    canvasView: GPUTextureView,
+    timestamp?: GPURenderPassTimestampWrites,
+    instead?: GPUTextureView,
+  ): void;
 }
 
 export async function createPost(
@@ -50,6 +58,19 @@ export async function createPost(
   const [pipeline, pipelineCoarse] = await Promise.all([compositeAt(2), coarse ? compositeAt(3) : null]);
   let scale = 2;
   let bindGroup: GPUBindGroup | null = null;
+  let targets: Targets;
+  /** the bind group that reads another texture in place of the scene, and which texture that is */
+  let other: GPUBindGroup | null = null;
+  let otherOf: GPUTextureView | null = null;
+  const reading = (sceneTexture: GPUTextureView) =>
+    Group.bind(device, layout, {
+      frame: { buffer: frameBuffer },
+      linearSampler,
+      sceneTexture,
+      shaftsTexture: targets.shaftsBlurred.createView(),
+      bloomTexture: targets.bloom[0]!.createView(),
+      depthTexture: targets.depth.createView(),
+    });
   const attachment: GPURenderPassColorAttachment = {
     view: undefined as unknown as GPUTextureView, // set every frame: the canvas hands out a new texture each time
     loadOp: 'clear',
@@ -58,23 +79,19 @@ export async function createPost(
   };
   const pass: GPURenderPassDescriptor = { colorAttachments: [attachment] };
   return {
-    resize(targets) {
+    resize(next) {
+      targets = next;
       scale = targets.shaftScale;
-      bindGroup = Group.bind(device, layout, {
-        frame: { buffer: frameBuffer },
-        linearSampler,
-        sceneTexture: targets.scene.createView(),
-        shaftsTexture: targets.shaftsBlurred.createView(),
-        bloomTexture: targets.bloom[0]!.createView(),
-        depthTexture: targets.depth.createView(),
-      });
+      bindGroup = reading(targets.scene.createView());
+      other = otherOf = null;
     },
-    encode(encoder, canvasView, timestamp) {
+    encode(encoder, canvasView, timestamp, instead) {
+      if (instead && instead !== otherOf) other = reading((otherOf = instead));
       attachment.view = canvasView;
       pass.timestampWrites = timestamp;
       const p = encoder.beginRenderPass(pass);
       p.setPipeline(scale === 3 && pipelineCoarse ? pipelineCoarse : pipeline);
-      p.setBindGroup(0, bindGroup);
+      p.setBindGroup(0, instead ? other : bindGroup);
       p.draw(3);
       p.end();
     },

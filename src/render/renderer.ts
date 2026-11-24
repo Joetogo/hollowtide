@@ -11,6 +11,7 @@ import { Frame, writeFrame } from './frame';
 import { createBlit } from './passes/blit';
 import { createBloom } from './passes/bloom';
 import { bakeDetail } from './passes/detail';
+import { createFocus, type Focus } from './passes/focus';
 import { createPost } from './passes/post';
 import { createScenePass, skipped } from './passes/scene';
 import { createShadowBake } from './passes/shadow';
@@ -42,6 +43,13 @@ export interface Renderer {
   supersample: number;
   /** How far the eye opens, as a multiple of the usual exposure (a mood's: 1 at noon). */
   exposure: number;
+  /**
+   * A photograph's depth of field: while set, what is nearer or further than the distance the lens is held at is
+   * out of focus. Setting `refocus` holds the lens, from the next frame, at the distance of whatever is then in
+   * the middle of the picture.
+   */
+  softFocus: boolean;
+  refocus: boolean;
   /** The current targets; replaced whenever the render size changes. */
   targets: Targets;
   /** While set, the scene pass is skipped and whatever the scene target holds is composited (used by the harness). */
@@ -95,6 +103,7 @@ export async function createRenderer(
   const [water] = await Promise.all([createWater(gpu, blit, scene.water), bakeDetail(gpu, blit, scene.detail)]);
   const bloom = createBloom(blit);
   const timer = createFrameTimer(gpu, onGpuTime);
+  let focus: Focus | null = null; // made when first asked for
   let scenePass: GPURenderPassDescriptor;
   const camera = createCamera();
   const cullView = createCullView(camera);
@@ -108,6 +117,8 @@ export async function createRenderer(
     pixelBudget: MAX_PIXELS,
     supersample: 1,
     exposure: 1,
+    softFocus: false,
+    refocus: false,
     targets: undefined as unknown as Targets, // set by the resize() below
     holdScene: false,
     body: createBodyParts(),
@@ -176,6 +187,7 @@ export async function createRenderer(
       shafts.resize(targets);
       bloom.resize(targets);
       post.resize(targets);
+      focus?.resize(targets);
       return true;
     },
 
@@ -202,7 +214,14 @@ export async function createRenderer(
         if (renderer.world) shafts.encode(encoder, skipped('shafts'));
       }
       if (!skipped('bloom')) bloom.encode(encoder);
-      post.encode(encoder, context.getCurrentTexture().createView(), stamps?.last);
+      let soft: GPUTextureView | undefined;
+      if (renderer.softFocus) {
+        if (!focus)
+          (focus = createFocus(gpu, scene.frameBuffer, scene.linearSampler, blit, quality.samples)).resize(targets);
+        soft = focus.encode(encoder, renderer.refocus);
+        renderer.refocus = false;
+      } else focus?.release();
+      post.encode(encoder, context.getCurrentTexture().createView(), stamps?.last, soft);
       timer.resolve(encoder);
       queue.submit([encoder.finish()]);
       timer.submitted();

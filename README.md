@@ -41,11 +41,17 @@ viewpoints, `P` photo mode (`Enter` saves a picture), `T` a guided tour, `F` the
 the original's steady glide. A first dive is told the few that matter, a line at a time, once the eyes are open;
 the panel has the whole list.
 
+**Every key in that list can be changed.** Press its cap in the panel, then the key that is to do its job; `Esc`
+leaves it as it was. A key that already had a job swaps with it, so nothing is left without one, and one button
+puts the usual keys back. What the page says afterwards (the home view's four keys, the lines at the bottom)
+names the keys as they are. Keys are known by their place on the keyboard, so the same four swim on one that is
+not laid out as QWERTY, and in Chrome and Edge the caps show what that keyboard has printed there.
+
 - **Touchscreen:** hold to swim forward, slide to steer, a second finger for the scooter. Buttons in the corner
   for the lamp, the sound and the menu; the tour and photo mode are in the pause panel, and photo mode has its
-  own buttons to save and to go back. A phone held upright gets the page turned on its side, and a line along
-  the bottom, the right way up, says to turn the phone; the pause panel is laid out to fit either way, with rows
-  a finger can hit. (Tried on a touchscreen the size of a phone in Chrome's emulation, not yet on one.)
+  own buttons for everything its keys do. A phone held upright gets the page turned on its side, and a line
+  along the bottom, the right way up, says to turn the phone; the pause panel is laid out to fit either way,
+  with rows a finger can hit. (Tried in Chrome's emulation of a phone, and on a real one.)
 - **Gamepad:** left stick swims, right stick looks, the bumpers go down and up, the right trigger is the scooter,
   `A` or `Start` dives, pauses and resumes, `Y` is the lamp. In the panel the d-pad or the left stick goes from
   one control to the next and moves the sliders, `A` presses, `B` closes the panel.
@@ -64,17 +70,31 @@ followed. (The animals will be somewhere else: they do not stop for a link.)
 fish, on the same seabed, with the wreck, the arches and the viewpoints where they are. Without it the world is
 the authored one, to the byte.
 
-The pause panel has the settings: detail level, light, look speed, inverted look, field of view, volume, and two
-choices; and buttons for the tour and photo mode. Another light is there in a fifth of a second, where you
-are. Another detail level makes the world again, which takes a few seconds and says so beforehand; afterwards
-the panel is up again where you were.
+The pause panel has the settings: detail level, light, look speed, inverted look, field of view, volume, how to
+swim, and what the picture is made of; buttons for the tour and photo mode; and the list of keys. Another light
+is there in a fifth of a second, where you are. Another detail level makes the world again, which takes a few
+seconds and says so beforehand; afterwards the panel is up again where you were.
+**Swimming: with arms or classic** is the `C` key's switch, where it can be seen.
 **Picture: smooth or sharp** says what gives when the machine cannot keep up: smooth trades resolution and draw
 distance for sixty frames a second; sharp settles for thirty and spends the difference on pixels and distance.
-**Swimming: with arms or classic** is the `C` key's switch, where it can be seen.
+**Frames** is how many are drawn a second: as many as the screen shows, or no more than sixty, or no more than
+thirty, for a cooler and quieter machine. (At thirty there is time for a sharp picture whichever was chosen, so
+that row cannot be pressed then.)
+**Resolution** is whose the pixel count is. Auto: the page's, given up where the machine is short and taken
+back where it is not. Half or full: yours, held whatever it costs, and then only the draw distance is traded.
+On a phone the last two are left to the page.
 
 **Photo mode** (`P`) stops the moment, clears the screen of everything but the world, and lets you still move
 to frame it; `Z` runs the moment back and `X` runs it on while held, to have the manta where you want it;
-`Enter` draws it again at twice the screen's size each way (up to 4K) and saves a PNG.
+`Enter` draws it again at twice the screen's size each way (up to 4K) and saves a PNG. A photograph can also be
+given three things, each for that photograph only:
+
+- `V` and `B` make it darker and brighter, half a stop at a time, two stops either way.
+- `G` lays a grid of thirds over the picture to set it out by. The grid is the page's: a saved picture has none.
+- `O` holds the focus at the distance of whatever is in the middle of the picture at that moment; what is nearer
+  or further goes soft, the more the further from it, and the view can then be moved to put the sharp thing
+  where it belongs. It is a thin lens: held on something close, the distance is very soft; held far off, nearly
+  everything is sharp. `O` again lets go.
 **The tour** (`T`) flies the camera along a scripted route through the wreck, the kelp forest and the grotto for a
 minute; any swimming key takes over wherever it has got to. Where the system asks for reduced motion it flies at
 half its pace, and says beforehand that the view moves by itself.
@@ -87,7 +107,7 @@ It takes [Node](https://nodejs.org) 20 or later; the tests in a browser drive th
 npm install
 npm run dev            # http://127.0.0.1:5173, rebuilds and reloads on save
 npm run check          # typecheck, lint, unit tests: 20 to 40 s, no browser
-npm run build          # dist/index.html: one self-contained file, size printed, 200 kB budget enforced
+npm run build          # dist/index.html: one self-contained file, size printed, 220 KiB budget enforced
 open dist/index.html   # it runs from file://
 ```
 
@@ -165,6 +185,8 @@ geometry, and the picture ended up at 942×530 and 40 % draw distance, blurred f
   says so; set back to Smooth by hand, it stays there.
 - A machine that has settled for thirty and cannot draw sixty draws every second frame, so that they come
   evenly: thirty even frames look better than forty uneven ones.
+- Whoever would rather decide can: the panel's **Frames** caps what is drawn at sixty or thirty a second, and
+  **Resolution** holds the pixel count at half or at all of it, leaving the controller the draw distance alone.
 
 On that laptop: 2560×1440 at an even thirty frames a second, where it was 942×530 at an uneven forty.
 
@@ -341,7 +363,7 @@ taken minutes apart cannot be compared.
 | Load time on a cool machine (separate sittings) | 3.4 s | 1.6 s |
 | Peak memory while loading, page / whole browser | 1.1 GB / 1.9 GB | 0.5 GB / 1.2 GB |
 | Loading bar | timed animation | real progress from the generator |
-| Shipped file | 97 kB | 199 kB (80 kB gzipped), with the swimmer from hands to fins, the opening, the moods, the lamp, jellyfish and turtles that the original does not have. The shader code the shaders share is in the file once and joined to each when the page starts (spliced into each, it was there eight times: 28 kB), and the build gives the shaders' own names short ones (12 kB) |
+| Shipped file | 97 KiB | 211 KiB (84 KiB gzipped), with the swimmer from hands to fins, the opening, the moods, the lamp, jellyfish and turtles that the original does not have. The shader code the shaders share is in the file once and joined to each when the page starts (spliced into each, it was there eight times: 28 KiB), and the build gives the shaders' own names short ones (12 KiB) |
 | Frame at 2560×1440, six viewpoints | 45.7 / 35.4 / 26.9 / 38.5 / 35.9 / 35.7 ms | the same within 3 % |
 | Frame at 640×360, six viewpoints | 26.2 / 19.1 / 19.6 / 20.3 / 21.2 / 19.2 ms | the same within 3 % |
 | 60 s fly-through at 2560×1440, average | 37.8 ms | 37.1 ms |

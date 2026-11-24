@@ -10,7 +10,17 @@ import { createIntent, createSwimmer, stepSwimmer, type Drive } from '../camera/
 import { loadSettings, markLoading, saveSettings, forgetSettings } from '../config/settings';
 import { quality, type Level } from '../config/quality';
 import { createGpu, StartupError } from '../gpu/context';
-import { addFrame, addGpuTime, createDynRes, MAX_PIXELS, settle, SHARP, SMOOTH, OUT_OF_REACH } from '../render/dynres';
+import {
+  addFrame,
+  addGpuTime,
+  createDynRes,
+  fixPixels,
+  MAX_PIXELS,
+  settle,
+  SHARP,
+  SMOOTH,
+  OUT_OF_REACH,
+} from '../render/dynres';
 import { createRenderer } from '../render/renderer';
 import { generateWorld, type Generated } from '../world/client';
 import { CAMERA_RADIUS, rockDistance, type CollisionField } from '../world/collision';
@@ -31,6 +41,8 @@ import { aimLamp } from '../render/lamp';
 import { createBreath, stepBreath, stepWash } from '../body/breath';
 import { TAN_HALF_FOV } from '../render/frame';
 import { breathe } from '../gpu/turns';
+import { actionOf, keyName, keyOf, learnLayout } from '../config/keys';
+import { bindKeys } from '../ui/rebind';
 
 export interface BootReport {
   adapter: string;
@@ -78,12 +90,23 @@ const RESUME = 'hollowtide-resume';
 const THIRTY = 'Thirty frames a second is what this machine holds here: Picture is now Sharp, in the panel';
 const LINK_COPIED = 'A link to this view is copied';
 const LINK_IN_BAR = 'A link to this view is in the address bar';
-const PHOTO_KEYS = 'Photo: the moment stands still. Z and X run it back and on, Enter saves it, P returns';
+/**
+ * What the key for an action is called just now (an action is known by its usual key's code: config/keys.ts).
+ * Keys can be chosen, and what the page says names them as they are.
+ */
+let cap = (action: string): string => keyName(action);
+const photoKeys = () =>
+  `Photo: the moment stands still · ${cap('KeyZ')} ${cap('KeyX')} run it · ${cap('KeyV')} ${cap('KeyB')} light · ` +
+  `${cap('KeyG')} grid · ${cap('KeyO')} focus · Enter saves · ${cap('KeyP')} returns`;
 /** How fast the moment runs while Z or X is held in photo mode, as a share of the world's own pace. */
 const SCRUB_SPEED = 0.6;
 const coarse = () => matchMedia('(pointer: coarse)').matches;
 /** What photo mode says of itself: the keys, or for fingers (which have buttons for them) what the arrows do. */
-const photoHint = () => (coarse() ? 'Photo: the moment stands still. ◀ and ▶ run it back and on' : PHOTO_KEYS);
+const photoHint = () =>
+  coarse() ? 'Photo: the moment stands still · ◀ ▶ run it · ☼ light · # grid · ◎ focus' : photoKeys();
+/** How far a photograph's exposure can be moved from what the eye has, in stops, and by how much a press moves it. */
+const STOPS = 2;
+const STOP = 0.5;
 /** What the tour says as it begins: how to take over, with keys or with a finger. */
 const tourHint = () =>
   (calm() ? 'A slow tour of the hollow: the view moves by itself. ' : 'A tour of the hollow. ') +
@@ -108,8 +131,8 @@ const firstDive = (classic: boolean) =>
         '≡ opens the panel: settings, a tour, photo mode',
       ]
     : [
-        'W A S D swim · the mouse or the arrow keys look around',
-        `Shift ${classic ? 'goes faster' : 'brings up a scooter'} · Q and E go down and up`,
+        `${cap('KeyW')} ${cap('KeyA')} ${cap('KeyS')} ${cap('KeyD')} swim · the mouse or the arrow keys look around`,
+        `${cap('ShiftLeft')} ${classic ? 'goes faster' : 'brings up a scooter'} · ${cap('KeyQ')} and ${cap('KeyE')} go down and up`,
         'Esc opens the panel: settings, a tour, photo mode, all the keys',
       ];
 /** Seconds after the dive at which the first of those lines comes up, and from one line to the next. */
@@ -117,8 +140,8 @@ const HINT_AT = 3;
 const HINT_EVERY = 5.5;
 /** The most pixels a saved picture has: a 4K frame. */
 const PHOTO_PIXELS = 3840 * 2160;
-const CLASSIC_ON = 'Classic glide: no arms, steady speed. C brings the arms back';
-const CLASSIC_OFF = 'Swimming with arms. C switches to the classic glide';
+const classicOn = () => `Classic glide: no arms, steady speed. ${cap('KeyC')} brings the arms back`;
+const classicOff = () => `Swimming with arms. ${cap('KeyC')} switches to the classic glide`;
 /** The home view: which stretch of the scripted flight it drifts along (seconds of it), and how fast. */
 const HOME_FROM = 8.5; // the wreck in its shafts of light...
 const HOME_SPAN = 27; // ...on through the kelp forest, and back
@@ -205,6 +228,7 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
   // harness builds can be told to forget what was remembered: for a browser that keeps it from run to run
   if (__HARNESS__ && params.has('forget')) forgetSettings();
   const settings = loadSettings();
+  cap = (action) => keyName(keyOf(settings.keys, action));
   // dev and harness builds can force the detail level with ?level=0|1|2
   const forced = __DEV__ || __HARNESS__ ? params.get('level') : null;
   if (forced === '0' || forced === '1' || forced === '2') settings.level = Number(forced) as Level;
@@ -236,6 +260,7 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       if (open) pausedAt = performance.now();
       if (open) hush();
       if (open) input?.release();
+      else unbind();
     },
     onLevel(next) {
       // another level is another world: remember it and start over (what the screen settled on no longer applies)
@@ -262,6 +287,8 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
   let relight: (name: string) => void = () => undefined;
   /** takes down the line at the bottom of the picture, once there is one */
   let hush: () => void = () => undefined;
+  /** stops waiting for a key that was being chosen in the panel */
+  let unbind: () => void = () => undefined;
 
   try {
     menu.progress('Diving…', 0.02);
@@ -292,7 +319,10 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       });
       making.catch(() => 0); // a failure is reported where the world is awaited, not as an unhandled rejection
     } else menu.progress('Compiling shaders…', 0.05);
-    const dynres = createDynRes(settings.pixels, settings.detail, settings.mobile, settings.sharp ? SHARP : SMOOTH);
+    // what a frame's GPU time is steered towards: with thirty frames a second asked for, there is time for a
+    // sharp picture whichever of the two was chosen
+    const aim = () => (settings.sharp || settings.fps === 30 ? SHARP : SMOOTH);
+    const dynres = createDynRes(settings.pixels, settings.detail, settings.mobile, aim());
     let gpuMs = 0;
     // dev and harness builds can draw with the original's own distances: ?tuning=faithful
     let tuning = (__DEV__ || __HARNESS__) && params.get('tuning') === 'faithful' ? FAITHFUL : TUNED;
@@ -305,7 +335,10 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       gpuMs = ms;
       addGpuTime(dynres, ms);
     });
-    renderer.exposure = mood.exposure;
+    /** how much brighter than the eye has it a photograph is being taken, in stops (darker: negative) */
+    let stops = 0;
+    const lightUp = () => (renderer.exposure = mood.exposure * 2 ** stops);
+    lightUp();
     hook.light = mood.name;
     // ---- another light, picked in the panel or on the home view. The light is built into the shaders, so those
     // that have it in them are made again, while the picture goes on as it was; then the world comes up out of
@@ -326,7 +359,7 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
           mood = moodNamed(wanted);
           setShaderMood(mood);
           await renderer.relight();
-          renderer.exposure = mood.exposure;
+          lightUp();
           hook.light = mood.name;
           menu.fade();
           settle(dynres);
@@ -451,7 +484,7 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       // in this browser the few things worth knowing, a line at a time. They stop for the panel or a mode, and
       // are not said again once the last has been.
       const first = hinting && !settings.hinted && !resuming;
-      const lines = [...(settings.classic ? [CLASSIC_ON] : []), ...(first ? firstDive(settings.classic) : [])];
+      const lines = [...(settings.classic ? [classicOn()] : []), ...(first ? firstDive(settings.classic) : [])];
       const say = (i: number) => {
         if (i >= lines.length || menu.open || photo || tour >= 0) return;
         // (a line that is up is left its time: the one about thirty frames a second may be)
@@ -469,6 +502,10 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
     if (keptStats) hud.toggle();
     const note = createNote(document.getElementById('note')!);
     hush = note.clear;
+    // ---- keys can be chosen: the caps in the panel's list are buttons (ui/rebind.ts)
+    const rebind = bindKeys(settings.keys, note, () => saveSettings(settings, fullPixels()));
+    unbind = rebind.cancel;
+    void learnLayout().then(rebind.refresh);
     sound = createSoundscape(camera, settings.muted);
     input = bindInput(canvas, intent, {
       onGesture: () => sound!.wake(),
@@ -479,6 +516,7 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
         if (menu.paused) note(PAD_PANEL);
       },
       onPadBack: () => menu.paused && menu.press(),
+      bound: (code) => actionOf(settings.keys, code),
       onKey(code) {
         if (code === 'KeyH') hud.toggle();
         else if (code === 'Pad') note(PAD_KEYS);
@@ -491,9 +529,13 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
           settings.classic = !settings.classic;
           saveSettings(settings, fullPixels());
           menu.sync();
-          note(settings.classic ? CLASSIC_ON : CLASSIC_OFF);
+          note(settings.classic ? classicOn() : classicOff());
         } else if (code === 'KeyP') setPhoto(!photo);
         else if (code === 'Enter' && photo) takePicture();
+        else if (code === 'KeyV' && photo) expose(-STOP);
+        else if (code === 'KeyB' && photo) expose(STOP);
+        else if (code === 'KeyG' && photo) setThirds(!thirds);
+        else if (code === 'KeyO' && photo) setFocus(!renderer.softFocus, true);
         else if (code === 'KeyT') setTour(tour < 0);
         else if (code === 'Escape') {
           // The panel (which ends photo mode and the tour), and out of it again. Not within a fifth of a second
@@ -552,21 +594,61 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
     const deviceWidth = () => Math.max(2, Math.round(canvas.clientWidth * devicePixelRatio));
     const fullPixels = () =>
       Math.min(MAX_PIXELS, deviceWidth() * Math.max(2, Math.round(canvas.clientHeight * devicePixelRatio)));
+    // a resolution that was asked for is not the controller's to trade
+    fixPixels(dynres, settings.resolution, fullPixels());
 
     // ---- photo mode: the moment stands still, nothing but the world is on screen, and Enter saves a picture
     let photo = false;
     let shoot = false;
     /** which way the moment is being run in photo mode: -1 back, 1 on, 0 still */
     let scrub = 0;
+    /** photo mode's grid of thirds is wanted (it is kept from one photograph to the next) */
+    let thirds = false;
     const setPhoto = (on: boolean) => {
       photo = on;
       scrub = 0;
       document.body.classList.toggle('photo', on);
+      document.body.classList.toggle('thirds', on && thirds);
       if (on) {
         setTour(false);
         body.shown = 0; // arms out of the picture at once
         note.hold(photoHint());
-      } else note.clear();
+      } else {
+        note.clear();
+        // what was set for the photograph goes with it: the exposure, and the focus
+        stops = 0;
+        lightUp();
+        setFocus(false);
+      }
+    };
+    /** A brighter photograph, or a darker one: half a stop at a time, two stops either way. */
+    const expose = (by: number) => {
+      stops = Math.max(-STOPS, Math.min(STOPS, stops + by));
+      lightUp();
+      const size = Math.abs(stops);
+      note(
+        stops ? `Exposure ${stops > 0 ? '+' : '−'}${size} stop${size === 1 ? '' : 's'}` : 'Exposure as the eye has it',
+      );
+    };
+    /** The grid of thirds over the picture, to set it out by. It is the page's: a saved picture has none. */
+    const setThirds = (on: boolean) => {
+      thirds = on;
+      document.body.classList.toggle('thirds', on);
+      note(on ? 'Grid on: it is not in the picture' : 'Grid off');
+    };
+    /**
+     * A lens held at one distance: that of whatever is in the middle of the picture when it is switched on.
+     * What is nearer or further goes soft, the more the further from it (render/passes/focus.ts).
+     */
+    const setFocus = (on: boolean, say = false) => {
+      renderer.softFocus = renderer.refocus = on;
+      if (!say) return;
+      const again = coarse() ? '◎' : cap('KeyO');
+      note(
+        on
+          ? `Focus held on the middle of the picture: nearer and further go soft. ${again} lets go`
+          : 'Focus let go: all of it is sharp',
+      );
     };
     /** Asks for the picture, and says so at once: writing a large one out takes a moment. */
     const takePicture = () => {
@@ -590,11 +672,9 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
         link.download = `hollowtide-${new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-')}.png`;
         link.click();
         setTimeout(() => URL.revokeObjectURL(link.href), 10_000);
-        // (what is saved is the world alone: the line and the buttons are the page's, not the picture's. And if
-        // photo mode has been left while the picture was being written out, the line does not stay)
-        const saved = `Saved, ${width} × ${height}, the world alone`;
-        if (photo) note.hold(`${saved}. ${photoHint()}`);
-        else note(saved);
+        // (what is saved is the world alone: the line and the buttons are the page's, not the picture's. The
+        // line goes after a moment, as every line does that says what a key has done)
+        note(`Saved, ${width} × ${height}, the world alone`);
       }, 'image/png');
       renderer.supersample = 1;
       renderer.pixelBudget = budget;
@@ -638,6 +718,10 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       setPhoto(true);
     };
     document.getElementById('save')!.onclick = takePicture;
+    document.getElementById('darker')!.onclick = () => expose(-STOP);
+    document.getElementById('brighter')!.onclick = () => expose(STOP);
+    document.getElementById('grid')!.onclick = () => setThirds(!thirds);
+    document.getElementById('focus')!.onclick = () => setFocus(!renderer.softFocus, true);
     // ---- in photo mode the moment can be chosen: Z runs it back and X on while held, and so do two buttons
     const run = (which: number) => () => void (scrub = which);
     for (const [id, which] of [
@@ -649,11 +733,12 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       button.onpointerup = button.onpointerleave = button.onpointercancel = run(0);
     }
     addEventListener('keydown', (event) => {
-      if (event.code === 'KeyZ') scrub = -1;
-      else if (event.code === 'KeyX') scrub = 1;
+      const code = actionOf(settings.keys, event.code);
+      if (code === 'KeyZ') scrub = -1;
+      else if (code === 'KeyX') scrub = 1;
     });
     addEventListener('keyup', (event) => {
-      if (event.code === 'KeyZ' || event.code === 'KeyX') scrub = 0;
+      if (/^Key[ZX]$/.test(actionOf(settings.keys, event.code))) scrub = 0;
     });
     document.getElementById('leave')!.onclick = () => setPhoto(false);
 
@@ -662,7 +747,8 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       sound!.setVolume(settings.volume);
       // set to sharp for this machine, and now back to smooth by hand: that is the swimmer's to decide
       if (settledForThirty && !settings.sharp) settings.keepSmooth = true;
-      dynres.target = settings.sharp ? SHARP : SMOOTH;
+      dynres.target = aim();
+      if (dynres.fixed !== settings.resolution) fixPixels(dynres, settings.resolution, fullPixels());
       saveSettings(settings, fullPixels());
     };
 
@@ -688,7 +774,11 @@ export async function bootMain(createWorker: () => Worker): Promise<void> {
       gpuUsual += (gpuMs - gpuUsual) * 0.05;
       if (dynres.target === SHARP ? gpuUsual > (evenly ? EVEN_BELOW : EVEN_ABOVE) : false) evenly = true;
       else evenly = false;
-      if ((menu.paused || (evenly && !menu.open)) && (skip = !skip)) return;
+      // No more often than was asked for. (A frame two milliseconds early is on time: the screen's beat is not
+      // exact, and a frame put off for that would be shown a whole beat late.)
+      if (settings.fps && now - last < 1000 / settings.fps - 2) return;
+      // (at thirty asked for, every frame drawn is wanted: there is nothing left to halve)
+      if ((menu.paused || (evenly && !menu.open)) && settings.fps !== 30 && (skip = !skip)) return;
       const frameMs = now - last;
       last = now;
       if (hook.paused) return;

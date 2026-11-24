@@ -11,6 +11,9 @@
 // pixel count buys next to nothing, twice running, and from then on leaves the pixels at full and trades only
 // the draw distance. And when the lowest settings are still far too slow, it says so (`stuck`), so that whoever
 // drives it can stop aiming for a frame rate that is not to be had.
+//
+// The pixel count can also be taken out of its hands (`fixed`): then it is what was asked for, a share of the
+// full count, and only the draw distance is traded.
 
 /** The most pixels a frame is rendered at; a larger canvas is scaled up from that. */
 export const MAX_PIXELS = 2560 * 1440;
@@ -52,6 +55,8 @@ export interface DynRes {
   boundAt: number;
   /** measuring periods in a row at the lowest settings and still far too slow (see OUT_OF_REACH) */
   stuck: number;
+  /** 0: the pixel count is the controller's to trade. Otherwise the share of the full count it is held at. */
+  fixed: number;
 }
 
 /** After this many such periods the target is out of this machine's reach. */
@@ -76,7 +81,23 @@ export function createDynRes(pixels: number, detail: number, mobile: boolean, ta
     geometryBound: false,
     boundAt: 0,
     stuck: 0,
+    fixed: 0,
   };
+}
+
+/** The pixel count a fixed share comes to for a canvas of `devicePixels`: never below the controller's floor. */
+const heldAt = (state: DynRes, top: number): number => Math.max(top * state.fixed, Math.min(top, state.minPixels));
+
+/**
+ * Takes the pixel count out of the controller's hands, at a share of the full count (1: all of it), or with 0
+ * gives it back. A fixed count is in use from the next frame; `devicePixels` is the canvas's full size.
+ */
+export function fixPixels(state: DynRes, share: number, devicePixels: number): void {
+  state.fixed = share;
+  if (!share) return;
+  state.pixels = heldAt(state, Math.min(MAX_PIXELS, devicePixels));
+  state.lastGpu = state.flat = 0;
+  settle(state);
 }
 
 /** A GPU time for one frame has arrived (they come a few frames late). */
@@ -153,19 +174,23 @@ export function addFrame(state: DynRes, frameMs: number, behindMenu: boolean, de
   }
   state.lastPixels = state.pixels;
   state.lastGpu = gpu;
-  if (state.geometryBound && state.pixels < top) {
-    // the pixels given up bought nothing: have them back, and see what that costs before doing anything else
-    state.pixels = top;
+  // where the pixel count is not to be traded, this is what it stays at: what was asked for, or all of it
+  const held = state.fixed ? heldAt(state, top) : state.geometryBound ? top : 0;
+  if (held && (state.fixed ? state.pixels !== held : state.pixels < held)) {
+    // the pixels given up bought nothing (or the window is another size than the fixed count was worked out
+    // for): have them back, and see what that costs before doing anything else
+    state.pixels = held;
     state.lastGpu = 0;
     state.flat = 0;
     return true;
   }
-  const floor = state.geometryBound ? top : state.minPixels;
-  const mid = state.geometryBound ? top : Math.max(top / 2, state.minPixels);
+  const floor = held || state.minPixels;
+  const mid = held || Math.max(top / 2, state.minPixels);
+  const most = held || top;
 
   // too slow: pixels down to `mid` first, then draw distance, then the remaining pixels; faster goes back the same way
   if (k < 1 ? state.pixels > mid || state.detail <= MIN_DETAIL : state.pixels < mid || state.detail >= 1) {
-    const end = k < 1 ? (state.detail > MIN_DETAIL ? mid : floor) : state.detail < 1 ? mid : top;
+    const end = k < 1 ? (state.detail > MIN_DETAIL ? mid : floor) : state.detail < 1 ? mid : most;
     state.pixels *= k;
     if (k < 1 ? state.pixels < end : state.pixels > end) state.pixels = end;
   } else {
