@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Frame check</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #031a22; color: #e8fbff; font: 500 22px/1.5 system-ui, sans-serif; }
+  body { padding: 1.5em; box-sizing: border-box; touch-action: none; user-select: none; }
+  h1 { font-weight: 300; letter-spacing: .2em; margin: 0 0 1em; }
+  dt { opacity: .6; font-size: .8em; margin-top: .9em; }
+  dd { margin: 0; word-break: break-word; }
+  .yes { color: #7fffb2; } .no { color: #ff8f8f; }
+  #fingers { font-size: 3em; font-weight: 200; }
+  a { color: #7ff3ff; font-size: 1.2em; }
+</style>
+</head>
+<body>
+<h1>FRAME CHECK</h1>
+<dl>
+  <dt>WebGPU</dt><dd id="gpu">checking…</dd>
+  <dt>Graphics adapter</dt><dd id="adapter">–</dd>
+  <dt>Screen</dt><dd id="screen">–</dd>
+  <dt>Touch points the screen reports</dt><dd id="max">–</dd>
+  <dt>Fingers down now (most seen)</dt><dd><span id="fingers">0</span> <span id="most"></span></dd>
+  <dt>Browser</dt><dd id="ua">–</dd>
+</dl>
+<p><a href="./">Open Hollowtide →</a></p>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const say = (id, text, ok) => { $(id).textContent = text; if (ok !== undefined) $(id).className = ok ? 'yes' : 'no'; };
+  const size = () => say('screen', `${innerWidth}×${innerHeight} CSS px at ${devicePixelRatio}× = ${Math.round(innerWidth * devicePixelRatio)}×${Math.round(innerHeight * devicePixelRatio)} px`);
+  size(); addEventListener('resize', size);
+  say('max', String(navigator.maxTouchPoints));
+  say('ua', navigator.userAgent + (isSecureContext ? ' · secure page' : ' · NOT a secure page'));
+  (async () => {
+    if (!navigator.gpu) return say('gpu', 'No: this browser has no WebGPU', false);
+    try {
+      const adapter = await navigator.gpu.requestAdapter();
+      if (!adapter) return say('gpu', 'No: WebGPU is there but gave no adapter (blocked GPU?)', false);
+      const device = await adapter.requestDevice();
+      say('gpu', 'Yes: a device was created', true);
+      const info = adapter.info || {};
+      say('adapter', [info.vendor, info.architecture, info.device, info.description].filter(Boolean).join(' · ') || '(not reported)');
+      device.destroy();
+    } catch (e) { say('gpu', 'No: ' + e.message, false); }
+  })();
+  let most = 0;
+  const count = (e) => { e.preventDefault(); const n = e.touches.length; most = Math.max(most, n); $('fingers').textContent = n; $('most').textContent = `(most: ${most})`; };
+  for (const t of ['touchstart', 'touchmove', 'touchend', 'touchcancel']) addEventListener(t, count, { passive: false });
+</script>
+</body>
+</html>
