@@ -20,6 +20,9 @@
 <dl>
   <dt>WebGPU</dt><dd id="gpu">checking…</dd>
   <dt>Graphics adapter</dt><dd id="adapter">–</dd>
+  <dt>WebGPU, low-power or software fallback</dt><dd id="fallback">checking…</dd>
+  <dt>WebGL 2</dt><dd id="webgl">checking…</dd>
+  <dt>Graphics chip (from WebGL)</dt><dd id="chip">–</dd>
   <dt>Screen</dt><dd id="screen">–</dd>
   <dt>Touch points the screen reports</dt><dd id="max">–</dd>
   <dt>Fingers down now (most seen)</dt><dd><span id="fingers">0</span> <span id="most"></span></dd>
@@ -44,6 +47,25 @@
       say('adapter', [info.vendor, info.architecture, info.device, info.description].filter(Boolean).join(' · ') || '(not reported)');
       device.destroy();
     } catch (e) { say('gpu', 'No: ' + e.message, false); }
+  })();
+  (async () => {
+    if (!navigator.gpu) return say('fallback', 'No WebGPU at all', false);
+    const found = [];
+    for (const [name, options] of [['low-power', { powerPreference: 'low-power' }], ['high-performance', { powerPreference: 'high-performance' }], ['software', { forceFallbackAdapter: true }]]) {
+      try {
+        const adapter = await navigator.gpu.requestAdapter(options);
+        if (adapter) { const i = adapter.info || {}; found.push(`${name}: yes (${[i.vendor, i.architecture, i.description].filter(Boolean).join(' ') || '?'})`); }
+        else found.push(`${name}: no`);
+      } catch (e) { found.push(`${name}: error ${e.message}`); }
+    }
+    say('fallback', found.join(' · '), found.some((f) => f.includes('yes')));
+  })();
+  (() => {
+    const gl = document.createElement('canvas').getContext('webgl2');
+    if (!gl) return say('webgl', 'No', false);
+    say('webgl', `Yes: ${gl.getParameter(gl.VERSION)} · max texture ${gl.getParameter(gl.MAX_TEXTURE_SIZE)}`, true);
+    const debug = gl.getExtension('WEBGL_debug_renderer_info');
+    say('chip', debug ? `${gl.getParameter(debug.UNMASKED_VENDOR_WEBGL)} · ${gl.getParameter(debug.UNMASKED_RENDERER_WEBGL)}` : `${gl.getParameter(gl.VENDOR)} · ${gl.getParameter(gl.RENDERER)}`);
   })();
   let most = 0;
   const count = (e) => { e.preventDefault(); const n = e.touches.length; most = Math.max(most, n); $('fingers').textContent = n; $('most').textContent = `(most: ${most})`; };
